@@ -322,7 +322,7 @@
             // NEW: Atomic Save to Cloud
             _syncLock: false,
 
-            // CLOUD SYNC FUNCTIONS (REST API Version) - v17.16
+            // CLOUD SYNC FUNCTIONS (REST API Version) - v17.17
             uploadToCloud: async (silent = false, targetRoute = null, filterFn = null, forceAll = false) => {
                 if (window.Utils._syncLock) {
                     console.log("[Sync] Already in progress, skipping...");
@@ -7189,7 +7189,7 @@
                             evidence: [{ img, time: new Date().toISOString(), type: 'AUTO_CAPTURE_PHOTO' }]
                         });
                     }
-                }, 60000); // MODIFIED: 60 Seconds Interval
+                }, 15000); // MODIFIED: 15 Seconds Interval for Fast Sync (v17.17)
 
                 return () => clearInterval(autoCaptureInterval.current);
             }, [examMode, isLocked, user.id]);
@@ -7284,11 +7284,11 @@
                     if (window.studentRecordingInterval) clearInterval(window.studentRecordingInterval);
                     window.studentRecordingInterval = setInterval(() => {
                         if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
-                            console.log("Auto-splitting student video (30s)...");
+                            console.log("Auto-splitting student video (15s)...");
                             mediaRecorderRef.current.stop();
                             // Sequence increment handled in startSegment
                         }
-                    }, 30000);
+                    }, 15000);
                 }
 
                 return () => {
@@ -8154,7 +8154,7 @@
                         window.Utils.uploadToCloud(true);
                         setTimeout(() => window.Utils.downloadFromCloud(true), 2000); // Wait 2s for upload to settle
                     }
-                }, 60000);
+                }, 15000);
 
                 return () => clearInterval(intervalId);
             }, [user]);
