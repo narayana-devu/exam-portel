@@ -38,21 +38,21 @@ if (process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY && proces
     console.log("S3 Disabled (Missing valid AWS Env Vars). Using Local Disk.");
 }
 
-const uploadToS3 = async (fileName, fileContent) => {
+const uploadToS3 = async (fileName, fileContent, contentType = 'application/octet-stream') => {
     if (!s3) return null;
     const params = {
         Bucket: process.env.BUCKET_NAME,
         Key: fileName,
         Body: fileContent,
-        ACL: 'public-read', // or private depending on need
-        ContentType: 'application/octet-stream' // Detect if possible
+        // ACL: 'public-read', // Removed to avoid 500 errors if Block Public Access is ON
+        ContentType: contentType
     };
     try {
         const data = await s3.upload(params).promise();
         return data.Location;
     } catch (e) {
-        console.error("S3 Upload Error", e);
-        return null;
+        console.error("S3 Upload Error [CRITICAL]:", e.message);
+        return null; // The endpoint will handle the null
     }
 };
 
@@ -262,7 +262,7 @@ dbAdapter.init();
 // Let's protect it with the same auth to avoid leaking bucket name to public.
 app.get('/api/diagnostics', authMiddleware, (req, res) => {
     res.json({
-        version: 'v17.14',
+        version: 'v17.15',
         storage_type: dbAdapter.type,
         s3_enabled: !!s3,
         bucket_name: process.env.BUCKET_NAME || 'Not Set',
@@ -345,14 +345,28 @@ app.post('/api/upload-media', authMiddleware, upload.single('file'), async (req,
     }
 
     try {
-        const fileName = `media/${Date.now()}_${req.file.originalname}`;
-        const s3Url = await uploadToS3(fileName, req.file.buffer);
+        const ext = path.extname(req.file.originalname).toLowerCase();
+        let folder = 'media/others';
+        let contentType = req.file.mimetype || 'application/octet-stream';
+
+        if (['.jpg', '.jpeg', '.png', '.webp'].includes(ext)) {
+            folder = 'media/photos';
+            contentType = 'image/jpeg';
+        } else if (['.webm', '.mp4'].includes(ext)) {
+            folder = 'media/videos';
+            contentType = 'video/webm';
+        }
+
+        const fileName = `${folder}/${Date.now()}_${req.file.originalname}`;
+        console.log(`[S3] Uploading to: ${fileName} (${contentType})`);
+
+        const s3Url = await uploadToS3(fileName, req.file.buffer, contentType);
 
         if (s3Url) {
-            console.log(`Media Uploaded: ${s3Url}`);
+            console.log(`[S3] Success: ${s3Url}`);
             res.json({ success: true, url: s3Url });
         } else {
-            throw new Error('S3 upload returned no location');
+            throw new Error('S3 upload failed (Check server logs for detail)');
         }
     } catch (e) {
         console.error("Media Upload Error", e);
