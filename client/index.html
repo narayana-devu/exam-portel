@@ -74,7 +74,7 @@
             alert("Global Error: " + msg + "\nLine: " + line + "\nCol: " + col);
             return false;
         };
-        console.log("V17.9 DEPLOYMENT ACTIVE - ASSESSOR_SYNC_FIX");
+        console.log("V17.10 DEPLOYMENT ACTIVE - MEDIA_SYNC_FIX");
 
         // DATA LAYER
         const DB_KEYS = {
@@ -322,7 +322,7 @@
             // NEW: Atomic Save to Cloud
 
 
-            // CLOUD SYNC FUNCTIONS (REST API Version) - v17.9
+            // CLOUD SYNC FUNCTIONS (REST API Version) - v17.10
             uploadToCloud: async (silent = false, targetRoute = null, filterFn = null, forceAll = false) => {
                 const statusBtn = document.getElementById('sync-status-text');
                 const MAPPING = {
@@ -360,22 +360,26 @@
 
                             if (statusBtn && !silent) statusBtn.innerText = `Syncing ${route}... (${pendingItems.length})`;
 
-                            // PRE-PROCESS: Upload Videos from IndexedDB to S3 (Specific to Responses)
+                            // PRE-PROCESS: Upload Media (Images & Videos) from IndexedDB to S3
                             if (route === 'responses') {
                                 for (let item of pendingItems) {
                                     if (item.evidence && Array.isArray(item.evidence)) {
-                                        let hasVideoUpdates = false;
+                                        let hasMediaUpdates = false;
                                         for (let j = 0; j < item.evidence.length; j++) {
                                             const ev = item.evidence[j];
-                                            // Check for pending video evidence
-                                            if (ev.type === 'VIDEO_INDEXED_DB' && ev.key && !ev.url && !ev.uploaded) {
-                                                try {
-                                                    const blob = await window.VideoDB.getVideo(ev.key);
-                                                    if (blob) {
-                                                        if (statusBtn && !silent) statusBtn.innerText = `Uploading Video...`;
+                                            // Check for any pending media (Video or Image) stored in IndexedDB
+                                            const isIndexedDB = ev.type === 'VIDEO_INDEXED_DB' || ev.storage === 'indexeddb';
+                                            const localKey = ev.key || ev.img;
 
+                                            if (isIndexedDB && localKey && !ev.url && !ev.uploaded) {
+                                                try {
+                                                    const blob = await window.VideoDB.getVideo(localKey);
+                                                    if (blob) {
+                                                        if (statusBtn && !silent) statusBtn.innerText = `Uploading Media...`;
+
+                                                        const extension = blob.type.includes('video') ? 'webm' : 'jpg';
                                                         const formData = new FormData();
-                                                        formData.append('file', blob, `${item.studentId}_${ev.key}.webm`);
+                                                        formData.append('file', blob, `${item.studentId}_${localKey}.${extension}`);
 
                                                         const uploadRes = await fetch(`${API_BASE}/upload-media`, {
                                                             method: 'POST',
@@ -386,23 +390,24 @@
                                                         if (uploadRes.ok) {
                                                             const json = await uploadRes.json();
                                                             ev.url = json.url;
-                                                            ev.type = 'VIDEO_S3'; // Update Type for Viewer
+                                                            ev.img = json.url; // Ensure img is updated for photos
+                                                            if (ev.type === 'VIDEO_INDEXED_DB') ev.type = 'VIDEO_S3';
                                                             ev.uploaded = true;
-                                                            hasVideoUpdates = true;
-                                                            console.log(`[Sync] Video Uploaded: ${json.url}`);
+                                                            ev.storage = 's3';
+                                                            hasMediaUpdates = true;
+                                                            console.log(`[Sync] Media Uploaded: ${json.url}`);
                                                         } else {
-                                                            console.error("Video Upload Failed", uploadRes.statusText);
+                                                            console.error("Media Upload Failed", uploadRes.statusText);
                                                         }
                                                     } else {
-                                                        console.warn("Skipping Payload: Video Blob missing in IndexedDB for key", ev.key);
+                                                        console.warn("Skipping: Blob missing in IndexedDB for key", localKey);
                                                     }
-                                                } catch (videoErr) {
-                                                    console.error("Video Upload Exception", videoErr);
+                                                } catch (err) {
+                                                    console.error("Media Upload Exception", err);
                                                 }
                                             }
                                         }
-                                        // Save intermediate progress to localStorage
-                                        if (hasVideoUpdates) {
+                                        if (hasMediaUpdates) {
                                             localStorage.setItem(key, JSON.stringify(items));
                                         }
                                     }
@@ -1167,7 +1172,7 @@
                                     <div className={`w-2 h-2 rounded-full ${navigator.onLine ? 'bg-green-500' : 'bg-red-500'}`}></div>
                                     {navigator.onLine ? "Cloud Connected" : "Offline Mode"}
                                 </span>
-                                <span>v17.9 (Production)</span>
+                                <span>v17.10 (Production)</span>
                             </div>
                             {error && <p className="text-red-500 text-sm text-center bg-red-50 p-2 rounded">{error}</p>}
                             <div className="flex gap-2">
@@ -1190,7 +1195,7 @@
                             </div>
                             <div className="text-center text-xs text-gray-400 mt-4 space-y-1">
                                 <p>Demo: admin/admin</p>
-                                <p className="text-gray-400 text-[10px] mt-2">v17.9 (Production)</p>
+                                <p className="text-gray-400 text-[10px] mt-2">v17.10 (Production)</p>
                             </div>
                         </form>
                     </div>
@@ -5432,6 +5437,70 @@
 
         // New StudentGradingView Component
         // SESSION PLAYER COMPONENT
+        const EvidenceImage = ({ item }) => {
+            const [src, setSrc] = React.useState(null);
+            const [isLocal, setIsLocal] = React.useState(false);
+
+            React.useEffect(() => {
+                let active = true;
+                const load = async () => {
+                    // 1. Try Local IndexedDB
+                    const key = (item.storage === 'indexeddb' || !item.url) ? item.img : null;
+                    if (key && !key.startsWith('data:') && !key.startsWith('blob:')) {
+                        try {
+                            const blob = await VideoDB.getVideo(key);
+                            if (blob && active) {
+                                setSrc(URL.createObjectURL(blob));
+                                setIsLocal(true);
+                                return;
+                            }
+                        } catch (e) { }
+                    }
+
+                    // 2. Fallback to direct img (Base64 or URL)
+                    if (active) {
+                        setSrc(item.img || item.url);
+                        setIsLocal(!item.url || item.img?.startsWith('data:'));
+                    }
+                };
+                load();
+                return () => { active = false; };
+            }, [item]);
+
+            if (!src) return <div className="w-full h-32 bg-gray-200 animate-pulse flex items-center justify-center"><Icons.Loader className="animate-spin" /></div>;
+
+            return (
+                <div className="relative group overflow-hidden h-32">
+                    <img
+                        src={src}
+                        className="w-full h-full object-cover transition-transform group-hover:scale-105 cursor-pointer"
+                        onClick={() => {
+                            const w = window.open("");
+                            w.document.write(`<img src="${src}" style="max-width:100%"/>`);
+                        }}
+                        onError={(e) => {
+                            e.target.style.display = 'none';
+                            e.target.nextSibling.style.display = 'flex';
+                        }}
+                    />
+                    <div className="absolute inset-0 hidden flex-col items-center justify-center bg-gray-200 text-gray-500 p-2 text-center">
+                        <Icons.XCircle className="w-8 h-8 mb-1" />
+                        <span className="text-[10px] font-bold">Media Not Found</span>
+                    </div>
+                    {isLocal && (
+                        <div className="absolute top-0 right-0 bg-amber-500 text-white text-[10px] px-2 py-1 font-bold flex items-center gap-1">
+                            <Icons.Smartphone className="w-3 h-3" /> Local
+                        </div>
+                    )}
+                    {!isLocal && (
+                        <div className="absolute top-0 right-0 bg-green-600 text-white text-[10px] px-2 py-1 font-bold flex items-center gap-1">
+                            <Icons.Cloud className="w-3 h-3" /> Synced
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
         const SessionPlayer = ({ parts }) => {
             const [index, setIndex] = React.useState(0);
             const [src, setSrc] = React.useState(null);
@@ -6003,20 +6072,7 @@
                                                             {e.type.includes('VIDEO') ? (
                                                                 <SessionPlayer parts={[e]} />
                                                             ) : (
-                                                                <img src={e.img} className="w-full h-32 object-cover transition-transform group-hover:scale-105"
-                                                                    onClick={() => {
-                                                                        if (e.img.startsWith('blob:') || e.img.startsWith('data:')) {
-                                                                            const w = window.open("");
-                                                                            w.document.write(`<img src="${e.img}" style="max-width:100%"/>`);
-                                                                        } else {
-                                                                            alert("Image not available on this device. Please sync from the source device.");
-                                                                        }
-                                                                    }}
-                                                                    onError={(ev) => {
-                                                                        ev.target.style.display = 'none';
-                                                                        ev.target.nextSibling.style.display = 'flex';
-                                                                    }}
-                                                                />
+                                                                <EvidenceImage item={e} />
                                                             )}
                                                         </>
                                                     )}
@@ -8025,7 +8081,7 @@
             React.useEffect(() => {
                 if (!user) return;
 
-                // Initial Sync on Load (Safe v17.9)
+                // Initial Sync on Load (Safe v17.10)
                 console.log("[Auto-Sync] Re-syncing on Load...");
                 window.Utils.downloadFromCloud(true);
 
