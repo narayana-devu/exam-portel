@@ -302,23 +302,51 @@ function createCRUDEndpoints(tableName, routeName) {
         if (!Array.isArray(items)) return res.status(400).json({ error: "Expected array" });
 
         dbAdapter.sync(tableName, items, (err) => {
-            if (err) return res.status(500).json({ error: err && err.message });
+            if (err) return res.status(500).json({ error: err.message });
             io.emit('data-change', { table: tableName, action: 'sync' });
             res.json({ success: true, count: items.length });
         });
     });
 }
 
-createCRUDEndpoints('batches', 'batches');
-createCRUDEndpoints('students', 'students');
-createCRUDEndpoints('qps', 'qps');
-createCRUDEndpoints('nos', 'nos');
-createCRUDEndpoints('pcs', 'pcs');
-createCRUDEndpoints('responses', 'responses');
-createCRUDEndpoints('ssc', 'ssc');
+// Create Routes for Known Tables
+const TABLES = ["batches", "students", "qps", "nos", "pcs", "responses", "ssc", "question_papers", "synced_chunks"];
+const ROUTES = ["batches", "students", "qps", "nos", "pcs", "responses", "ssc", "question_papers", "synced_chunks"];
 
-createCRUDEndpoints('question_papers', 'question_papers');
-createCRUDEndpoints('question_papers', 'question_papers');
+TABLES.forEach((table, idx) => createCRUDEndpoints(table, ROUTES[idx]));
+
+// --- MEDIA UPLOAD ENDPOINT (S3) ---
+const multer = require('multer');
+const upload = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 50 * 1024 * 1024 } // 50MB limit per chunk
+});
+
+app.post('/api/upload-media', authMiddleware, upload.single('file'), async (req, res) => {
+    if (!req.file) {
+        return res.status(400).json({ error: 'No file provided' });
+    }
+
+    if (!s3) {
+        // Fallback to local disk (optional, or just error)
+        return res.status(503).json({ error: 'S3 storage not configured' });
+    }
+
+    try {
+        const fileName = `media/${Date.now()}_${req.file.originalname}`;
+        const s3Url = await uploadToS3(fileName, req.file.buffer);
+
+        if (s3Url) {
+            console.log(`Media Uploaded: ${s3Url}`);
+            res.json({ success: true, url: s3Url });
+        } else {
+            throw new Error('S3 upload returned no location');
+        }
+    } catch (e) {
+        console.error("Media Upload Error", e);
+        res.status(500).json({ error: e.message });
+    }
+});
 
 // CUSTOM HANDLER FOR CHUNKS (S3 Support)
 app.post('/api/synced_chunks', async (req, res) => {

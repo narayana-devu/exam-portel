@@ -348,27 +348,60 @@
 
                             if (statusBtn && !silent) statusBtn.innerText = `Syncing ${route}... (${pendingItems.length})`;
 
-                            // PRE-PROCESS CHUNKING (Responses/Videos)
-                            for (let item of pendingItems) {
-                                if (item.evidence && Array.isArray(item.evidence)) {
-                                    for (let j = 0; j < item.evidence.length; j++) {
-                                        const ev = item.evidence[j];
-                                        // Simplified Chunking logic for REST (reuse existing logic but adapt save)
-                                        // Check if Blob or String needs chunking
-                                        if (ev.img && ev.img.length > 500000) { // > 500KB
-                                            // ... Chunking Logic would go here ...
-                                            // For now, let's assume direct upload works for < 200MB (Render limit).
-                                            // TODO: Restore complex chunking if needed.
+                            // PRE-PROCESS: Upload Videos from IndexedDB to S3 (Specific to Responses)
+                            if (route === 'responses') {
+                                for (let item of pendingItems) {
+                                    if (item.evidence && Array.isArray(item.evidence)) {
+                                        let hasVideoUpdates = false;
+                                        for (let j = 0; j < item.evidence.length; j++) {
+                                            const ev = item.evidence[j];
+                                            // Check for pending video evidence
+                                            if (ev.type === 'VIDEO_INDEXED_DB' && ev.key && !ev.url && !ev.uploaded) {
+                                                try {
+                                                    const blob = await window.VideoDB.getVideo(ev.key);
+                                                    if (blob) {
+                                                        if (statusBtn && !silent) statusBtn.innerText = `Uploading Video...`;
+
+                                                        const formData = new FormData();
+                                                        formData.append('file', blob, `${item.studentId}_${ev.key}.webm`);
+
+                                                        const uploadRes = await fetch(`${API_BASE}/upload-media`, {
+                                                            method: 'POST',
+                                                            headers: { 'x-api-key': 'portel_secure_key_2025' },
+                                                            body: formData
+                                                        });
+
+                                                        if (uploadRes.ok) {
+                                                            const json = await uploadRes.json();
+                                                            ev.url = json.url;
+                                                            ev.type = 'VIDEO_S3'; // Update Type for Viewer
+                                                            ev.uploaded = true;
+                                                            hasVideoUpdates = true;
+                                                            console.log(`[Sync] Video Uploaded: ${json.url}`);
+                                                        } else {
+                                                            console.error("Video Upload Failed", uploadRes.statusText);
+                                                        }
+                                                    } else {
+                                                        console.warn("Skipping Payload: Video Blob missing in IndexedDB for key", ev.key);
+                                                    }
+                                                } catch (videoErr) {
+                                                    console.error("Video Upload Exception", videoErr);
+                                                }
+                                            }
+                                        }
+                                        // Save intermediate progress to localStorage
+                                        if (hasVideoUpdates) {
+                                            localStorage.setItem(key, JSON.stringify(items));
                                         }
                                     }
                                 }
                             }
 
-                            // BULK UPLOAD
-                            console.log(`[Sync] Uploading ${pendingItems.length} to /api/sync/${route}`);
+                            // BULK UPLOAD JSON METADATA
+                            console.log(`[Sync] Uploading ${pendingItems.length} items to /api/sync/${route}`);
                             const response = await fetch(`${API_BASE}/sync/${route}`, {
                                 method: 'POST',
-                                headers: { 'Content-Type': 'application/json', 'x-api-key': 'portel_secure_key_2025' }, // Hardcoded key matching server default
+                                headers: { 'Content-Type': 'application/json', 'x-api-key': 'portel_secure_key_2025' },
                                 body: JSON.stringify(pendingItems)
                             });
 
@@ -4790,12 +4823,18 @@
             );
         };
 
-        // Helper Component: Video from IndexedDB
-        const VideoPlayerDB = ({ videoKey }) => {
+        // Helper Component: Video from IndexedDB or Cloud
+        const VideoPlayerDB = ({ videoKey, url: cloudUrl }) => {
             const [url, setUrl] = useState(null);
             const [status, setStatus] = useState('loading');
 
             useEffect(() => {
+                if (cloudUrl) {
+                    setUrl(cloudUrl);
+                    setStatus('ready');
+                    return;
+                }
+
                 VideoDB.getVideo(videoKey).then(blob => {
                     if (blob) {
                         setUrl(URL.createObjectURL(blob));
@@ -4807,14 +4846,13 @@
                     console.error("VideoPlayerDB Error", e);
                     setStatus('error');
                 });
-            }, [videoKey]);
+            }, [videoKey, cloudUrl]);
 
             if (status === 'loading') return <div className="p-4 text-gray-500 text-center text-xs">Loading Video...</div>;
             if (status === 'error') return (
                 <div className="p-4 text-red-500 text-center text-xs bg-red-50 border border-red-100 rounded">
                     <p className="font-bold">Video File Not Found</p>
                     <p className="font-mono mt-1 text-[10px] text-gray-400">Key: {videoKey}</p>
-                    <p className="text-[10px] text-gray-500 mt-2">Try refreshing (Ctrl+F5) to re-sync.</p>
                 </div>
             );
 
@@ -4827,6 +4865,9 @@
                 </div>
             );
         };
+
+
+
 
         // ASSESSORS TAB
         const AssessorsTab = () => {
@@ -5276,18 +5317,6 @@
                 <div>
                     <div className="flex justify-between items-center mb-4">
                         <button onClick={() => setExamType(null)} className="text-indigo-600 font-medium flex items-center gap-1"><Icons.ChevronDown className="rotate-90" /> Back</button>
-                        <button onClick={async () => {
-                            const btn = document.getElementById('refresh-btn');
-                            if (btn) btn.innerText = 'Syncing...';
-                            await window.Utils.downloadFromCloud(true);
-                            if (btn) btn.innerText = 'Refresh Results';
-
-                            // Reliable Update: Refresh responses state
-                            setAllResponses(window.Utils.getResponses());
-                            setStudents([...students]); // Force re-render just in case
-                        }} id="refresh-btn" className="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-3 py-1 rounded text-sm font-bold flex items-center gap-2 border border-indigo-200">
-                            <Icons.RefreshCw className="w-4 h-4" /> Refresh Results
-                        </button>
                     </div>
                     <h3 className="text-xl font-bold mb-4">{selectedBatch.name} - {examType} Results</h3>
                     <div className="bg-white rounded overflow-hidden shadow">
@@ -5377,10 +5406,10 @@
                                 setSrc(part.img);
                                 setSourceType('Local');
                             }
-                        } else if (part.downloadUrl) {
+                        } else if (part.downloadUrl || part.url) {
                             // Fallback to Cloud URL
                             if (active) {
-                                setSrc(part.downloadUrl);
+                                setSrc(part.downloadUrl || part.url);
                                 setSourceType('Cloud');
                             }
                         } else if (part.isChunked && part.chunkIds && part.chunkIds.length > 0) {
@@ -6419,15 +6448,6 @@
                 loadQPs();
                 window.addEventListener('cloud-sync-complete', loadQPs);
 
-                // Default Sync: Auto-Download on Dashboard Load
-                console.log("Admin Dashboard Loaded: Triggering Auto-Sync...");
-                window.Utils.downloadFromCloud(true); // Silent Sync
-
-                // Real-Time Sync (Commented out Socket.io)
-                // In Firebase, we can use db.collection(...).onSnapshot()
-                // const socket = io(SERVER_URL);
-                // socket.on('data-change', (data) => { ... });
-
                 return () => {
                     window.removeEventListener('cloud-sync-complete', loadQPs);
                 };
@@ -6450,15 +6470,9 @@
                                 <span className="font-medium text-gray-900 capitalize">{activeTab.replace(/([A-Z])/g, ' $1')}</span>
                             </div>
                             <div className="flex items-center gap-4">
-                                {/* CLOUD SYNC CONTROLS */}
+                                {/* CLOUD SYNC CONTROLS REMOVED (Auto-Sync Active) */}
                                 <div className="flex items-center gap-2 mr-2 border-r pr-4">
-                                    <span id="sync-status-text" className="text-xs text-gray-500 hidden md:inline-block">Sync:</span>
-                                    <button onClick={() => window.Utils.uploadToCloud()} className="p-2 text-blue-600 hover:bg-blue-50 rounded transition-colors" title="Upload Local Data to Cloud">
-                                        <Icons.Upload className="w-5 h-5" />
-                                    </button>
-                                    <button onClick={() => window.Utils.downloadFromCloud()} className="p-2 text-green-600 hover:bg-green-50 rounded transition-colors" title="Download Data from Cloud">
-                                        <Icons.Download className="w-5 h-5" />
-                                    </button>
+                                    <span id="sync-status-text" className="text-xs text-gray-400 hidden md:inline-block italic">Auto-Sync On</span>
                                 </div>
 
                                 <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 font-bold">A</div>
@@ -7512,7 +7526,7 @@
 
                 } catch (e) {
                     console.error("Submit Sync Failed", e);
-                    alert("Submitted to LOCAL STORAGE. Cloud Sync Failed (" + e.message + "). Please enable internet and click 'Sync Data' manually.");
+                    alert("Submitted to LOCAL STORAGE. Cloud Sync Failed (" + e.message + "). The system will retry automatically when online.");
                     endExam();
                 }
             };
@@ -7920,6 +7934,25 @@
                     if (saved) setUser(JSON.parse(saved));
                 } catch (e) { console.error(e); }
             }, []);
+
+            // GLOBAL AUTO-SYNC (Running for ALL users when logged in)
+            React.useEffect(() => {
+                if (!user) return;
+
+                console.log("[Auto-Sync] Initialized for user:", user.username);
+                // Initial Sync on Load
+                window.Utils.downloadFromCloud(true);
+
+                const intervalId = setInterval(() => {
+                    if (navigator.onLine) {
+                        console.log("[Auto-Sync] Triggering global sync...");
+                        window.Utils.uploadToCloud(true); // Upload Local Changes
+                        window.Utils.downloadFromCloud(true); // Fetch Cloud Updates
+                    }
+                }, 30000); // Every 30 seconds
+
+                return () => clearInterval(intervalId);
+            }, [user]);
 
             const handleLogin = (u) => {
                 localStorage.setItem('se_user', JSON.stringify(u));
