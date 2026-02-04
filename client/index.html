@@ -74,7 +74,7 @@
             alert("Global Error: " + msg + "\nLine: " + line + "\nCol: " + col);
             return false;
         };
-        console.log("V17.10 DEPLOYMENT ACTIVE - MEDIA_SYNC_FIX");
+        console.log("V17.11 DEPLOYMENT ACTIVE - MEDIA_RESILIENCE_FIX");
 
         // DATA LAYER
         const DB_KEYS = {
@@ -322,7 +322,7 @@
             // NEW: Atomic Save to Cloud
 
 
-            // CLOUD SYNC FUNCTIONS (REST API Version) - v17.10
+            // CLOUD SYNC FUNCTIONS (REST API Version) - v17.11
             uploadToCloud: async (silent = false, targetRoute = null, filterFn = null, forceAll = false) => {
                 const statusBtn = document.getElementById('sync-status-text');
                 const MAPPING = {
@@ -350,8 +350,16 @@
                             if (filterFn) items = items.filter(filterFn);
 
                             // PENDING SYNC CHECK
-                            // ForceAll sends everything, otherwise only !synced
-                            const pendingItems = forceAll ? items : items.filter(i => !i.synced);
+                            // ForceAll sends everything.
+                            // Otherwise: Send if !synced OR if it has un-uploaded media (Responses only)
+                            const pendingItems = items.filter(i => {
+                                if (forceAll) return true;
+                                if (!i.synced) return true;
+                                if (route === 'responses' && i.evidence) {
+                                    return i.evidence.some(ev => (ev.storage === 'indexeddb' || ev.type === 'VIDEO_INDEXED_DB') && !ev.url);
+                                }
+                                return false;
+                            });
 
                             if (pendingItems.length === 0) {
                                 skipped += items.length;
@@ -1174,7 +1182,7 @@
                                     <div className={`w-2 h-2 rounded-full ${navigator.onLine ? 'bg-green-500' : 'bg-red-500'}`}></div>
                                     {navigator.onLine ? "Cloud Connected" : "Offline Mode"}
                                 </span>
-                                <span>v17.10 (Production)</span>
+                                <span>v17.11 (Production)</span>
                             </div>
                             {error && <p className="text-red-500 text-sm text-center bg-red-50 p-2 rounded">{error}</p>}
                             <div className="flex gap-2">
@@ -5472,7 +5480,7 @@
             if (!src) return <div className="w-full h-32 bg-gray-200 animate-pulse flex items-center justify-center"><Icons.Loader className="animate-spin" /></div>;
 
             return (
-                <div className="relative group overflow-hidden h-32">
+                <div className="relative group overflow-hidden h-32 bg-gray-100">
                     <img
                         src={src}
                         className="w-full h-full object-cover transition-transform group-hover:scale-105 cursor-pointer"
@@ -5481,21 +5489,25 @@
                             w.document.write(`<img src="${src}" style="max-width:100%"/>`);
                         }}
                         onError={(e) => {
-                            e.target.style.display = 'none';
-                            e.target.nextSibling.style.display = 'flex';
+                            // If it's not a valid data/blob URL, it will fail
+                            if (!src.startsWith('data:') && !src.startsWith('blob:') && !src.startsWith('http')) {
+                                e.target.style.display = 'none';
+                                e.target.nextSibling.style.display = 'flex';
+                            }
                         }}
                     />
                     <div className="absolute inset-0 hidden flex-col items-center justify-center bg-gray-200 text-gray-500 p-2 text-center">
                         <Icons.XCircle className="w-8 h-8 mb-1" />
                         <span className="text-[10px] font-bold">Media Not Found</span>
+                        <p className="text-[8px]">Device Mismatch or Not Synced</p>
                     </div>
                     {isLocal && (
-                        <div className="absolute top-0 right-0 bg-amber-500 text-white text-[10px] px-2 py-1 font-bold flex items-center gap-1">
+                        <div className="absolute top-0 right-0 bg-amber-500 text-white text-[10px] px-2 py-1 font-bold flex items-center gap-1 shadow-sm">
                             <Icons.Smartphone className="w-3 h-3" /> Local
                         </div>
                     )}
-                    {!isLocal && (
-                        <div className="absolute top-0 right-0 bg-green-600 text-white text-[10px] px-2 py-1 font-bold flex items-center gap-1">
+                    {!isLocal && src && src.startsWith('http') && (
+                        <div className="absolute top-0 right-0 bg-green-600 text-white text-[10px] px-2 py-1 font-bold flex items-center gap-1 shadow-sm">
                             <Icons.Cloud className="w-3 h-3" /> Synced
                         </div>
                     )}
@@ -5507,18 +5519,30 @@
             const [index, setIndex] = React.useState(0);
             const [src, setSrc] = React.useState(null);
             const [sourceType, setSourceType] = React.useState(null); // 'Local' | 'Cloud'
+            const [isLoading, setIsLoading] = React.useState(true);
+            const [isError, setIsError] = React.useState(false);
 
             React.useEffect(() => {
                 let active = true;
                 const load = async () => {
+                    setIsLoading(true);
+                    setIsError(false);
                     setSrc(null);
                     setSourceType(null);
+
+                    // Safety timeout (5 seconds)
+                    const timeout = setTimeout(() => {
+                        if (active && isLoading) {
+                            console.warn("SessionPlayer load timeout for index", index);
+                            setIsLoading(false);
+                            setIsError(true);
+                        }
+                    }, 5000);
+
                     try {
                         const part = parts[index];
-                        // Try Local IndexedDB first
                         let blob = null;
 
-                        // Determine Key: Use part.key, part.originalKey (from loadStudentResponse), or fallback to part.img if offloaded
                         let key = part.key || part.originalKey;
                         if (!key && part.storage === 'indexeddb' && part.img && !part.img.startsWith('data:') && !part.img.startsWith('blob:')) {
                             key = part.img;
@@ -5532,52 +5556,38 @@
                             if (active) {
                                 setSrc(URL.createObjectURL(blob));
                                 setSourceType('Local');
+                                setIsLoading(false);
                             }
                         } else if (part.img && (typeof part.img === 'string') && (part.img.startsWith('data:') || part.img.startsWith('blob:'))) {
-                            // Fallback to Embedded Base64 or Blob URL
                             if (active) {
                                 setSrc(part.img);
                                 setSourceType('Local');
+                                setIsLoading(false);
                             }
                         } else if (part.downloadUrl || part.url) {
-                            // Fallback to Cloud URL
                             if (active) {
                                 setSrc(part.downloadUrl || part.url);
                                 setSourceType('Cloud');
-                            }
-                        } else if (part.isChunked && part.chunkIds && part.chunkIds.length > 0) {
-                            // NEW: Handle Chunked Video from Firestore
-                            try {
-                                const chunkDocs = await Promise.all(part.chunkIds.map(id => db.collection('synced_chunks').doc(id).get()));
-                                // Sort by index stored in doc data
-                                const validChunks = chunkDocs.filter(d => d.exists).map(d => d.data()).sort((a, b) => a.index - b.index);
-
-                                if (validChunks.length > 0) {
-                                    const combinedBase64 = validChunks.map(c => c.data).join('');
-                                    // Use base64ToBlob utility if available, or fetch
-                                    const blob = await (await fetch(combinedBase64)).blob();
-
-                                    if (active) {
-                                        setSrc(URL.createObjectURL(blob));
-                                        setSourceType('Cloud Chunks');
-                                    }
-                                } else {
-                                    console.warn("Chunks missing for part", part);
-                                }
-                            } catch (err) {
-                                console.error("Error reassembling chunks", err);
+                                setIsLoading(false);
                             }
                         } else {
-                            console.warn("Video Part Missing (No Local Blob, No Base64, & No Cloud URL)", part);
+                            if (active) {
+                                setIsLoading(false);
+                                setIsError(true);
+                            }
                         }
-                    } catch (e) { console.error(e); }
+                    } catch (e) {
+                        console.error(e);
+                        if (active) { setIsLoading(false); setIsError(true); }
+                    }
+                    clearTimeout(timeout);
                 };
                 load();
                 return () => { active = false; };
             }, [index, parts]);
 
             return (
-                <div className="relative bg-black w-full h-32 group-hover:h-auto transition-all">
+                <div className="relative bg-black w-full h-32 group-hover:h-auto min-h-[128px]">
                     {src ? (
                         <video
                             src={src}
@@ -5587,15 +5597,32 @@
                             onEnded={() => {
                                 if (index < parts.length - 1) setIndex(index + 1);
                             }}
+                            onError={() => setIsError(true)}
                         />
                     ) : (
-                        <div className="flex items-center justify-center h-full text-white text-xs">
-                            Loading Part {index + 1}...
+                        <div className="flex flex-col items-center justify-center h-full text-white text-xs p-4 text-center">
+                            {isLoading ? (
+                                <>
+                                    <Icons.Loader className="w-6 h-6 animate-spin mb-2 text-indigo-400" />
+                                    <span>Loading Part {index + 1}...</span>
+                                </>
+                            ) : (
+                                <>
+                                    <Icons.XCircle className="w-8 h-8 mb-2 text-red-500" />
+                                    <span className="font-bold">Media Not Found</span>
+                                    <p className="text-[10px] opacity-60">Not Synced or Local Storage Missing</p>
+                                </>
+                            )}
                         </div>
                     )}
                     <div className="absolute top-0 right-0 flex gap-1">
+                        {sourceType === 'Local' && (
+                            <div className="bg-amber-500 text-white text-[10px] px-2 py-1 font-bold z-10 flex items-center gap-1 shadow-sm">
+                                <Icons.Smartphone className="w-3 h-3" /> Local
+                            </div>
+                        )}
                         {sourceType === 'Cloud' && (
-                            <div className="bg-green-600 text-white text-[10px] px-2 py-1 font-bold z-10 flex items-center gap-1">
+                            <div className="bg-green-600 text-white text-[10px] px-2 py-1 font-bold z-10 flex items-center gap-1 shadow-sm">
                                 <Icons.Cloud className="w-3 h-3" /> Synced
                             </div>
                         )}
@@ -8083,7 +8110,7 @@
             React.useEffect(() => {
                 if (!user) return;
 
-                // Initial Sync on Load (Safe v17.10)
+                // Initial Sync on Load (Safe v17.11)
                 console.log("[Auto-Sync] Re-syncing on Load...");
                 window.Utils.downloadFromCloud(true);
 
