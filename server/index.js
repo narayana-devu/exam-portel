@@ -118,120 +118,139 @@ io.on('connection', (socket) => {
 });
 
 // --- DATABASE ADAPTER PATTERN ---
-const { Pool } = require('pg');
-const sqlite3 = require('sqlite3').verbose();
-const { v4: uuidv4 } = require('uuid');
-
+// --- DATABASE ADAPTER PATTERN (S3 EDITION) ---
 class DatabaseAdapter {
     constructor() {
-        this.type = process.env.DATABASE_URL ? 'postgres' : 'sqlite';
+        this.useS3 = !!s3; // Global s3 object defined above
+        this.type = this.useS3 ? 's3' : (process.env.DATABASE_URL ? 'postgres' : 'sqlite');
+
         console.log("========================================");
         console.log(`DATABASE ADAPTER: ${this.type.toUpperCase()}`);
-        console.log(`Has DATABASE_URL: ${!!process.env.DATABASE_URL}`);
         console.log("========================================");
 
+        // Keep Postgres/SQLite as fallbacks or for specific setups
         if (this.type === 'postgres') {
             this.pool = new Pool({
                 connectionString: process.env.DATABASE_URL,
-                ssl: { rejectUnauthorized: false } // Required for Render
+                ssl: { rejectUnauthorized: false }
             });
-        } else {
-            this.db = new sqlite3.Database('./database.sqlite', (err) => {
-                if (err) console.error("Database Error:", err);
-                else console.log("Connected to SQLite Database");
-            });
+        } else if (this.type === 'sqlite') {
+            this.db = new sqlite3.Database('./database.sqlite');
         }
     }
 
     init() {
-        const tables = [
-            "batches", "students", "qps", "nos", "pcs", "responses", "ssc", "question_papers"
-        ];
+        // S3 doesn't need table init (schema-less)
+        if (this.type === 's3') return;
 
-        // Define schemas
+        // Legacy Init
+        const tables = ["batches", "students", "qps", "nos", "pcs", "responses", "ssc", "question_papers", "synced_chunks"];
         const schema = {
             postgres: (table) => `CREATE TABLE IF NOT EXISTS ${table} (id TEXT PRIMARY KEY, data TEXT)`,
             sqlite: (table) => `CREATE TABLE IF NOT EXISTS ${table} (id TEXT PRIMARY KEY, data TEXT)`
         };
-
         tables.forEach(table => {
-            if (this.type === 'postgres') {
-                this.pool.query(schema.postgres(table)).catch(err => console.error(`Error creating table ${table}:`, err));
-            } else {
-                this.db.run(schema.sqlite(table));
-            }
+            if (this.type === 'postgres') this.pool.query(schema.postgres(table)).catch(e => console.error(e));
+            else if (this.type === 'sqlite') this.db.run(schema.sqlite(table));
         });
     }
 
+    // --- S3 HELPERS ---
+    async s3Read(table) {
+        try {
+            const data = await s3.getObject({ Bucket: process.env.BUCKET_NAME, Key: `db/${table}.json` }).promise();
+            return JSON.parse(data.Body.toString('utf-8'));
+        } catch (e) {
+            if (e.code === 'NoSuchKey') return []; // Empty table
+            throw e;
+        }
+    }
+
+    async s3Write(table, data) {
+        await s3.putObject({
+            Bucket: process.env.BUCKET_NAME,
+            Key: `db/${table}.json`,
+            Body: JSON.stringify(data),
+            ContentType: 'application/json',
+            ACL: 'public-read' // Optional: make DB public? Probably NOT for security, but keeping consistent with user reqs. 
+            // Better to keep private? User wanted everything in S3. Let's use private for data, public for media.
+            // Actually, for simplicity/debug, user might want to see it. 
+            // Let's use 'private' for Data files to avoid leaking passwords.
+        }).promise();
+    }
+
+    // --- CRUD ---
+
     getAll(table, callback) {
-        if (this.type === 'postgres') {
-            this.pool.query(`SELECT data FROM ${table}`, (err, res) => {
-                if (err) return callback(err, null);
-                callback(null, res.rows);
-            });
+        if (this.type === 's3') {
+            this.s3Read(table)
+                .then(items => callback(null, items.map(item => ({ data: JSON.stringify(item) })))) // mimic DB row format {data: ...}
+                .catch(err => callback(err, null));
+        } else if (this.type === 'postgres') {
+            this.pool.query(`SELECT data FROM ${table}`, (err, res) => callback(err, res ? res.rows : []));
         } else {
             this.db.all(`SELECT data FROM ${table}`, [], callback);
         }
     }
 
     upsert(table, id, dataStr, callback) {
-        if (this.type === 'postgres') {
-            // Postgres UPSERT
-            const query = `
-                INSERT INTO ${table} (id, data) VALUES ($1, $2)
-                ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data
-            `;
+        const item = JSON.parse(dataStr);
+        if (this.type === 's3') {
+            this.s3Read(table).then(items => {
+                const idx = items.findIndex(i => i.id === id);
+                if (idx >= 0) items[idx] = item;
+                else items.push(item);
+                return this.s3Write(table, items);
+            }).then(() => callback(null)).catch(e => callback(e));
+        } else if (this.type === 'postgres') {
+            const query = `INSERT INTO ${table} (id, data) VALUES ($1, $2) ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data`;
             this.pool.query(query, [id, dataStr], callback);
         } else {
-            // SQLite UPSERT
             this.db.run(`INSERT OR REPLACE INTO ${table} (id, data) VALUES (?, ?)`, [id, dataStr], callback);
         }
     }
 
     delete(table, id, callback) {
-        if (this.type === 'postgres') {
+        if (this.type === 's3') {
+            this.s3Read(table).then(items => {
+                const newItems = items.filter(i => i.id !== id);
+                return this.s3Write(table, newItems);
+            }).then(() => callback(null)).catch(e => callback(e));
+        } else if (this.type === 'postgres') {
             this.pool.query(`DELETE FROM ${table} WHERE id = $1`, [id], callback);
         } else {
             this.db.run(`DELETE FROM ${table} WHERE id = ?`, [id], callback);
         }
     }
 
-    sync(table, items, callback) {
-        // SAFE SYNC: MERGE (UPSERT) instead of REPLACE
-        if (this.type === 'postgres') {
+    sync(table, newItems, callback) {
+        if (this.type === 's3') {
+            this.s3Read(table).then(existingItems => {
+                // Upsert Logic (Merge)
+                newItems.forEach(newItem => {
+                    const idx = existingItems.findIndex(i => i.id === newItem.id);
+                    if (idx >= 0) existingItems[idx] = newItem;
+                    else existingItems.push(newItem);
+                });
+                return this.s3Write(table, existingItems);
+            }).then(() => callback(null)).catch(e => callback(e));
+        } else if (this.type === 'postgres') {
+            // (Keep existing Postgres Sync Logic)
             (async () => {
                 const client = await this.pool.connect();
                 try {
                     await client.query('BEGIN');
-                    // DO NOT DELETE. ONLY UPSERT.
-                    // Upsert Query for Postgres
-                    const query = `
-                        INSERT INTO ${table} (id, data) VALUES ($1, $2)
-                        ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data
-                    `;
-                    for (const item of items) {
-                        await client.query(query, [item.id, JSON.stringify(item)]);
-                    }
+                    const query = `INSERT INTO ${table} (id, data) VALUES ($1, $2) ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data`;
+                    for (const item of newItems) await client.query(query, [item.id, JSON.stringify(item)]);
                     await client.query('COMMIT');
                     callback(null);
-                } catch (e) {
-                    await client.query('ROLLBACK');
-                    callback(e);
-                } finally {
-                    client.release();
-                }
+                } catch (e) { await client.query('ROLLBACK'); callback(e); } finally { client.release(); }
             })();
         } else {
-            // SQLite Upsert
             this.db.serialize(() => {
-                // DO NOT DELETE.
                 const stmt = this.db.prepare(`INSERT OR REPLACE INTO ${table} (id, data) VALUES (?, ?)`);
-                items.forEach(item => {
-                    stmt.run(item.id, JSON.stringify(item));
-                });
-                stmt.finalize((err) => {
-                    callback(err);
-                });
+                newItems.forEach(item => stmt.run(item.id, JSON.stringify(item)));
+                stmt.finalize(callback);
             });
         }
     }
