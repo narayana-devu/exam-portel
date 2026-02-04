@@ -260,6 +260,20 @@ class DatabaseAdapter {
 const dbAdapter = new DatabaseAdapter();
 dbAdapter.init();
 
+// Diagnostics Route (Public or Protected?)
+// Let's protect it with the same auth to avoid leaking bucket name to public.
+app.get('/api/diagnostics', authMiddleware, (req, res) => {
+    res.json({
+        version: '17.7',
+        storage_type: dbAdapter.type,
+        s3_enabled: !!s3,
+        bucket_name: process.env.BUCKET_NAME || 'Not Set',
+        region: process.env.AWS_REGION || 'ap-south-1',
+        database_url_present: !!process.env.DATABASE_URL,
+        time: new Date().toISOString()
+    });
+});
+
 // --- API ROUTES ---
 
 // Helper for simple CRUD

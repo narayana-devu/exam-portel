@@ -74,7 +74,7 @@
             alert("Global Error: " + msg + "\nLine: " + line + "\nCol: " + col);
             return false;
         };
-        console.log("V17.6 DEPLOYMENT ACTIVE - INSTANT_CLOUD_SYNC");
+        console.log("V17.7 DEPLOYMENT ACTIVE - CLOUD_DIAGNOSTICS");
 
         // DATA LAYER
         const DB_KEYS = {
@@ -488,12 +488,14 @@
             getSSC: () => JSON.parse(localStorage.getItem(DB_KEYS.SSC) || '[]'),
             saveSSC: (ssc) => {
                 const list = window.Utils.getSSC();
-                if (!ssc.id) ssc.id = window.Utils.generateId();
+                if (!ssc.id) ssc.id = Date.now().toString(36) + Math.random().toString(36).substr(2);
                 ssc.synced = false;
-                list.push(ssc);
-                localStorage.setItem(DB_KEYS.SSC, JSON.stringify(list));
 
-                // Atomic Sync
+                const existingIndex = list.findIndex(item => item.id === ssc.id);
+                if (existingIndex >= 0) list[existingIndex] = ssc;
+                else list.push(ssc);
+
+                localStorage.setItem(DB_KEYS.SSC, JSON.stringify(list));
                 window.Utils.uploadToCloud(true, 'ssc');
             },
             deleteSSC: (id) => {
@@ -811,8 +813,12 @@
             saveStudent: (student) => {
                 const list = window.Utils.getStudents();
                 if (!student.id) student.id = Date.now().toString(36) + Math.random().toString(36).substr(2);
-                student.synced = false; // Add this
-                list.push(student);
+                student.synced = false;
+
+                const existingIndex = list.findIndex(s => s.id === student.id);
+                if (existingIndex >= 0) list[existingIndex] = student;
+                else list.push(student);
+
                 localStorage.setItem(DB_KEYS.STUDENTS, JSON.stringify(list));
                 window.Utils.uploadToCloud(true, 'students');
             },
@@ -878,8 +884,12 @@
             saveQuestionPaper: (qp) => {
                 const list = window.Utils.getQuestionPapers();
                 if (!qp.id) qp.id = Date.now().toString(36) + Math.random().toString(36).substr(2);
-                qp.synced = false; // Add this
-                list.push(qp);
+                qp.synced = false;
+
+                const existingIndex = list.findIndex(q => q.id === qp.id);
+                if (existingIndex >= 0) list[existingIndex] = qp;
+                else list.push(qp);
+
                 localStorage.setItem(DB_KEYS.QUESTION_PAPERS, JSON.stringify(list));
                 window.Utils.uploadToCloud(true, 'question_papers');
             },
@@ -1160,7 +1170,7 @@
                                     <div className={`w-2 h-2 rounded-full ${navigator.onLine ? 'bg-green-500' : 'bg-red-500'}`}></div>
                                     {navigator.onLine ? "Cloud Connected" : "Offline Mode"}
                                 </span>
-                                <span>v17.6 (Production)</span>
+                                <span>v17.7 (Production)</span>
                             </div>
                             {error && <p className="text-red-500 text-sm text-center bg-red-50 p-2 rounded">{error}</p>}
                             <div className="flex gap-2">
@@ -1183,7 +1193,7 @@
                             </div>
                             <div className="text-center text-xs text-gray-400 mt-4 space-y-1">
                                 <p>Demo: admin/admin</p>
-                                <p className="text-gray-400 text-[10px] mt-2">v17.6 (Production)</p>
+                                <p className="text-gray-400 text-[10px] mt-2">v17.7 (Production)</p>
                             </div>
                         </form>
                     </div>
@@ -6527,7 +6537,32 @@
                             <div className="flex items-center gap-4">
                                 {/* CLOUD SYNC CONTROLS REMOVED (Auto-Sync Active) */}
                                 <div className="flex items-center gap-2 mr-2 border-r pr-4">
-                                    <span id="sync-status-text" className="text-xs text-gray-400 hidden md:inline-block italic">Auto-Sync On</span>
+                                    <span
+                                        id="sync-status-text"
+                                        className="text-xs text-indigo-400 cursor-help hover:text-indigo-600 transition-colors hidden md:inline-block italic font-medium"
+                                        title="Click for Cloud Diagnostics"
+                                        onClick={async () => {
+                                            try {
+                                                const res = await fetch(`${API_BASE}/diagnostics`, {
+                                                    headers: { 'x-api-key': 'portel_secure_key_2025' }
+                                                });
+                                                if (res.ok) {
+                                                    const data = await res.json();
+                                                    alert(`?? CLOUD DIAGNOSTICS ??\n\n` +
+                                                        `? Storage Type: ${data.storage_type.toUpperCase()}\n` +
+                                                        `? S3 Enabled: ${data.s3_enabled ? '? YES' : '? NO'}\n` +
+                                                        `? Bucket: ${data.bucket_name}\n` +
+                                                        `? Region: ${data.region}\n` +
+                                                        `? Server Time: ${new Date(data.time).toLocaleString()}\n\n` +
+                                                        (data.s3_enabled ? "Data is safely stored in AWS S3." : "WARNING: Data is on temporary server disk!"));
+                                                } else {
+                                                    alert("Diagnostics Failed: Could not reach server.");
+                                                }
+                                            } catch (e) { alert("Error: " + e.message); }
+                                        }}
+                                    >
+                                        Auto-Sync On
+                                    </span>
                                 </div>
 
                                 <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 font-bold">A</div>
