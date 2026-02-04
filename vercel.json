@@ -1,12 +1,17 @@
 {
+    "version": 2,
     "rewrites": [
         {
-            "source": "/",
-            "destination": "/client/index.html"
+            "source": "/api/:path*",
+            "destination": "https://exam-portal-api.onrender.com/api/:path*"
+        },
+        {
+            "source": "/socket.io/:path*",
+            "destination": "https://exam-portal-api.onrender.com/socket.io/:path*"
         },
         {
             "source": "/(.*)",
-            "destination": "/client/$1"
+            "destination": "/client/index.html"
         }
     ]
 }

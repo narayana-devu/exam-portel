@@ -17,11 +17,44 @@ app.use(express.json({ limit: '200mb' }));
 app.use(express.urlencoded({ limit: '200mb', extended: true }));
 app.use(express.static('uploads'));
 
-// Ensure uploads directory exists
+// Ensure uploads directory exists (Fallback)
 const uploadsDir = path.join(__dirname, 'uploads');
 if (!fs.existsSync(uploadsDir)) {
     fs.mkdirSync(uploadsDir);
 }
+
+// S3 CONFIGURATION
+const AWS = require('aws-sdk');
+let s3 = null;
+if (process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY && process.env.BUCKET_NAME) {
+    AWS.config.update({
+        accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+        region: process.env.AWS_REGION || 'ap-south-1' // Default region
+    });
+    s3 = new AWS.S3();
+    console.log("S3 Enabled: " + process.env.BUCKET_NAME);
+} else {
+    console.log("S3 Disabled (Missing valid AWS Env Vars). Using Local Disk.");
+}
+
+const uploadToS3 = async (fileName, fileContent) => {
+    if (!s3) return null;
+    const params = {
+        Bucket: process.env.BUCKET_NAME,
+        Key: fileName,
+        Body: fileContent,
+        ACL: 'public-read', // or private depending on need
+        ContentType: 'application/octet-stream' // Detect if possible
+    };
+    try {
+        const data = await s3.upload(params).promise();
+        return data.Location;
+    } catch (e) {
+        console.error("S3 Upload Error", e);
+        return null;
+    }
+};
 
 // Create HTTP Server & Socket.io
 const httpServer = http.createServer(app);
@@ -266,6 +299,53 @@ createCRUDEndpoints('responses', 'responses');
 createCRUDEndpoints('ssc', 'ssc');
 
 createCRUDEndpoints('question_papers', 'question_papers');
+createCRUDEndpoints('question_papers', 'question_papers');
+
+// CUSTOM HANDLER FOR CHUNKS (S3 Support)
+app.post('/api/synced_chunks', async (req, res) => {
+    // 1. Check if S3 is active
+    if (s3) {
+        // Assume req.body is { id, data: "base64...", ... }
+        // Or if it is a bulk sync array
+        let items = Array.isArray(req.body) ? req.body : [req.body];
+
+        try {
+            for (let item of items) {
+                if (item.data) {
+                    // Upload Base64 to S3
+                    const buffer = Buffer.from(item.data, 'base64');
+                    const key = `chunks/${item.id}_${Date.now()}.bin`;
+                    const s3Url = await uploadToS3(key, buffer);
+
+                    if (s3Url) {
+                        item.data = s3Url; // Replace heavy data with URL
+                        item.storage = 's3';
+                    }
+                }
+                // Save Metadata to DB (Postgres)
+                await new Promise((resolve, reject) => {
+                    dbAdapter.upsert('synced_chunks', item.id, JSON.stringify(item), (err) => {
+                        if (err) reject(err);
+                        else resolve();
+                    });
+                });
+            }
+            res.json({ success: true, count: items.length, storage: 's3_hybrid' });
+        } catch (e) {
+            console.error("S3 Sync Error", e);
+            res.status(500).json({ error: e.message });
+        }
+    } else {
+        // Fallback to Standard DB implementation
+        // Reuse the generic logic but we must handle it manually here since we hijacked the route
+        const items = Array.isArray(req.body) ? req.body : [req.body];
+        dbAdapter.sync('synced_chunks', items, (err) => {
+            if (err) return res.status(500).json({ error: err.message });
+            res.json({ success: true, count: items.length });
+        });
+    }
+});
+// createCRUDEndpoints('synced_chunks', 'synced_chunks'); // Replaced by custom handler above
 
 // Removed duplicate health check from bottom
 
