@@ -74,7 +74,7 @@
             alert("Global Error: " + msg + "\nLine: " + line + "\nCol: " + col);
             return false;
         };
-        console.log("V17.11 DEPLOYMENT ACTIVE - MEDIA_RESILIENCE_FIX");
+        console.log("V17.12 DEPLOYMENT ACTIVE - UNIVERSAL_MEDIA_FIX");
 
         // DATA LAYER
         const DB_KEYS = {
@@ -322,7 +322,7 @@
             // NEW: Atomic Save to Cloud
 
 
-            // CLOUD SYNC FUNCTIONS (REST API Version) - v17.11
+            // CLOUD SYNC FUNCTIONS (REST API Version) - v17.12
             uploadToCloud: async (silent = false, targetRoute = null, filterFn = null, forceAll = false) => {
                 const statusBtn = document.getElementById('sync-status-text');
                 const MAPPING = {
@@ -431,8 +431,17 @@
                             });
 
                             if (response.ok) {
-                                // Mark as synced locally
-                                items.forEach(i => { if (!i.synced) i.synced = true; });
+                                // ULTRA-SAFE: Only mark as synced if ALL media within this batch was uploaded
+                                items.forEach(i => {
+                                    if (route === 'responses' && i.evidence) {
+                                        const hasUnuploadedMedia = i.evidence.some(ev => (ev.storage === 'indexeddb' || ev.type === 'VIDEO_INDEXED_DB') && !ev.url);
+                                        if (hasUnuploadedMedia) {
+                                            i.synced = false;
+                                            return;
+                                        }
+                                    }
+                                    if (!i.synced) i.synced = true;
+                                });
                                 localStorage.setItem(key, JSON.stringify(items));
                                 success += pendingItems.length;
                             } else {
@@ -1182,7 +1191,7 @@
                                     <div className={`w-2 h-2 rounded-full ${navigator.onLine ? 'bg-green-500' : 'bg-red-500'}`}></div>
                                     {navigator.onLine ? "Cloud Connected" : "Offline Mode"}
                                 </span>
-                                <span>v17.11 (Production)</span>
+                                <span>v17.12 (Production)</span>
                             </div>
                             {error && <p className="text-red-500 text-sm text-center bg-red-50 p-2 rounded">{error}</p>}
                             <div className="flex gap-2">
@@ -5503,7 +5512,7 @@
                     </div>
                     {isLocal && (
                         <div className="absolute top-0 right-0 bg-amber-500 text-white text-[10px] px-2 py-1 font-bold flex items-center gap-1 shadow-sm">
-                            <Icons.Smartphone className="w-3 h-3" /> Local
+                            <Icons.Smartphone className="w-3 h-3" /> {src && src.startsWith('blob:') ? 'Local' : 'Stored on Source'}
                         </div>
                     )}
                     {!isLocal && src && src.startsWith('http') && (
@@ -5618,7 +5627,7 @@
                     <div className="absolute top-0 right-0 flex gap-1">
                         {sourceType === 'Local' && (
                             <div className="bg-amber-500 text-white text-[10px] px-2 py-1 font-bold z-10 flex items-center gap-1 shadow-sm">
-                                <Icons.Smartphone className="w-3 h-3" /> Local
+                                <Icons.Smartphone className="w-3 h-3" /> {src && src.startsWith('blob:') ? 'Local' : 'Stored on Source'}
                             </div>
                         )}
                         {sourceType === 'Cloud' && (
@@ -6041,9 +6050,15 @@
                             <div className="p-6">
                                 {(() => {
                                     let filtered = evidence;
-                                    if (evidenceFilter === 'PHOTOS') filtered = evidence.filter(e => e.type?.includes('PHOTO') || e.type?.includes('IMG'));
+                                    if (evidenceFilter === 'PHOTOS') filtered = evidence.filter(e =>
+                                        e.img ||
+                                        e.type?.includes('PHOTO') ||
+                                        e.type?.includes('IMG') ||
+                                        e.type?.includes('SNAPSHOT') ||
+                                        e.type?.includes('PERSONS')
+                                    );
                                     if (evidenceFilter === 'VIDEOS') filtered = evidence.filter(e => e.type?.includes('VIDEO'));
-                                    if (evidenceFilter === 'LOGS') filtered = evidence.filter(e => !e.type?.includes('PHOTO') && !e.type?.includes('VIDEO'));
+                                    if (evidenceFilter === 'LOGS') filtered = evidence.filter(e => !e.img && !e.type?.includes('VIDEO'));
 
                                     if (filtered.length === 0) return <p className="text-gray-400 text-sm text-center py-8">No records found for {evidenceFilter}</p>;
 
@@ -8110,7 +8125,7 @@
             React.useEffect(() => {
                 if (!user) return;
 
-                // Initial Sync on Load (Safe v17.11)
+                // Initial Sync on Load (Safe v17.12)
                 console.log("[Auto-Sync] Re-syncing on Load...");
                 window.Utils.downloadFromCloud(true);
 
