@@ -3,10 +3,10 @@ services:
     name: portel-backend
     env: node
     plan: free
-    root: server
-    buildCommand: npm install
-    startCommand: npm start
-    branch: master
+    # Removed root: server so that both server and client folders are available
+    buildCommand: cd server && npm install
+    startCommand: node server/index.js
+    branch: main
     envVars:
       - key: PORT
         value: 10000
