@@ -459,12 +459,11 @@
                         });
                         if (res.ok) {
                             const data = await res.json();
-                            // Handle Evidence rehydration is complicated without explicit chunk fetching logic here.
-                            // For MVP Refactor, we just store what we get.
-                            // If data has 'chunkIds', the viewer logic will need to be updated to fetch chunks via API too.
-                            // But for now, let's just save.
-                            localStorage.setItem(key, JSON.stringify(data));
-                            success++;
+                            // Safeguard: Only overwrite if we got a valid response (array)
+                            if (Array.isArray(data)) {
+                                localStorage.setItem(key, JSON.stringify(data));
+                                success++;
+                            }
                         }
                     } catch (e) { console.error(`Download error ${route}`, e); }
                 }
@@ -607,27 +606,37 @@
             getBatches: () => JSON.parse(localStorage.getItem(DB_KEYS.BATCHES) || '[]'),
             saveToCloud: async (route, item) => {
                 try {
-                    if (!db || !item.id) {
-                        console.warn('Network not ready or Item ID missing');
-                        return false;
-                    }
+                    if (!item || !item.id) return false;
                     if (navigator.onLine === false) return false;
 
-                    const clean = JSON.parse(JSON.stringify(item));
-                    await db.collection(route).doc(item.id).set(clean, { merge: true });
-                    return true;
+                    const response = await fetch(`${API_BASE}/${route}`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'x-api-key': 'portel_secure_key_2025'
+                        },
+                        body: JSON.stringify(item)
+                    });
+
+                    if (response.ok) {
+                        console.log(`[Sync] ${route} saved to S3.`);
+                        return true;
+                    }
+                    return false;
                 } catch (e) {
                     console.error(`Save ${route} failed`, e);
-                    // alert(`Error saving to cloud: ${e.message}`); // Optional: Too noisy?
                     return false;
                 }
             },
             deleteFromCloud: async (route, id) => {
                 try {
-                    if (!db || !id) return;
+                    if (!id) return;
                     if (navigator.onLine === false) return;
-                    console.log(`Deleting from cloud: ${route}/${id}`);
-                    await db.collection(route).doc(id).delete();
+                    console.log(`Deleting from S3: ${route}/${id}`);
+                    await fetch(`${API_BASE}/${route}/${id}`, {
+                        method: 'DELETE',
+                        headers: { 'x-api-key': 'portel_secure_key_2025' }
+                    });
                 } catch (e) {
                     console.error(`Delete ${route} failed`, e);
                 }
@@ -1120,7 +1129,7 @@
                                     <div className={`w-2 h-2 rounded-full ${navigator.onLine ? 'bg-green-500' : 'bg-red-500'}`}></div>
                                     {navigator.onLine ? "Cloud Connected" : "Offline Mode"}
                                 </span>
-                                <span>v17.2 (Production)</span>
+                                <span>v17.3 (Production)</span>
                             </div>
                             {error && <p className="text-red-500 text-sm text-center bg-red-50 p-2 rounded">{error}</p>}
                             <div className="flex gap-2">
@@ -1166,7 +1175,7 @@
                 <div className="w-64 bg-slate-800 text-white min-h-screen flex flex-col">
                     <div className="p-6 border-b border-slate-700">
                         <h1 className="text-xl font-bold">NSXpertise</h1>
-                        <p className="text-xs text-slate-400 mt-1">v17.2</p>
+                        <p className="text-xs text-slate-400 mt-1">v17.3</p>
                     </div>
                     <nav className="flex-1 p-4 space-y-1">
                         {menuItems.map(item => (
