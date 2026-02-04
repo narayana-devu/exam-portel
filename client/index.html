@@ -86,11 +86,20 @@
         let db = null; // Removed Firestore
         let auth = null;
         let storage = null;
-        let socket = io(); // Initialize Socket.io
-
-        socket.on('connect', () => {
-            console.log("Connected to Backend via Socket.io:", socket.id);
-        });
+        let socket = null;
+        const initSocket = () => {
+            if (typeof io !== 'undefined') {
+                socket = io();
+                socket.on('connect', () => {
+                    console.log("Connected to Backend via Socket.io:", socket.id);
+                });
+                console.log("[Socket] Initialized successfully.");
+            } else {
+                console.warn("[Socket] 'io' not defined yet, retrying in 500ms...");
+                setTimeout(initSocket, 500);
+            }
+        };
+        initSocket();
 
         // Offline Persistence removed (Relies on LocalStorage + IndexedDB)
 
