@@ -74,7 +74,7 @@
             alert("Global Error: " + msg + "\nLine: " + line + "\nCol: " + col);
             return false;
         };
-        console.log("V17.12 DEPLOYMENT ACTIVE - UNIVERSAL_MEDIA_FIX");
+        console.log("V17.13 DEPLOYMENT ACTIVE - SYNC_STABILITY_FIX");
 
         // DATA LAYER
         const DB_KEYS = {
@@ -320,142 +320,156 @@
             },
 
             // NEW: Atomic Save to Cloud
+            _syncLock: false,
 
-
-            // CLOUD SYNC FUNCTIONS (REST API Version) - v17.12
+            // CLOUD SYNC FUNCTIONS (REST API Version) - v17.13
             uploadToCloud: async (silent = false, targetRoute = null, filterFn = null, forceAll = false) => {
-                const statusBtn = document.getElementById('sync-status-text');
-                const MAPPING = {
-                    'ssc': DB_KEYS.SSC, 'qps': DB_KEYS.QP, 'nos': DB_KEYS.NOS, 'pcs': DB_KEYS.PC,
-                    'batches': DB_KEYS.BATCHES, 'students': DB_KEYS.STUDENTS,
-                    'question_papers': DB_KEYS.QUESTION_PAPERS,
-                    'responses': DB_KEYS.RESPONSES,
-                    'assessors': 'se_assessors'
-                };
-                let success = 0;
-                let skipped = 0;
-                let failCount = 0;
-
-                if (!navigator.onLine) {
-                    if (!silent) alert("No Internet Connection. Sync skipped.");
+                if (window.Utils._syncLock) {
+                    console.log("[Sync] Already in progress, skipping...");
                     return;
                 }
+                window.Utils._syncLock = true;
 
-                for (const [route, key] of Object.entries(MAPPING)) {
-                    if (targetRoute && route !== targetRoute) continue;
-                    try {
-                        const dataStr = localStorage.getItem(key);
-                        if (dataStr && dataStr !== '[]') {
-                            let items = JSON.parse(dataStr);
-                            if (filterFn) items = items.filter(filterFn);
+                try {
+                    const statusBtn = document.getElementById('sync-status-text');
+                    const MAPPING = {
+                        'ssc': DB_KEYS.SSC, 'qps': DB_KEYS.QP, 'nos': DB_KEYS.NOS, 'pcs': DB_KEYS.PC,
+                        'batches': DB_KEYS.BATCHES, 'students': DB_KEYS.STUDENTS,
+                        'question_papers': DB_KEYS.QUESTION_PAPERS,
+                        'responses': DB_KEYS.RESPONSES,
+                        'assessors': 'se_assessors'
+                    };
+                    let success = 0;
+                    let skipped = 0;
+                    let failCount = 0;
 
-                            // PENDING SYNC CHECK
-                            // ForceAll sends everything.
-                            // Otherwise: Send if !synced OR if it has un-uploaded media (Responses only)
-                            const pendingItems = items.filter(i => {
-                                if (forceAll) return true;
-                                if (!i.synced) return true;
-                                if (route === 'responses' && i.evidence) {
-                                    return i.evidence.some(ev => (ev.storage === 'indexeddb' || ev.type === 'VIDEO_INDEXED_DB') && !ev.url);
+                    if (!navigator.onLine) {
+                        if (!silent) alert("No Internet Connection. Sync skipped.");
+                        return;
+                    }
+
+                    for (const [route, key] of Object.entries(MAPPING)) {
+                        if (targetRoute && route !== targetRoute) continue;
+                        try {
+                            const dataStr = localStorage.getItem(key);
+                            if (dataStr && dataStr !== '[]') {
+                                let items = JSON.parse(dataStr);
+                                if (filterFn) items = items.filter(filterFn);
+
+                                // PENDING SYNC CHECK
+                                // ForceAll sends everything.
+                                // Otherwise: Send if !synced OR if it has un-uploaded media (Responses only)
+                                const pendingItems = items.filter(i => {
+                                    if (forceAll) return true;
+                                    if (!i.synced) return true;
+                                    if (route === 'responses' && i.evidence) {
+                                        return i.evidence.some(ev => (ev.storage === 'indexeddb' || ev.type === 'VIDEO_INDEXED_DB') && !ev.url);
+                                    }
+                                    return false;
+                                });
+
+                                if (pendingItems.length === 0) {
+                                    skipped += items.length;
+                                    continue;
                                 }
-                                return false;
-                            });
 
-                            if (pendingItems.length === 0) {
-                                skipped += items.length;
-                                continue;
-                            }
+                                if (statusBtn && !silent) statusBtn.innerText = `Syncing ${route}... (${pendingItems.length})`;
 
-                            if (statusBtn && !silent) statusBtn.innerText = `Syncing ${route}... (${pendingItems.length})`;
+                                // PRE-PROCESS: Upload Media (Images & Videos) from IndexedDB to S3
+                                if (route === 'responses') {
+                                    for (let item of pendingItems) {
+                                        if (item.evidence && Array.isArray(item.evidence)) {
+                                            let hasMediaUpdates = false;
+                                            for (let j = 0; j < item.evidence.length; j++) {
+                                                const ev = item.evidence[j];
+                                                // Check for any pending media (Video or Image) stored in IndexedDB
+                                                const isIndexedDB = ev.type === 'VIDEO_INDEXED_DB' || ev.storage === 'indexeddb';
+                                                const localKey = ev.key || ev.img;
 
-                            // PRE-PROCESS: Upload Media (Images & Videos) from IndexedDB to S3
-                            if (route === 'responses') {
-                                for (let item of pendingItems) {
-                                    if (item.evidence && Array.isArray(item.evidence)) {
-                                        let hasMediaUpdates = false;
-                                        for (let j = 0; j < item.evidence.length; j++) {
-                                            const ev = item.evidence[j];
-                                            // Check for any pending media (Video or Image) stored in IndexedDB
-                                            const isIndexedDB = ev.type === 'VIDEO_INDEXED_DB' || ev.storage === 'indexeddb';
-                                            const localKey = ev.key || ev.img;
+                                                if (isIndexedDB && localKey && !ev.url && !ev.uploaded) {
+                                                    try {
+                                                        const blob = await window.VideoDB.getVideo(localKey);
+                                                        if (blob) {
+                                                            if (statusBtn && !silent) statusBtn.innerText = `Uploading Media...`;
 
-                                            if (isIndexedDB && localKey && !ev.url && !ev.uploaded) {
-                                                try {
-                                                    const blob = await window.VideoDB.getVideo(localKey);
-                                                    if (blob) {
-                                                        if (statusBtn && !silent) statusBtn.innerText = `Uploading Media...`;
+                                                            const extension = blob.type.includes('video') ? 'webm' : 'jpg';
+                                                            const formData = new FormData();
+                                                            formData.append('file', blob, `${item.studentId}_${localKey}.${extension}`);
 
-                                                        const extension = blob.type.includes('video') ? 'webm' : 'jpg';
-                                                        const formData = new FormData();
-                                                        formData.append('file', blob, `${item.studentId}_${localKey}.${extension}`);
+                                                            const uploadRes = await fetch(`${API_BASE}/upload-media`, {
+                                                                method: 'POST',
+                                                                headers: { 'x-api-key': 'portel_secure_key_2025' },
+                                                                body: formData
+                                                            });
 
-                                                        const uploadRes = await fetch(`${API_BASE}/upload-media`, {
-                                                            method: 'POST',
-                                                            headers: { 'x-api-key': 'portel_secure_key_2025' },
-                                                            body: formData
-                                                        });
-
-                                                        if (uploadRes.ok) {
-                                                            const json = await uploadRes.json();
-                                                            ev.url = json.url;
-                                                            ev.img = json.url; // Ensure img is updated for photos
-                                                            if (ev.type === 'VIDEO_INDEXED_DB') ev.type = 'VIDEO_S3';
-                                                            ev.uploaded = true;
-                                                            ev.storage = 's3';
-                                                            hasMediaUpdates = true;
-                                                            console.log(`[Sync] Media Uploaded: ${json.url}`);
+                                                            if (uploadRes.ok) {
+                                                                const json = await uploadRes.json();
+                                                                ev.url = json.url;
+                                                                ev.img = json.url; // Ensure img is updated for photos
+                                                                if (ev.type === 'VIDEO_INDEXED_DB') ev.type = 'VIDEO_S3';
+                                                                ev.uploaded = true;
+                                                                ev.storage = 's3';
+                                                                hasMediaUpdates = true;
+                                                                console.log(`[Sync] Media Uploaded: ${json.url}`);
+                                                            } else {
+                                                                console.error("Media Upload Failed", uploadRes.statusText);
+                                                            }
                                                         } else {
-                                                            console.error("Media Upload Failed", uploadRes.statusText);
+                                                            console.warn("Skipping: Blob missing in IndexedDB for key", localKey);
                                                         }
-                                                    } else {
-                                                        console.warn("Skipping: Blob missing in IndexedDB for key", localKey);
+                                                    } catch (err) {
+                                                        console.error("Media Upload Exception", err);
                                                     }
-                                                } catch (err) {
-                                                    console.error("Media Upload Exception", err);
                                                 }
                                             }
-                                        }
-                                        if (hasMediaUpdates) {
-                                            localStorage.setItem(key, JSON.stringify(items));
+                                            if (hasMediaUpdates) {
+                                                localStorage.setItem(key, JSON.stringify(items));
+                                            }
                                         }
                                     }
                                 }
-                            }
 
-                            // BULK UPLOAD JSON METADATA
-                            console.log(`[Sync] Uploading ${pendingItems.length} items to /api/sync/${route}`);
-                            const response = await fetch(`${API_BASE}/sync/${route}`, {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json', 'x-api-key': 'portel_secure_key_2025' },
-                                body: JSON.stringify(pendingItems)
-                            });
-
-                            if (response.ok) {
-                                // ULTRA-SAFE: Only mark as synced if ALL media within this batch was uploaded
-                                items.forEach(i => {
-                                    if (route === 'responses' && i.evidence) {
-                                        const hasUnuploadedMedia = i.evidence.some(ev => (ev.storage === 'indexeddb' || ev.type === 'VIDEO_INDEXED_DB') && !ev.url);
-                                        if (hasUnuploadedMedia) {
-                                            i.synced = false;
-                                            return;
-                                        }
-                                    }
-                                    if (!i.synced) i.synced = true;
+                                // BULK UPLOAD JSON METADATA
+                                console.log(`[Sync] Uploading ${pendingItems.length} items to /api/sync/${route}`);
+                                const response = await fetch(`${API_BASE}/sync/${route}`, {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json', 'x-api-key': 'portel_secure_key_2025' },
+                                    body: JSON.stringify(pendingItems)
                                 });
-                                localStorage.setItem(key, JSON.stringify(items));
-                                success += pendingItems.length;
-                            } else {
-                                throw new Error(`Server Error: ${response.statusText}`);
+
+                                if (response.ok) {
+                                    // ULTRA-SAFE: Only mark as synced if ALL media within this batch was uploaded
+                                    items.forEach(i => {
+                                        if (route === 'responses' && i.evidence) {
+                                            const hasUnuploadedMedia = i.evidence.some(ev => (ev.storage === 'indexeddb' || ev.type === 'VIDEO_INDEXED_DB') && !ev.url);
+                                            if (hasUnuploadedMedia) {
+                                                i.synced = false;
+                                                return;
+                                            }
+                                        }
+                                        if (!i.synced) i.synced = true;
+                                    });
+                                    localStorage.setItem(key, JSON.stringify(items));
+                                    success += pendingItems.length;
+                                } else {
+                                    throw new Error(`Server Error: ${response.statusText}`);
+                                }
                             }
+                        } catch (e) {
+                            console.error(`Sync error ${route}`, e);
+                            failCount++;
                         }
-                    } catch (e) {
-                        console.error(`Upload error ${route}`, e);
-                        failCount++;
-                        if (!silent && failCount === 1) alert("Sync Error: " + e.message);
                     }
+
+                    if (success > 0 && !silent) {
+                        if (statusBtn) statusBtn.innerText = "Sync Complete";
+                        console.log(`[Sync] Successfully synced ${success} items.`);
+                    }
+                } catch (globalErr) {
+                    console.error("Global Sync Error", globalErr);
+                } finally {
+                    window.Utils._syncLock = false;
                 }
-                if (statusBtn && !silent) statusBtn.innerText = "Sync Complete";
-                if (!silent && success > 0) alert(`Uploaded ${success} items successfully.`);
             },
 
 
@@ -1191,7 +1205,7 @@
                                     <div className={`w-2 h-2 rounded-full ${navigator.onLine ? 'bg-green-500' : 'bg-red-500'}`}></div>
                                     {navigator.onLine ? "Cloud Connected" : "Offline Mode"}
                                 </span>
-                                <span>v17.12 (Production)</span>
+                                <span>v17.13 (Production)</span>
                             </div>
                             {error && <p className="text-red-500 text-sm text-center bg-red-50 p-2 rounded">{error}</p>}
                             <div className="flex gap-2">
@@ -5581,6 +5595,10 @@
                             }
                         } else {
                             if (active) {
+                                // DETECT CROSS-DEVICE GHOST (Local Key but missing Blob)
+                                if (key && !key.startsWith('http')) {
+                                    setSourceType('Local');
+                                }
                                 setIsLoading(false);
                                 setIsError(true);
                             }
@@ -8171,6 +8189,8 @@
                             >
                                 <Icons.Lock className="w-4 h-4 inline mr-1" /> Logout
                             </button>
+
+                            <SyncStatusHUD />
                         </React.Fragment>
                     )}
                 </React.Fragment>
