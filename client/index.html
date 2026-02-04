@@ -74,7 +74,7 @@
             alert("Global Error: " + msg + "\nLine: " + line + "\nCol: " + col);
             return false;
         };
-        console.log("V17.1 DEPLOYMENT ACTIVE - SOCKET_FIX");
+        console.log("V17.4 DEPLOYMENT ACTIVE - PERSISTENCE_FIX");
 
         // DATA LAYER
         const DB_KEYS = {
@@ -459,9 +459,19 @@
                         });
                         if (res.ok) {
                             const data = await res.json();
-                            // Safeguard: Only overwrite if we got a valid response (array)
                             if (Array.isArray(data)) {
-                                localStorage.setItem(key, JSON.stringify(data));
+                                const localItems = JSON.parse(localStorage.getItem(key) || '[]');
+                                const serverIds = new Set(data.map(i => i.id));
+
+                                // MERGE LOGIC: Keep local items that are NOT on server (pending sync)
+                                // and combine with all server items (mark as synced)
+                                const pendingLocal = localItems.filter(i => !i.synced && !serverIds.has(i.id));
+                                const merged = [
+                                    ...data.map(i => ({ ...i, synced: true })),
+                                    ...pendingLocal
+                                ];
+
+                                localStorage.setItem(key, JSON.stringify(merged));
                                 success++;
                             }
                         }
@@ -475,9 +485,8 @@
             getSSC: () => JSON.parse(localStorage.getItem(DB_KEYS.SSC) || '[]'),
             saveSSC: (ssc) => {
                 const list = window.Utils.getSSC();
-                // Assign ID if missing (Critical for Sync)
-                if (!ssc.id) ssc.id = Date.now().toString(36) + Math.random().toString(36).substr(2);
-
+                if (!ssc.id) ssc.id = window.Utils.generateId();
+                ssc.synced = false;
                 list.push(ssc);
                 localStorage.setItem(DB_KEYS.SSC, JSON.stringify(list));
 
@@ -560,6 +569,7 @@
             saveQP: (qp) => {
                 const list = window.Utils.getQPs();
                 if (!qp.id) qp.id = Date.now().toString(36) + Math.random().toString(36).substr(2);
+                qp.synced = false; // Add this
                 const existingIndex = list.findIndex(item => item.id === qp.id);
                 if (existingIndex >= 0) list[existingIndex] = qp;
                 else list.push(qp);
@@ -576,6 +586,7 @@
             saveNOS: (nos) => {
                 const list = window.Utils.getNOS();
                 if (!nos.id) nos.id = Date.now().toString(36) + Math.random().toString(36).substr(2);
+                nos.synced = false; // Add this
                 const existingIndex = list.findIndex(item => item.id === nos.id);
                 if (existingIndex >= 0) list[existingIndex] = nos;
                 else list.push(nos);
@@ -592,6 +603,7 @@
             savePC: (pc) => {
                 const list = window.Utils.getPCs();
                 if (!pc.id) pc.id = Date.now().toString(36) + Math.random().toString(36).substr(2);
+                pc.synced = false; // Add this
                 const existingIndex = list.findIndex(item => item.id === pc.id);
                 if (existingIndex >= 0) list[existingIndex] = pc;
                 else list.push(pc);
@@ -647,6 +659,7 @@
             saveBatch: async (batch) => {
                 let list = window.Utils.getBatches();
                 if (!batch.id) batch.id = Date.now().toString(36) + Math.random().toString(36).substr(2);
+                batch.synced = false; // Add this
 
                 const existingIndex = list.findIndex(b => b.id === batch.id);
                 if (existingIndex >= 0) {
@@ -778,6 +791,7 @@
             saveStudent: (student) => {
                 const list = window.Utils.getStudents();
                 if (!student.id) student.id = Date.now().toString(36) + Math.random().toString(36).substr(2);
+                student.synced = false; // Add this
                 list.push(student);
                 localStorage.setItem(DB_KEYS.STUDENTS, JSON.stringify(list));
                 window.Utils.saveToCloud('students', student);
@@ -795,6 +809,7 @@
                 const list = window.Utils.getAssessors();
                 if (!assessor.id) assessor.id = Date.now().toString(36) + Math.random().toString(36).substr(2);
                 if (!assessor.createdAt) assessor.createdAt = new Date().toISOString();
+                assessor.synced = false; // Add this
 
                 // Save Local
                 const existingIndex = list.findIndex(a => a.id === assessor.id);
@@ -849,6 +864,7 @@
             saveQuestionPaper: (qp) => {
                 const list = window.Utils.getQuestionPapers();
                 if (!qp.id) qp.id = Date.now().toString(36) + Math.random().toString(36).substr(2);
+                qp.synced = false; // Add this
                 list.push(qp);
                 localStorage.setItem(DB_KEYS.QUESTION_PAPERS, JSON.stringify(list));
                 window.Utils.uploadToCloud(true, 'qps');
@@ -894,6 +910,7 @@
                     }
 
                     if (!response.id) response.id = `${response.studentId}_${response.examType}`;
+                    response.synced = false; // Add this
 
                     const list = window.Utils.getResponses();
                     const existing = list.findIndex(r => r.studentId === response.studentId && r.examType === response.examType);
@@ -916,7 +933,7 @@
                     else list.push(response);
 
                     localStorage.setItem(DB_KEYS.RESPONSES, JSON.stringify(list));
-
+                    window.Utils.uploadToCloud(true); // Trigger sync for responses
                 } catch (e) {
                     console.error("Storage Error", e);
                     // Fallback to alert if IndexedDB fails or something else is wrong
@@ -1129,7 +1146,7 @@
                                     <div className={`w-2 h-2 rounded-full ${navigator.onLine ? 'bg-green-500' : 'bg-red-500'}`}></div>
                                     {navigator.onLine ? "Cloud Connected" : "Offline Mode"}
                                 </span>
-                                <span>v17.3 (Production)</span>
+                                <span>v17.4 (Production)</span>
                             </div>
                             {error && <p className="text-red-500 text-sm text-center bg-red-50 p-2 rounded">{error}</p>}
                             <div className="flex gap-2">
@@ -1152,7 +1169,7 @@
                             </div>
                             <div className="text-center text-xs text-gray-400 mt-4 space-y-1">
                                 <p>Demo: admin/admin</p>
-                                <p className="text-gray-400 text-[10px] mt-2">v17.1 (Production)</p>
+                                <p className="text-gray-400 text-[10px] mt-2">v17.4 (Production)</p>
                             </div>
                         </form>
                     </div>
@@ -1175,7 +1192,7 @@
                 <div className="w-64 bg-slate-800 text-white min-h-screen flex flex-col">
                     <div className="p-6 border-b border-slate-700">
                         <h1 className="text-xl font-bold">NSXpertise</h1>
-                        <p className="text-xs text-slate-400 mt-1">v17.3</p>
+                        <p className="text-xs text-slate-400 mt-1">v17.4</p>
                     </div>
                     <nav className="flex-1 p-4 space-y-1">
                         {menuItems.map(item => (
@@ -6775,18 +6792,7 @@
             // Poll for Assessor "Admit" signal (Replaced by Socket.io in VivaWait)
             // useEffect(() => { ... }, []);
 
-            // AUTO-SYNC In Background (Every 60s)
-            useEffect(() => {
-                const autoSync = setInterval(() => {
-                    // Only sync if online
-                    if (navigator.onLine) {
-                        // Silent sync (no alerts)
-                        window.Utils.uploadToCloud(true);
-                    }
-                }, 60000); // 60 seconds
 
-                return () => clearInterval(autoSync);
-            }, []);
 
             const [timeLeft, setTimeLeft] = useState(0);
             const [webcamActive, setWebcamActive] = useState(false);
@@ -7959,21 +7965,16 @@
                 } catch (e) { console.error(e); }
             }, []);
 
-            // GLOBAL AUTO-SYNC (Running for ALL users when logged in)
             React.useEffect(() => {
                 if (!user) return;
-
-                console.log("[Auto-Sync] Initialized for user:", user.username);
-                // Initial Sync on Load
-                window.Utils.downloadFromCloud(true);
-
+                // GLOBAL AUTO-SYNC: Throttled to 60s to prevent race conditions
                 const intervalId = setInterval(() => {
-                    if (navigator.onLine) {
+                    if (navigator.onLine && user) {
                         console.log("[Auto-Sync] Triggering global sync...");
-                        window.Utils.uploadToCloud(true); // Upload Local Changes
-                        window.Utils.downloadFromCloud(true); // Fetch Cloud Updates
+                        window.Utils.uploadToCloud(true);
+                        setTimeout(() => window.Utils.downloadFromCloud(true), 2000); // Wait 2s for upload to settle
                     }
-                }, 30000); // Every 30 seconds
+                }, 60000);
 
                 return () => clearInterval(intervalId);
             }, [user]);
