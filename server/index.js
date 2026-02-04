@@ -125,6 +125,7 @@ class DatabaseAdapter {
         this.type = this.useS3 ? 's3' : (process.env.DATABASE_URL ? 'postgres' : 'sqlite');
 
         console.log("========================================");
+        console.log("V17.8 DEPLOYMENT ACTIVE - CLOUD_FORCE_BACKUP");
         console.log(`DATABASE ADAPTER: ${this.type.toUpperCase()}`);
         console.log("========================================");
 
@@ -172,10 +173,7 @@ class DatabaseAdapter {
             Key: `db/${table}.json`,
             Body: JSON.stringify(data),
             ContentType: 'application/json',
-            ACL: 'public-read' // Optional: make DB public? Probably NOT for security, but keeping consistent with user reqs. 
-            // Better to keep private? User wanted everything in S3. Let's use private for data, public for media.
-            // Actually, for simplicity/debug, user might want to see it. 
-            // Let's use 'private' for Data files to avoid leaking passwords.
+            // ACL: 'public-read' // REMOVED: Blocks write if bucket doesn't allow public ACLs. Data is safer private.
         }).promise();
     }
 
@@ -264,7 +262,7 @@ dbAdapter.init();
 // Let's protect it with the same auth to avoid leaking bucket name to public.
 app.get('/api/diagnostics', authMiddleware, (req, res) => {
     res.json({
-        version: '17.7',
+        version: 'v17.8',
         storage_type: dbAdapter.type,
         s3_enabled: !!s3,
         bucket_name: process.env.BUCKET_NAME || 'Not Set',

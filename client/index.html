@@ -74,7 +74,7 @@
             alert("Global Error: " + msg + "\nLine: " + line + "\nCol: " + col);
             return false;
         };
-        console.log("V17.7 DEPLOYMENT ACTIVE - CLOUD_DIAGNOSTICS");
+        console.log("V17.8 DEPLOYMENT ACTIVE - CLOUD_FORCE_BACKUP");
 
         // DATA LAYER
         const DB_KEYS = {
@@ -322,20 +322,19 @@
             // NEW: Atomic Save to Cloud
 
 
-            // CLOUD SYNC FUNCTIONS (REST API Version)
-            uploadToCloud: async (silent = false, targetRoute = null, filterFn = null) => {
+            // CLOUD SYNC FUNCTIONS (REST API Version) - v17.8
+            uploadToCloud: async (silent = false, targetRoute = null, filterFn = null, forceAll = false) => {
+                const statusBtn = document.getElementById('sync-status-text');
                 const MAPPING = {
+                    'ssc': DB_KEYS.SSC, 'qps': DB_KEYS.QP, 'nos': DB_KEYS.NOS, 'pcs': DB_KEYS.PC,
                     'batches': DB_KEYS.BATCHES, 'students': DB_KEYS.STUDENTS,
-                    'qps': DB_KEYS.QP, 'nos': DB_KEYS.NOS, 'pcs': DB_KEYS.PC,
-                    'ssc': DB_KEYS.SSC, 'responses': DB_KEYS.RESPONSES,
                     'question_papers': DB_KEYS.QUESTION_PAPERS,
+                    'responses': DB_KEYS.RESPONSES,
                     'assessors': 'se_assessors'
                 };
                 let success = 0;
-                let failCount = 0;
                 let skipped = 0;
-                const statusBtn = document.getElementById('sync-status-text');
-                if (statusBtn && !silent) statusBtn.innerText = "Syncing...";
+                let failCount = 0;
 
                 if (!navigator.onLine) {
                     if (!silent) alert("No Internet Connection. Sync skipped.");
@@ -351,10 +350,8 @@
                             if (filterFn) items = items.filter(filterFn);
 
                             // PENDING SYNC CHECK
-                            // For REST API, it is efficient to just send everything that is NOT synced?
-                            // Or just send the whole list to 'sync' (Merge)?
-                            // We will filter for !synced items for efficiency, unless it's a "Force" sync.
-                            const pendingItems = items.filter(i => !i.synced);
+                            // ForceAll sends everything, otherwise only !synced
+                            const pendingItems = forceAll ? items : items.filter(i => !i.synced);
 
                             if (pendingItems.length === 0) {
                                 skipped += items.length;
@@ -1170,7 +1167,7 @@
                                     <div className={`w-2 h-2 rounded-full ${navigator.onLine ? 'bg-green-500' : 'bg-red-500'}`}></div>
                                     {navigator.onLine ? "Cloud Connected" : "Offline Mode"}
                                 </span>
-                                <span>v17.7 (Production)</span>
+                                <span>v17.8 (Production)</span>
                             </div>
                             {error && <p className="text-red-500 text-sm text-center bg-red-50 p-2 rounded">{error}</p>}
                             <div className="flex gap-2">
@@ -1193,7 +1190,7 @@
                             </div>
                             <div className="text-center text-xs text-gray-400 mt-4 space-y-1">
                                 <p>Demo: admin/admin</p>
-                                <p className="text-gray-400 text-[10px] mt-2">v17.7 (Production)</p>
+                                <p className="text-gray-400 text-[10px] mt-2">v17.8 (Production)</p>
                             </div>
                         </form>
                     </div>
@@ -1216,7 +1213,7 @@
                 <div className="w-64 bg-slate-800 text-white min-h-screen flex flex-col">
                     <div className="p-6 border-b border-slate-700">
                         <h1 className="text-xl font-bold">NSXpertise</h1>
-                        <p className="text-xs text-slate-400 mt-1">v17.6</p>
+                        <p className="text-xs text-slate-400 mt-1">v17.8</p>
                     </div>
                     <nav className="flex-1 p-4 space-y-1">
                         {menuItems.map(item => (
@@ -6535,8 +6532,19 @@
                                 <span className="font-medium text-gray-900 capitalize">{activeTab.replace(/([A-Z])/g, ' $1')}</span>
                             </div>
                             <div className="flex items-center gap-4">
-                                {/* CLOUD SYNC CONTROLS REMOVED (Auto-Sync Active) */}
-                                <div className="flex items-center gap-2 mr-2 border-r pr-4">
+                                {/* CLOUD SYNC CONTROLS */}
+                                <div className="flex items-center gap-3 mr-2 border-r pr-4">
+                                    <button
+                                        onClick={() => {
+                                            if (confirm("Force full backup of all local data to Cloud? This will overwrite cloud data with your current local state.")) {
+                                                window.Utils.uploadToCloud(false, null, null, true);
+                                            }
+                                        }}
+                                        className="text-[10px] bg-indigo-50 text-indigo-600 px-2 py-1 rounded hover:bg-indigo-100 transition-colors font-bold uppercase tracking-wider"
+                                        title="Force Full Cloud Backup"
+                                    >
+                                        Force Backup
+                                    </button>
                                     <span
                                         id="sync-status-text"
                                         className="text-xs text-indigo-400 cursor-help hover:text-indigo-600 transition-colors hidden md:inline-block italic font-medium"
@@ -8017,7 +8025,7 @@
             React.useEffect(() => {
                 if (!user) return;
 
-                // Initial Sync on Load (Safe v17.5)
+                // Initial Sync on Load (Safe v17.8)
                 console.log("[Auto-Sync] Re-syncing on Load...");
                 window.Utils.downloadFromCloud(true);
 
