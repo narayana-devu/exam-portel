@@ -74,7 +74,7 @@
             alert("Global Error: " + msg + "\nLine: " + line + "\nCol: " + col);
             return false;
         };
-        console.log("V17.15 DEPLOYMENT ACTIVE - STRUCTURED_S3_SYNC");
+        console.log("V17.16 DEPLOYMENT ACTIVE - CONSISTENCY_FIX");
 
         // DATA LAYER
         const DB_KEYS = {
@@ -322,7 +322,7 @@
             // NEW: Atomic Save to Cloud
             _syncLock: false,
 
-            // CLOUD SYNC FUNCTIONS (REST API Version) - v17.15
+            // CLOUD SYNC FUNCTIONS (REST API Version) - v17.16
             uploadToCloud: async (silent = false, targetRoute = null, filterFn = null, forceAll = false) => {
                 if (window.Utils._syncLock) {
                     console.log("[Sync] Already in progress, skipping...");
@@ -1205,7 +1205,7 @@
                                     <div className={`w-2 h-2 rounded-full ${navigator.onLine ? 'bg-green-500' : 'bg-red-500'}`}></div>
                                     {navigator.onLine ? "Cloud Connected" : "Offline Mode"}
                                 </span>
-                                <span>v17.13 (Production)</span>
+                                <span>v17.15 (Production)</span>
                             </div>
                             {error && <p className="text-red-500 text-sm text-center bg-red-50 p-2 rounded">{error}</p>}
                             <div className="flex gap-2">
@@ -1228,7 +1228,7 @@
                             </div>
                             <div className="text-center text-xs text-gray-400 mt-4 space-y-1">
                                 <p>Demo: admin/admin</p>
-                                <p className="text-gray-400 text-[10px] mt-2">v17.10 (Production)</p>
+                                <p className="text-gray-400 text-[10px] mt-2">v17.15 (Production)</p>
                             </div>
                         </form>
                     </div>
@@ -1251,7 +1251,7 @@
                 <div className="w-64 bg-slate-800 text-white min-h-screen flex flex-col">
                     <div className="p-6 border-b border-slate-700">
                         <h1 className="text-xl font-bold">NSXpertise</h1>
-                        <p className="text-xs text-slate-400 mt-1">v17.8</p>
+                        <p className="text-xs text-slate-400 mt-1">v17.15</p>
                     </div>
                     <nav className="flex-1 p-4 space-y-1">
                         {menuItems.map(item => (
@@ -8094,7 +8094,7 @@
         };
 
 
-        // SYNC STATUS HUD COMPONENT (v17.14)
+        // SYNC STATUS HUD COMPONENT (v17.15)
         const SyncStatusHUD = () => {
             React.useEffect(() => {
                 const el = document.getElementById('sync-status-text');
