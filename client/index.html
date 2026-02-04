@@ -74,7 +74,7 @@
             alert("Global Error: " + msg + "\nLine: " + line + "\nCol: " + col);
             return false;
         };
-        console.log("V17.13 DEPLOYMENT ACTIVE - SYNC_STABILITY_FIX");
+        console.log("V17.14 DEPLOYMENT ACTIVE - REFERENCE_ERROR_FIX");
 
         // DATA LAYER
         const DB_KEYS = {
@@ -322,7 +322,7 @@
             // NEW: Atomic Save to Cloud
             _syncLock: false,
 
-            // CLOUD SYNC FUNCTIONS (REST API Version) - v17.13
+            // CLOUD SYNC FUNCTIONS (REST API Version) - v17.14
             uploadToCloud: async (silent = false, targetRoute = null, filterFn = null, forceAll = false) => {
                 if (window.Utils._syncLock) {
                     console.log("[Sync] Already in progress, skipping...");
@@ -8094,8 +8094,8 @@
         };
 
 
-        // SYNC OVERLAY COMPONENT
-        const SyncOverlay = () => {
+        // SYNC STATUS HUD COMPONENT (v17.14)
+        const SyncStatusHUD = () => {
             React.useEffect(() => {
                 const el = document.getElementById('sync-status-text');
                 if (!el) return;
@@ -8171,8 +8171,6 @@
 
             return (
                 <React.Fragment>
-                    <SyncOverlay />
-
                     {!user ? (
                         <LoginScreen onLogin={handleLogin} />
                     ) : (
