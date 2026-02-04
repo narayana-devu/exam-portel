@@ -1,0 +1,40 @@
+﻿                        try {
+                            unsubscribe = db.collection('assessors').onSnapshot((snapshot) => {
+                                const list = snapshot.docs.map(doc => doc.data());
+                                // 1. Update State (Visual)
+                                setAssessors(list);
+                                // 2. Update Local Storage (Persistence)
+                                localStorage.setItem('se_assessors', JSON.stringify(list));
+                            }, (error) => {
+                                console.error("Realtime Assessor Sync Error:", error);
+                            });
+                        } catch (e) {
+                            console.error("Setup Listener Failed", e);
+                        }
+                    } else {
+                        // Retry if DB not ready yet (race condition on load)
+                        setTimeout(setupRealtimeListener, 500);
+                    }
+                };
+
+                // Initial Load from LocalStorage (Instant UI)
+                const localData = window.Utils.getAssessors();
+                setAssessors(localData);
+
+                // Start Listening
+                setupRealtimeListener();
+
+                // Other lists that don't need realtime usually (refreshed on mount)
+                setSSCList(window.Utils.getSSC());
+                setQPList(window.Utils.getQPs());
+                setBatches(window.Utils.getBatches());
+
+                return () => unsubscribe();
+            }, []);
+
+            const handleSaveAssessor = () => {
+                if (!newAssessor.name || !newAssessor.username || !newAssessor.password || !newAssessor.batchId) {
+                    alert('Please fill all required fields');
+                    return;
+                }
+

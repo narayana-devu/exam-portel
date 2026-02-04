@@ -1,0 +1,1377 @@
+L5369: Bal 0 -> 1 | {
+L5370: Bal 1 -> 1 | const [evidence, setEvidence] = useState([]);
+L5371: Bal 1 -> 1 | const [answers, setAnswers] = useState({});
+L5372: Bal 1 -> 1 | const [grades, setGrades] = useState({});
+L5373: Bal 1 -> 1 | const [evidenceFilter, setEvidenceFilter] = useSta
+L5374: Bal 1 -> 1 | const [facingMode, setFacingMode] = useState('envi
+L5375: Bal 1 -> 1 | const [showGallery, setShowGallery] = useState(fal
+L5376: Bal 1 -> 1 | 
+L5377: Bal 1 -> 1 | // Camera State
+L5378: Bal 1 -> 1 | const [isCamActive, setIsCamActive] = useState(fal
+L5379: Bal 1 -> 1 | const [isRecording, setIsRecording] = useState(fal
+L5380: Bal 1 -> 1 | 
+L5381: Bal 1 -> 1 | 
+L5382: Bal 1 -> 1 | const mediaStreamRef = useRef(null);
+L5383: Bal 1 -> 1 | const videoRef = useRef(null);
+L5384: Bal 1 -> 1 | const mediaRecorderRef = useRef(null);
+L5385: Bal 1 -> 1 | const chunksRef = useRef([]);
+L5386: Bal 1 -> 1 | const recordingSessionRef = useRef(null);
+L5387: Bal 1 -> 1 | const segmentSequenceRef = useRef(0);
+L5388: Bal 1 -> 1 | 
+L5389: Bal 1 -> 2 | useEffect(() => {
+L5390: Bal 2 -> 2 | loadStudentResponse(student);
+L5391: Bal 2 -> 2 | return () => stopCam(); // Cleanup on unmount
+L5392: Bal 2 -> 1 | }, [student, examType]);
+L5393: Bal 1 -> 1 | 
+L5394: Bal 1 -> 1 | // Fix: Attach stream to video element when it bec
+L5395: Bal 1 -> 2 | useEffect(() => {
+L5396: Bal 2 -> 3 | if (isCamActive && videoRef.current && mediaStream
+L5397: Bal 3 -> 3 | videoRef.current.srcObject = mediaStreamRef.curren
+L5398: Bal 3 -> 2 | }
+L5399: Bal 2 -> 1 | }, [isCamActive]); // Depend on isCamActive
+L5400: Bal 1 -> 1 | 
+L5401: Bal 1 -> 2 | const loadStudentResponse = async (s) => {
+L5402: Bal 2 -> 2 | const responses = window.Utils.getResponses();
+L5403: Bal 2 -> 2 | let evList = [];
+L5404: Bal 2 -> 2 | let targetResp = null;
+L5405: Bal 2 -> 2 | 
+L5406: Bal 2 -> 2 | // AGGREGATE VIEW: Fetch ALL evidence (Manual + Au
+L5407: Bal 2 -> 2 | // We want to show proctoring evidence for Theory/
+L5408: Bal 2 -> 2 | const allStudentResponses = responses.filter(r => 
+L5409: Bal 2 -> 2 | 
+L5410: Bal 2 -> 2 | // 1. Find the specific response for this exam typ
+L5411: Bal 2 -> 2 | targetResp = allStudentResponses.find(r => r.examT
+L5412: Bal 2 -> 2 | 
+L5413: Bal 2 -> 2 | // 2. Gather Evidence:
+L5414: Bal 2 -> 2 | // If it's the specific exam, get its evidence.
+L5415: Bal 2 -> 2 | // ALSO, include any 'MANUAL' or 'AUTO' evidence c
+L5416: Bal 2 -> 2 | 
+L5417: Bal 2 -> 2 | // Current Requirement: Show "system recorded vide
+L5418: Bal 2 -> 2 | // So we should NOT filter out MANUAL types for Th
+L5419: Bal 2 -> 2 | 
+L5420: Bal 2 -> 3 | if (targetResp && targetResp.evidence) {
+L5421: Bal 3 -> 3 | evList = [...targetResp.evidence];
+L5422: Bal 3 -> 2 | }
+L5423: Bal 2 -> 2 | 
+L5424: Bal 2 -> 2 | // If no specific response found (e.g. absent but 
+L5425: Bal 2 -> 2 | 
+L5426: Bal 2 -> 2 | // Optional: If 'Photo' tab is selected, maybe ONL
+L5427: Bal 2 -> 2 | // But user wants to see it IN Theory tab.
+L5428: Bal 2 -> 2 | // So let's just show whatever evidence exists in 
+L5429: Bal 2 -> 2 | 
+L5430: Bal 2 -> 2 | // NOTE: If the auto-captures are stored in a SEPA
+L5431: Bal 2 -> 2 | // we might need to merge them. But usually, they 
+L5432: Bal 2 -> 2 | // Let's assume they are attached to the actual ex
+L5433: Bal 2 -> 2 | 
+L5434: Bal 2 -> 3 | if (examType === 'Photo') {
+L5435: Bal 3 -> 3 | // For Photo Tab, we aggregate ALL evidence from A
+L5436: Bal 3 -> 4 | allStudentResponses.forEach(r => {
+L5437: Bal 4 -> 5 | if (r.evidence && Array.isArray(r.evidence)) {
+L5438: Bal 5 -> 5 | evList = [...evList, ...r.evidence];
+L5439: Bal 5 -> 4 | }
+L5440: Bal 4 -> 3 | });
+L5441: Bal 3 -> 3 | } else {
+L5442: Bal 3 -> 3 | // For Theory/Practical, show evidence attached to
+L5443: Bal 3 -> 3 | // PREVIOUSLY: filtered out MANUAL.
+L5444: Bal 3 -> 3 | // NOW: Include everything (Manual + Auto + Upload
+L5445: Bal 3 -> 4 | if (targetResp && targetResp.evidence) {
+L5446: Bal 4 -> 4 | evList = targetResp.evidence;
+L5447: Bal 4 -> 3 | }
+L5448: Bal 3 -> 2 | }
+L5449: Bal 2 -> 2 | 
+L5450: Bal 2 -> 2 | // RESOLVE INDEXEDDB IMAGES
+L5451: Bal 2 -> 3 | const resolvedEvidence = await Promise.all(evList.
+L5452: Bal 3 -> 4 | if (e.storage === 'indexeddb' && e.img) {
+L5453: Bal 4 -> 5 | try {
+L5454: Bal 5 -> 5 | const blob = await VideoDB.getVideo(e.img);
+L5455: Bal 5 -> 6 | if (blob) {
+L5456: Bal 6 -> 6 | return { ...e, img: URL.createObjectURL(blob), ori
+L5457: Bal 6 -> 5 | }
+L5458: Bal 5 -> 4 | } catch (err) { console.error("Failed to load evid
+L5459: Bal 4 -> 3 | }
+L5460: Bal 3 -> 3 | return e;
+L5461: Bal 3 -> 2 | }));
+L5462: Bal 2 -> 2 | 
+L5463: Bal 2 -> 2 | setEvidence(resolvedEvidence);
+L5464: Bal 2 -> 2 | setAnswers(targetResp?.answers || {});
+L5465: Bal 2 -> 2 | setGrades(targetResp?.assessorMarks || {});
+L5466: Bal 2 -> 1 | };
+L5467: Bal 1 -> 1 | 
+L5468: Bal 1 -> 1 | // Camera Functions
+L5469: Bal 1 -> 2 | const startCam = async () => {
+L5470: Bal 2 -> 2 | stopCam(); // Cleanup
+L5471: Bal 2 -> 2 | 
+L5472: Bal 2 -> 2 | // Wait 500ms for hardware to fully release
+L5473: Bal 2 -> 2 | await new Promise(r => setTimeout(r, 500));
+L5474: Bal 2 -> 2 | 
+L5475: Bal 2 -> 3 | if (!navigator.mediaDevices || !navigator.mediaDev
+L5476: Bal 3 -> 3 | alert("Camera Error: Secure Context (HTTPS) requir
+L5477: Bal 3 -> 3 | return;
+L5478: Bal 3 -> 2 | }
+L5479: Bal 2 -> 2 | 
+L5480: Bal 2 -> 3 | try {
+L5481: Bal 3 -> 3 | // Force Back Camera with Standard Resolution (Fix
+L5482: Bal 3 -> 4 | const stream = await navigator.mediaDevices.getUse
+L5483: Bal 4 -> 5 | video: {
+L5484: Bal 5 -> 5 | facingMode: { ideal: "environment" },
+L5485: Bal 5 -> 5 | width: { ideal: 1280 },
+L5486: Bal 5 -> 5 | height: { ideal: 720 }
+L5487: Bal 5 -> 4 | },
+L5488: Bal 4 -> 4 | audio: true
+L5489: Bal 4 -> 3 | });
+L5490: Bal 3 -> 3 | mediaStreamRef.current = stream;
+L5491: Bal 3 -> 3 | setIsCamActive(true);
+L5492: Bal 3 -> 3 | } catch (err) {
+L5493: Bal 3 -> 3 | console.warn(`Camera failed`, err);
+L5494: Bal 3 -> 3 | alert(`Back Camera Error: ${err.name}.\n${err.mess
+L5495: Bal 3 -> 2 | }
+L5496: Bal 2 -> 1 | };
+L5497: Bal 1 -> 1 | 
+L5498: Bal 1 -> 2 | const stopCam = () => {
+L5499: Bal 2 -> 3 | if (mediaStreamRef.current) {
+L5500: Bal 3 -> 3 | mediaStreamRef.current.getTracks().forEach(track =
+L5501: Bal 3 -> 3 | mediaStreamRef.current = null;
+L5502: Bal 3 -> 2 | }
+L5503: Bal 2 -> 2 | setIsCamActive(false);
+L5504: Bal 2 -> 2 | setIsRecording(false);
+L5505: Bal 2 -> 1 | };
+L5506: Bal 1 -> 1 | 
+L5507: Bal 1 -> 2 | const capturePhoto = () => {
+L5508: Bal 2 -> 2 | if (!videoRef.current) return;
+L5509: Bal 2 -> 2 | const canvas = document.createElement('canvas');
+L5510: Bal 2 -> 2 | canvas.width = 640;
+L5511: Bal 2 -> 2 | canvas.height = 480;
+L5512: Bal 2 -> 2 | const ctx = canvas.getContext('2d');
+L5513: Bal 2 -> 2 | ctx.drawImage(videoRef.current, 0, 0, canvas.width
+L5514: Bal 2 -> 2 | const dataUrl = canvas.toDataURL('image/jpeg');
+L5515: Bal 2 -> 2 | addEvidence(dataUrl, 'MANUAL_CAPTURE_PHOTO');
+L5516: Bal 2 -> 1 | };
+L5517: Bal 1 -> 1 | 
+L5518: Bal 1 -> 1 | // Helper to add evidence with correct ExamType co
+L5519: Bal 1 -> 2 | const addEvidence = (data, type) => {
+L5520: Bal 2 -> 2 | // When capturing, we must ensure it is saved unde
+L5521: Bal 2 -> 2 | // However, if the user explicitly selected 'Photo
+L5522: Bal 2 -> 2 | // The AssessorPortal flow sets 'examType' correct
+L5523: Bal 2 -> 2 | 
+L5524: Bal 2 -> 2 | const newEvidence = { img: data, time: new Date().
+L5525: Bal 2 -> 2 | // Correctly delegate to the utility function whic
+L5526: Bal 2 -> 2 | // We pass a partial object with just the new evid
+L5527: Bal 2 -> 3 | const partialResponse = {
+L5528: Bal 3 -> 3 | studentId: student.id,
+L5529: Bal 3 -> 3 | batchId: batch.id,
+L5530: Bal 3 -> 3 | examType: examType,
+L5531: Bal 3 -> 3 | evidence: [newEvidence],
+L5532: Bal 3 -> 3 | // Ensure status is tracked if new
+L5533: Bal 3 -> 3 | status: 'draft'
+L5534: Bal 3 -> 2 | };
+L5535: Bal 2 -> 2 | 
+L5536: Bal 2 -> 2 | window.Utils.saveResponse(partialResponse);
+L5537: Bal 2 -> 2 | 
+L5538: Bal 2 -> 2 | // Update local state (UI)
+L5539: Bal 2 -> 2 | setEvidence(prev => [...prev, newEvidence]);
+L5540: Bal 2 -> 1 | };
+L5541: Bal 1 -> 1 | 
+L5542: Bal 1 -> 2 | const toggleRecording = () => {
+L5543: Bal 2 -> 3 | if (isRecording) {
+L5544: Bal 3 -> 3 | // STOP MANUAL
+L5545: Bal 3 -> 3 | if (mediaRecorderRef.current) mediaRecorderRef.cur
+L5546: Bal 3 -> 3 | setIsRecording(false);
+L5547: Bal 3 -> 3 | if (window.recordingInterval) clearInterval(window
+L5548: Bal 3 -> 3 | recordingSessionRef.current = null; // Reset Sessi
+L5549: Bal 3 -> 3 | } else {
+L5550: Bal 3 -> 3 | // START
+L5551: Bal 3 -> 3 | if (!mediaStreamRef.current) return;
+L5552: Bal 3 -> 3 | 
+L5553: Bal 3 -> 3 | // Initialize New Session
+L5554: Bal 3 -> 3 | recordingSessionRef.current = `session_${Date.now(
+L5555: Bal 3 -> 3 | segmentSequenceRef.current = 1;
+L5556: Bal 3 -> 3 | 
+L5557: Bal 3 -> 4 | const startSegment = () => {
+L5558: Bal 4 -> 4 | let localChunks = [];
+L5559: Bal 4 -> 4 | const recorder = new MediaRecorder(mediaStreamRef.
+L5560: Bal 4 -> 4 | recorder.ondataavailable = e => { if (e.data.size 
+L5561: Bal 4 -> 5 | recorder.onstop = async () => {
+L5562: Bal 5 -> 5 | const blob = new Blob(localChunks, { type: 'video/
+L5563: Bal 5 -> 5 | const key = `vid_${student.id}_${Date.now()}`;
+L5564: Bal 5 -> 5 | const currentSeq = segmentSequenceRef.current; // 
+L5565: Bal 5 -> 5 | 
+L5566: Bal 5 -> 6 | try {
+L5567: Bal 6 -> 6 | await VideoDB.saveVideo(key, blob);
+L5568: Bal 6 -> 7 | const newEvidence = {
+L5569: Bal 7 -> 7 | img: null,
+L5570: Bal 7 -> 7 | key: key,
+L5571: Bal 7 -> 7 | time: new Date().toISOString(),
+L5572: Bal 7 -> 7 | type: 'VIDEO_INDEXED_DB',
+L5573: Bal 7 -> 7 | storage: 'indexeddb',
+L5574: Bal 7 -> 7 | // METADATA FOR GROUPING
+L5575: Bal 7 -> 7 | sessionId: recordingSessionRef.current,
+L5576: Bal 7 -> 7 | sequence: currentSeq,
+L5577: Bal 7 -> 7 | isSegment: true
+L5578: Bal 7 -> 6 | };
+L5579: Bal 6 -> 6 | 
+L5580: Bal 6 -> 7 | const partialResponse = {
+L5581: Bal 7 -> 7 | studentId: student.id,
+L5582: Bal 7 -> 7 | batchId: batch.id,
+L5583: Bal 7 -> 7 | examType: examType,
+L5584: Bal 7 -> 7 | evidence: [newEvidence],
+L5585: Bal 7 -> 7 | status: 'draft'
+L5586: Bal 7 -> 6 | };
+L5587: Bal 6 -> 6 | window.Utils.saveResponse(partialResponse);
+L5588: Bal 6 -> 6 | setEvidence(prev => [...prev, newEvidence]);
+L5589: Bal 6 -> 6 | 
+L5590: Bal 6 -> 6 | // AUTO SYNC
+L5591: Bal 6 -> 6 | const statusBtn = document.getElementById('sync-st
+L5592: Bal 6 -> 6 | if(statusBtn) statusBtn.innerText = `Uploading Par
+L5593: Bal 6 -> 7 | window.Utils.uploadToCloud(true).then(() => {
+L5594: Bal 7 -> 7 | if(statusBtn) statusBtn.innerText = "Synced";
+L5595: Bal 7 -> 6 | });
+L5596: Bal 6 -> 6 | 
+L5597: Bal 6 -> 6 | } catch (err) {
+L5598: Bal 6 -> 6 | console.error("Failed to save video to DB", err);
+L5599: Bal 6 -> 5 | }
+L5600: Bal 5 -> 4 | };
+L5601: Bal 4 -> 4 | recorder.start();
+L5602: Bal 4 -> 4 | mediaRecorderRef.current = recorder;
+L5603: Bal 4 -> 3 | };
+L5604: Bal 3 -> 3 | 
+L5605: Bal 3 -> 3 | startSegment();
+L5606: Bal 3 -> 3 | setIsRecording(true);
+L5607: Bal 3 -> 3 | 
+L5608: Bal 3 -> 3 | // Auto-split every 10 minutes (600,000 ms)
+L5609: Bal 3 -> 4 | window.recordingInterval = setInterval(() => {
+L5610: Bal 4 -> 5 | if (mediaRecorderRef.current && mediaRecorderRef.c
+L5611: Bal 5 -> 5 | console.log("Auto-splitting video segment...");
+L5612: Bal 5 -> 5 | mediaRecorderRef.current.stop();
+L5613: Bal 5 -> 5 | segmentSequenceRef.current += 1; // Increment Sequ
+L5614: Bal 5 -> 5 | setTimeout(startSegment, 200);
+L5615: Bal 5 -> 4 | }
+L5616: Bal 4 -> 3 | }, 600000);
+L5617: Bal 3 -> 2 | }
+L5618: Bal 2 -> 1 | };
+L5619: Bal 1 -> 1 | 
+L5620: Bal 1 -> 1 | 
+L5621: Bal 1 -> 1 | 
+L5622: Bal 1 -> 1 | 
+L5623: Bal 1 -> 2 | const saveGrades = () => {
+L5624: Bal 2 -> 2 | const responses = window.Utils.getResponses();
+L5625: Bal 2 -> 2 | let idx = responses.findIndex(r => r.studentId ===
+L5626: Bal 2 -> 2 | 
+L5627: Bal 2 -> 3 | if (idx === -1) {
+L5628: Bal 3 -> 3 | // Create if not exists (e.g. starting fresh manua
+L5629: Bal 3 -> 4 | const newResp = {
+L5630: Bal 4 -> 4 | id: window.Utils.generateId(),
+L5631: Bal 4 -> 4 | studentId: student.id,
+L5632: Bal 4 -> 4 | examType,
+L5633: Bal 4 -> 4 | evidence,
+L5634: Bal 4 -> 4 | answers, // might be empty for manual
+L5635: Bal 4 -> 4 | assessorMarks: grades
+L5636: Bal 4 -> 3 | };
+L5637: Bal 3 -> 3 | responses.push(newResp);
+L5638: Bal 3 -> 3 | } else {
+L5639: Bal 3 -> 3 | if (!responses[idx].id) responses[idx].id = window
+L5640: Bal 3 -> 3 | responses[idx].assessorMarks = grades;
+L5641: Bal 3 -> 3 | responses[idx].evidence = evidence; // Ensure evid
+L5642: Bal 3 -> 3 | 
+L5643: Bal 3 -> 3 | // Calculate Total
+L5644: Bal 3 -> 3 | const total = Object.values(grades).reduce((a, b) 
+L5645: Bal 3 -> 3 | responses[idx].totalScore = total;
+L5646: Bal 3 -> 2 | }
+L5647: Bal 2 -> 2 | 
+L5648: Bal 2 -> 3 | try {
+L5649: Bal 3 -> 3 | localStorage.setItem(DB_KEYS.RESPONSES, JSON.strin
+L5650: Bal 3 -> 3 | } catch (e) {
+L5651: Bal 3 -> 3 | console.error("Storage Full", e);
+L5652: Bal 3 -> 2 | }
+L5653: Bal 2 -> 2 | 
+L5654: Bal 2 -> 2 | // DIRECT SYNC
+L5655: Bal 2 -> 2 | const currentResp = idx === -1 ? responses[respons
+L5656: Bal 2 -> 2 | window.Utils.saveToCloud('responses', currentResp)
+L5657: Bal 2 -> 2 | 
+L5658: Bal 2 -> 2 | alert("Grades Saved Successfully! (Synced)");
+L5659: Bal 2 -> 1 | };
+L5660: Bal 1 -> 1 | 
+L5661: Bal 1 -> 2 | const deleteEvidence = async () => {
+L5662: Bal 2 -> 2 | if (!confirm("Are you sure you want to DELETE ALL 
+L5663: Bal 2 -> 2 | 
+L5664: Bal 2 -> 2 | // 1. Delete Videos/Images from IndexedDB
+L5665: Bal 2 -> 3 | for (let e of evidence) {
+L5666: Bal 3 -> 3 | const key = (e.type === 'VIDEO_INDEXED_DB' && e.ke
+L5667: Bal 3 -> 3 | (e.storage === 'indexeddb' && (e.originalKey || e.
+L5668: Bal 3 -> 3 | 
+L5669: Bal 3 -> 4 | if (key && typeof key === 'string') {
+L5670: Bal 4 -> 5 | try {
+L5671: Bal 5 -> 5 | const db = await VideoDB.init();
+L5672: Bal 5 -> 5 | const tx = db.transaction(VideoDB.storeName, 'read
+L5673: Bal 5 -> 5 | tx.objectStore(VideoDB.storeName).delete(key);
+L5674: Bal 5 -> 4 | } catch (err) { console.error("Failed to delete me
+L5675: Bal 4 -> 3 | }
+L5676: Bal 3 -> 2 | }
+L5677: Bal 2 -> 2 | 
+L5678: Bal 2 -> 2 | // 2. Update LocalStorage (Remove evidence array)
+L5679: Bal 2 -> 2 | const responses = window.Utils.getResponses();
+L5680: Bal 2 -> 2 | const idx = responses.findIndex(r => r.studentId =
+L5681: Bal 2 -> 3 | if (idx >= 0) {
+L5682: Bal 3 -> 3 | if (!responses[idx].id) responses[idx].id = window
+L5683: Bal 3 -> 3 | responses[idx].evidence = []; // Clear evidence
+L5684: Bal 3 -> 3 | 
+L5685: Bal 3 -> 4 | try {
+L5686: Bal 4 -> 4 | localStorage.setItem(DB_KEYS.RESPONSES, JSON.strin
+L5687: Bal 4 -> 4 | } catch (e) {
+L5688: Bal 4 -> 4 | console.error("Storage Full", e);
+L5689: Bal 4 -> 3 | }
+L5690: Bal 3 -> 3 | 
+L5691: Bal 3 -> 3 | // DIRECT SYNC
+L5692: Bal 3 -> 3 | window.Utils.saveToCloud('responses', responses[id
+L5693: Bal 3 -> 2 | }
+L5694: Bal 2 -> 2 | 
+L5695: Bal 2 -> 2 | setEvidence([]); // Clear UI
+L5696: Bal 2 -> 2 | alert("Evidence Deleted Successfully. (Synced)");
+L5697: Bal 2 -> 1 | };
+L5698: Bal 1 -> 1 | 
+L5699: Bal 1 -> 1 | // Helper to download all evidence
+L5700: Bal 1 -> 2 | const downloadAllEvidence = async () => {
+L5701: Bal 2 -> 2 | // ... existing implementation if needed or kept m
+L5702: Bal 2 -> 2 | alert("Download implementation preserved but hidde
+L5703: Bal 2 -> 1 | };
+L5704: Bal 1 -> 1 | 
+L5705: Bal 1 -> 1 | // Force Camera to be visible ONLY for Assessor (w
+L5706: Bal 1 -> 1 | const showCamera = captureOnly;
+L5707: Bal 1 -> 1 | 
+L5708: Bal 1 -> 1 | return (
+L5709: Bal 1 -> 1 | <div>
+L5710: Bal 1 -> 1 | <div className="flex justify-between items-center 
+L5711: Bal 1 -> 1 | <button onClick={onBack} className="text-indigo-60
+L5712: Bal 1 -> 1 | <h3 className="text-xl font-bold">{captureOnly ? '
+L5713: Bal 1 -> 1 | <div className="flex gap-2">
+L5714: Bal 1 -> 1 | 
+L5715: Bal 1 -> 1 | <button onClick={() => setShowGallery(!showGallery
+L5716: Bal 1 -> 1 | {showGallery ? <Icons.EyeOff className="w-4 h-4" /
+L5717: Bal 1 -> 1 | </button>
+L5718: Bal 1 -> 2 | {!captureOnly && (
+L5719: Bal 2 -> 2 | <>
+L5720: Bal 2 -> 2 | <button onClick={saveGrades} className="bg-indigo-
+L5721: Bal 2 -> 2 | <Icons.Check className="w-4 h-4" /> Save Grades
+L5722: Bal 2 -> 2 | </button>
+L5723: Bal 2 -> 2 | <button onClick={deleteEvidence} className="text-r
+L5724: Bal 2 -> 2 | <Icons.Trash2 className="w-5 h-5" />
+L5725: Bal 2 -> 2 | </button>
+L5726: Bal 2 -> 2 | </>
+L5727: Bal 2 -> 1 | )}
+L5728: Bal 1 -> 1 | </div>
+L5729: Bal 1 -> 1 | </div>
+L5730: Bal 1 -> 1 | 
+L5731: Bal 1 -> 1 | {/* Assessor Camera Section - ALWAYS VISIBLE */}
+L5732: Bal 1 -> 2 | {showCamera && (
+L5733: Bal 2 -> 2 | <div className="bg-slate-900 p-4 rounded shadow mb
+L5734: Bal 2 -> 3 | {!isCamActive ? (
+L5735: Bal 3 -> 3 | <div className="py-8">
+L5736: Bal 3 -> 3 | <Icons.Camera className="w-16 h-16 mx-auto text-sl
+L5737: Bal 3 -> 3 | <h4 className="text-xl font-bold mb-2">Ready to Ca
+L5738: Bal 3 -> 3 | <p className="text-gray-400 mb-6">Take photos or r
+L5739: Bal 3 -> 3 | <button onClick={startCam} className="bg-indigo-60
+L5740: Bal 3 -> 3 | <Icons.Camera className="w-5 h-5 inline mr-2" /> S
+L5741: Bal 3 -> 3 | </button>
+L5742: Bal 3 -> 3 | </div>
+L5743: Bal 3 -> 3 | ) : (
+L5744: Bal 3 -> 3 | <div>
+L5745: Bal 3 -> 3 | <div className="grid md:grid-cols-2 gap-4">
+L5746: Bal 3 -> 3 | <div className="relative bg-black rounded overflow
+L5747: Bal 3 -> 3 | <video ref={videoRef} autoPlay muted playsInline c
+L5748: Bal 3 -> 4 | {isRecording && (
+L5749: Bal 4 -> 4 | <div className="absolute top-4 right-4 animate-pul
+L5750: Bal 4 -> 4 | <span className="w-2 h-2 rounded-full bg-white"></
+L5751: Bal 4 -> 4 | </div>
+L5752: Bal 4 -> 3 | )}
+L5753: Bal 3 -> 3 | </div>
+L5754: Bal 3 -> 3 | <div className="flex flex-col justify-center gap-4
+L5755: Bal 3 -> 3 | <button onClick={capturePhoto} className="bg-white
+L5756: Bal 3 -> 3 | <Icons.Camera className="w-6 h-6 text-indigo-600" 
+L5757: Bal 3 -> 3 | </button>
+L5758: Bal 3 -> 3 | <button onClick={toggleRecording} className={`py-4
+L5759: Bal 3 -> 3 | {isRecording ? <><Icons.Square className="w-5 h-5"
+L5760: Bal 3 -> 3 | </button>
+L5761: Bal 3 -> 3 | <button onClick={stopCam} className="mt-4 text-gra
+L5762: Bal 3 -> 3 | </div>
+L5763: Bal 3 -> 3 | </div>
+L5764: Bal 3 -> 3 | </div>
+L5765: Bal 3 -> 2 | )}
+L5766: Bal 2 -> 2 | </div>
+L5767: Bal 2 -> 1 | )}
+L5768: Bal 1 -> 1 | 
+L5769: Bal 1 -> 1 | {/* Evidence Gallery (Categorized) */}
+L5770: Bal 1 -> 2 | {showGallery && (
+L5771: Bal 2 -> 2 | <div className="bg-white rounded shadow animate-fa
+L5772: Bal 2 -> 2 | <div className="flex bg-gray-100 border-b">
+L5773: Bal 2 -> 3 | {['ALL', 'PHOTOS', 'VIDEOS', 'LOGS'].map(tab => (
+L5774: Bal 3 -> 3 | <button
+L5775: Bal 3 -> 3 | key={tab}
+L5776: Bal 3 -> 3 | onClick={() => setEvidenceFilter(tab)}
+L5777: Bal 3 -> 3 | className={`px-6 py-3 font-bold text-sm transition
+L5778: Bal 3 -> 3 | >
+L5779: Bal 3 -> 3 | {tab}
+L5780: Bal 3 -> 3 | </button>
+L5781: Bal 3 -> 2 | ))}
+L5782: Bal 2 -> 2 | </div>
+L5783: Bal 2 -> 2 | 
+L5784: Bal 2 -> 2 | <div className="p-6">
+L5785: Bal 2 -> 4 | {(() => {
+L5786: Bal 4 -> 4 | let filtered = evidence;
+L5787: Bal 4 -> 4 | if (evidenceFilter === 'PHOTOS') filtered = eviden
+L5788: Bal 4 -> 4 | if (evidenceFilter === 'VIDEOS') filtered = eviden
+L5789: Bal 4 -> 4 | if (evidenceFilter === 'LOGS') filtered = evidence
+L5790: Bal 4 -> 4 | 
+L5791: Bal 4 -> 4 | if (filtered.length === 0) return <p className="te
+L5792: Bal 4 -> 4 | 
+L5793: Bal 4 -> 5 | if (evidenceFilter === 'LOGS') {
+L5794: Bal 5 -> 5 | return (
+L5795: Bal 5 -> 5 | <div className="space-y-2">
+L5796: Bal 5 -> 6 | {filtered.map((e, i) => (
+L5797: Bal 6 -> 6 | <div key={i} className="flex items-center justify-
+L5798: Bal 6 -> 6 | <div className="flex items-center gap-3">
+L5799: Bal 6 -> 6 | <Icons.TriangleAlert className="w-5 h-5 text-amber
+L5800: Bal 6 -> 6 | <div>
+L5801: Bal 6 -> 6 | <p className="font-bold text-sm text-gray-800">{(e
+L5802: Bal 6 -> 6 | <p className="text-xs text-gray-500">System Flag</
+L5803: Bal 6 -> 6 | </div>
+L5804: Bal 6 -> 6 | </div>
+L5805: Bal 6 -> 6 | <span className="text-xs font-mono bg-white px-2 p
+L5806: Bal 6 -> 6 | </div>
+L5807: Bal 6 -> 5 | ))}
+L5808: Bal 5 -> 5 | </div>
+L5809: Bal 5 -> 5 | );
+L5810: Bal 5 -> 4 | }
+L5811: Bal 4 -> 4 | 
+L5812: Bal 4 -> 4 | // GROUPING LOGIC
+L5813: Bal 4 -> 4 | const grouped = [];
+L5814: Bal 4 -> 4 | const sessions = {};
+L5815: Bal 4 -> 4 | 
+L5816: Bal 4 -> 5 | filtered.forEach(e => {
+L5817: Bal 5 -> 6 | if(e.sessionId) {
+L5818: Bal 6 -> 7 | if(!sessions[e.sessionId]) {
+L5819: Bal 7 -> 8 | sessions[e.sessionId] = {
+L5820: Bal 8 -> 8 | ...e,
+L5821: Bal 8 -> 8 | isGroup: true,
+L5822: Bal 8 -> 8 | parts: [],
+L5823: Bal 8 -> 8 | type: 'VIDEO_SESSION'
+L5824: Bal 8 -> 7 | };
+L5825: Bal 7 -> 7 | grouped.push(sessions[e.sessionId]);
+L5826: Bal 7 -> 6 | }
+L5827: Bal 6 -> 6 | sessions[e.sessionId].parts.push(e);
+L5828: Bal 6 -> 6 | } else {
+L5829: Bal 6 -> 6 | grouped.push(e);
+L5830: Bal 6 -> 5 | }
+L5831: Bal 5 -> 4 | });
+L5832: Bal 4 -> 4 | 
+L5833: Bal 4 -> 4 | // Sort parts
+L5834: Bal 4 -> 4 | Object.values(sessions).forEach(s => s.parts.sort(
+L5835: Bal 4 -> 4 | 
+L5836: Bal 4 -> 4 | return (
+L5837: Bal 4 -> 4 | <div className="grid grid-cols-2 md:grid-cols-4 ga
+L5838: Bal 4 -> 5 | {grouped.map((e, i) => (
+L5839: Bal 5 -> 5 | <div key={i} className="relative group bg-gray-100
+L5840: Bal 5 -> 6 | {e.isGroup ? (
+L5841: Bal 6 -> 6 | <SessionPlayer parts={e.parts} />
+L5842: Bal 6 -> 6 | ) : (
+L5843: Bal 6 -> 6 | <>
+L5844: Bal 6 -> 7 | {e.type.includes('VIDEO') ? (
+L5845: Bal 7 -> 7 | e.key ? (
+L5846: Bal 7 -> 7 | // Use VideoPlayerDB if available, else fallback t
+L5847: Bal 7 -> 7 | typeof VideoPlayerDB !== 'undefined' ? <VideoPlaye
+L5848: Bal 7 -> 7 | <SessionPlayer parts={[e]} />
+L5849: Bal 7 -> 7 | ) : (
+L5850: Bal 7 -> 7 | <video src={e.img} controls className="w-full h-32
+L5851: Bal 7 -> 9 | onError={(ev) => {
+L5852: Bal 9 -> 9 | ev.target.style.display = 'none';
+L5853: Bal 9 -> 9 | ev.target.nextSibling.style.display = 'flex';
+L5854: Bal 9 -> 7 | }}
+L5855: Bal 7 -> 7 | />
+L5856: Bal 7 -> 7 | )
+L5857: Bal 7 -> 7 | ) : (
+L5858: Bal 7 -> 7 | <img src={e.img} className="w-full h-32 object-cov
+L5859: Bal 7 -> 9 | onClick={() => {
+L5860: Bal 9 -> 10 | if (e.img.startsWith('blob:') || e.img.startsWith(
+L5861: Bal 10 -> 10 | const w = window.open("");
+L5862: Bal 10 -> 10 | w.document.write(`<img src="${e.img}" style="max-w
+L5863: Bal 10 -> 10 | } else {
+L5864: Bal 10 -> 10 | alert("Image not available on this device. Please 
+L5865: Bal 10 -> 9 | }
+L5866: Bal 9 -> 7 | }}
+L5867: Bal 7 -> 9 | onError={(ev) => {
+L5868: Bal 9 -> 9 | ev.target.style.display = 'none';
+L5869: Bal 9 -> 9 | ev.target.nextSibling.style.display = 'flex';
+L5870: Bal 9 -> 7 | }}
+L5871: Bal 7 -> 7 | />
+L5872: Bal 7 -> 6 | )}
+L5873: Bal 6 -> 6 | </>
+L5874: Bal 6 -> 5 | )}
+L5875: Bal 5 -> 5 | 
+L5876: Bal 5 -> 5 | {/* Fallback for Error */}
+L5877: Bal 5 -> 5 | <div className="absolute inset-0 hidden flex-col i
+L5878: Bal 5 -> 5 | <Icons.XCircle className="w-8 h-8 mb-1" />
+L5879: Bal 5 -> 5 | <span className="text-[10px] font-bold">Media Not 
+L5880: Bal 5 -> 5 | </div>
+L5881: Bal 5 -> 5 | 
+L5882: Bal 5 -> 5 | <div className="absolute top-0 left-0 bg-black/60 
+L5883: Bal 5 -> 5 | {new Date(e.time).toLocaleTimeString()}
+L5884: Bal 5 -> 5 | </div>
+L5885: Bal 5 -> 5 | <div className="absolute inset-x-0 bottom-0 bg-whi
+L5886: Bal 5 -> 5 | {e.isGroup ? `Exam Recording (${e.parts.length} Pa
+L5887: Bal 5 -> 5 | </div>
+L5888: Bal 5 -> 5 | </div>
+L5889: Bal 5 -> 4 | ))}
+L5890: Bal 4 -> 4 | </div>
+L5891: Bal 4 -> 4 | );
+L5892: Bal 4 -> 2 | })()}
+L5893: Bal 2 -> 2 | </div>
+L5894: Bal 2 -> 2 | </div>
+L5895: Bal 2 -> 1 | )}
+L5896: Bal 1 -> 1 | 
+L5897: Bal 1 -> 2 | {!captureOnly && (
+L5898: Bal 2 -> 2 | <div className="bg-white p-6 rounded shadow">
+L5899: Bal 2 -> 4 | {(() => {
+L5900: Bal 4 -> 4 | const currentQPId = examType === 'Theory' ? batch?
+L5901: Bal 4 -> 4 | const currentQP = allQPapers.find(q => q.id === cu
+L5902: Bal 4 -> 4 | 
+L5903: Bal 4 -> 4 | return (
+L5904: Bal 4 -> 4 | <>
+L5905: Bal 4 -> 4 | <h4 className="font-bold mb-4 flex items-center ju
+L5906: Bal 4 -> 4 | <span>Grading: {currentQP?.name || 'Manual Grade'}
+L5907: Bal 4 -> 4 | <span className="text-sm font-normal text-gray-500
+L5908: Bal 4 -> 4 | </h4>
+L5909: Bal 4 -> 4 | <div className="space-y-4">
+L5910: Bal 4 -> 6 | {currentQP?.questions?.map((question, index) => {
+L5911: Bal 6 -> 6 | const qIdx = String(index);
+L5912: Bal 6 -> 6 | const ans = answers[qIdx];
+L5913: Bal 6 -> 6 | return (
+L5914: Bal 6 -> 6 | <div key={qIdx} className="bg-gray-50 p-4 rounded 
+L5915: Bal 6 -> 6 | <div className="flex-1 pr-4">
+L5916: Bal 6 -> 6 | <span className="font-bold text-gray-700 block mb-
+L5917: Bal 6 -> 6 | {/* Tiny Answer preview */}
+L5918: Bal 6 -> 7 | {typeof ans === 'string' && (
+L5919: Bal 7 -> 7 | <div className="mt-1">
+L5920: Bal 7 -> 7 | <p className={`text-xs font-medium truncate max-w-
+L5921: Bal 7 -> 7 | Student Answer: {ans}
+L5922: Bal 7 -> 7 | </p>
+L5923: Bal 7 -> 8 | {question?.correctAnswer && (
+L5924: Bal 8 -> 8 | <p className="text-xs text-green-700 font-bold tru
+L5925: Bal 8 -> 8 | Correct Answer: {question.correctAnswer}
+L5926: Bal 8 -> 8 | </p>
+L5927: Bal 8 -> 7 | )}
+L5928: Bal 7 -> 7 | </div>
+L5929: Bal 7 -> 6 | )}
+L5930: Bal 6 -> 6 | </div>
+L5931: Bal 6 -> 6 | <div className="flex items-center gap-3">
+L5932: Bal 6 -> 6 | <div className="flex items-center gap-2 bg-white p
+L5933: Bal 6 -> 6 | <span className="text-xs font-bold text-gray-500 u
+L5934: Bal 6 -> 6 | <input type="number"
+L5935: Bal 6 -> 6 | className="w-16 p-1 border-b-2 border-indigo-200 t
+L5936: Bal 6 -> 6 | placeholder="0"
+L5937: Bal 6 -> 6 | max={question?.totalMarks}
+L5938: Bal 6 -> 6 | value={grades[qIdx] !== undefined ? grades[qIdx] :
+L5939: Bal 6 -> 6 | onChange={e => setGrades({ ...grades, [qIdx]: e.ta
+L5940: Bal 6 -> 6 | />
+L5941: Bal 6 -> 6 | <span className="text-xs text-gray-400">/ {questio
+L5942: Bal 6 -> 6 | </div>
+L5943: Bal 6 -> 6 | </div>
+L5944: Bal 6 -> 6 | </div>
+L5945: Bal 6 -> 6 | );
+L5946: Bal 6 -> 4 | })}
+L5947: Bal 4 -> 5 | {(!currentQP || !currentQP.questions || currentQP.
+L5948: Bal 5 -> 5 | <div className="p-8 text-center border-2 border-da
+L5949: Bal 5 -> 5 | <p className="text-gray-500 mb-4">No Question Pape
+L5950: Bal 5 -> 5 | <label className="block text-sm font-bold text-gra
+L5951: Bal 5 -> 5 | <input type="number" className="p-2 border rounded
+L5952: Bal 5 -> 5 | onChange={e => setGrades({ 'MANUAL_TOTAL': e.targe
+L5953: Bal 5 -> 5 | />
+L5954: Bal 5 -> 5 | </div>
+L5955: Bal 5 -> 4 | )}
+L5956: Bal 4 -> 4 | </div>
+L5957: Bal 4 -> 4 | </>
+L5958: Bal 4 -> 4 | );
+L5959: Bal 4 -> 2 | })()}
+L5960: Bal 2 -> 2 | </div>
+L5961: Bal 2 -> 1 | )}
+L5962: Bal 1 -> 1 | </div>
+L5963: Bal 1 -> 1 | );
+L5964: Bal 1 -> 0 | };
+⚠️ BALANCE DROPPED TO 0!
+L5965: Bal 0 -> 0 | 
+⚠️ BALANCE DROPPED TO 0!
+L5966: Bal 0 -> 1 | const CalendarTab = () => {
+L5967: Bal 1 -> 1 | const [date, setDate] = useState(new Date());
+L5968: Bal 1 -> 1 | const [events, setEvents] = useState([]);
+L5969: Bal 1 -> 1 | const [selectedDateEvents, setSelectedDateEvents] 
+L5970: Bal 1 -> 1 | 
+L5971: Bal 1 -> 2 | useEffect(() => {
+L5972: Bal 2 -> 3 | const loadEvents = () => {
+L5973: Bal 3 -> 3 | const batches = window.Utils.getBatches();
+L5974: Bal 3 -> 3 | // Map batches to events
+L5975: Bal 3 -> 3 | const evts = [];
+L5976: Bal 3 -> 4 | batches.forEach(b => {
+L5977: Bal 4 -> 5 | if (b.startDate) {
+L5978: Bal 5 -> 5 | const d = new Date(b.startDate);
+L5979: Bal 5 -> 6 | if (!isNaN(d.getTime())) {
+L5980: Bal 6 -> 7 | evts.push({
+L5981: Bal 7 -> 7 | date: d,
+L5982: Bal 7 -> 7 | title: `Start: ${b.name}`,
+L5983: Bal 7 -> 7 | type: 'start',
+L5984: Bal 7 -> 7 | data: b
+L5985: Bal 7 -> 6 | });
+L5986: Bal 6 -> 5 | }
+L5987: Bal 5 -> 4 | }
+L5988: Bal 4 -> 5 | if (b.endDate) {
+L5989: Bal 5 -> 5 | const d = new Date(b.endDate);
+L5990: Bal 5 -> 6 | if (!isNaN(d.getTime())) {
+L5991: Bal 6 -> 7 | evts.push({
+L5992: Bal 7 -> 7 | date: d,
+L5993: Bal 7 -> 7 | title: `End: ${b.name}`,
+L5994: Bal 7 -> 7 | type: 'end',
+L5995: Bal 7 -> 7 | data: b
+L5996: Bal 7 -> 6 | });
+L5997: Bal 6 -> 5 | }
+L5998: Bal 5 -> 4 | }
+L5999: Bal 4 -> 3 | });
+L6000: Bal 3 -> 3 | setEvents(evts);
+L6001: Bal 3 -> 2 | };
+L6002: Bal 2 -> 2 | loadEvents();
+L6003: Bal 2 -> 2 | window.addEventListener('cloud-sync-complete', loa
+L6004: Bal 2 -> 2 | return () => window.removeEventListener('cloud-syn
+L6005: Bal 2 -> 1 | }, []);
+L6006: Bal 1 -> 1 | 
+L6007: Bal 1 -> 1 | const daysInMonth = (month, year) => new Date(year
+L6008: Bal 1 -> 1 | const firstDayOfMonth = (month, year) => new Date(
+L6009: Bal 1 -> 1 | 
+L6010: Bal 1 -> 2 | const renderCalendar = () => {
+L6011: Bal 2 -> 2 | const month = date.getMonth();
+L6012: Bal 2 -> 2 | const year = date.getFullYear();
+L6013: Bal 2 -> 2 | const totalDays = daysInMonth(month, year);
+L6014: Bal 2 -> 2 | const startDay = firstDayOfMonth(month, year);
+L6015: Bal 2 -> 2 | const days = [];
+L6016: Bal 2 -> 2 | 
+L6017: Bal 2 -> 2 | // Empty slots for days before start of month
+L6018: Bal 2 -> 3 | for (let i = 0; i < startDay; i++) {
+L6019: Bal 3 -> 3 | days.push(<div key={`empty-${i}`} className="h-24 
+L6020: Bal 3 -> 2 | }
+L6021: Bal 2 -> 2 | 
+L6022: Bal 2 -> 2 | // Days of month
+L6023: Bal 2 -> 3 | for (let d = 1; d <= totalDays; d++) {
+L6024: Bal 3 -> 3 | const currentDay = new Date(year, month, d);
+L6025: Bal 3 -> 3 | const dayEvents = events.filter(e =>
+L6026: Bal 3 -> 3 | e.date.getDate() === d &&
+L6027: Bal 3 -> 3 | e.date.getMonth() === month &&
+L6028: Bal 3 -> 3 | e.date.getFullYear() === year
+L6029: Bal 3 -> 3 | );
+L6030: Bal 3 -> 3 | 
+L6031: Bal 3 -> 3 | days.push(
+L6032: Bal 3 -> 3 | <div key={d}
+L6033: Bal 3 -> 3 | onClick={() => setSelectedDateEvents(dayEvents)}
+L6034: Bal 3 -> 3 | className={`h-24 border border-gray-100 p-2 cursor
+L6035: Bal 3 -> 3 | <div className="flex justify-between items-start">
+L6036: Bal 3 -> 3 | <span className={`text-sm font-bold ${dayEvents.le
+L6037: Bal 3 -> 3 | {dayEvents.length > 0 && <span className="w-2 h-2 
+L6038: Bal 3 -> 3 | </div>
+L6039: Bal 3 -> 3 | <div className="mt-1 space-y-1 overflow-hidden h-1
+L6040: Bal 3 -> 4 | {dayEvents.map((ev, i) => (
+L6041: Bal 4 -> 4 | <div key={i} className={`text-[10px] truncate px-1
+L6042: Bal 4 -> 4 | {ev.title}
+L6043: Bal 4 -> 4 | </div>
+L6044: Bal 4 -> 3 | ))}
+L6045: Bal 3 -> 3 | </div>
+L6046: Bal 3 -> 3 | </div>
+L6047: Bal 3 -> 3 | );
+L6048: Bal 3 -> 2 | }
+L6049: Bal 2 -> 2 | return days;
+L6050: Bal 2 -> 1 | };
+L6051: Bal 1 -> 1 | 
+L6052: Bal 1 -> 2 | const changeMonth = (offset) => {
+L6053: Bal 2 -> 2 | setDate(new Date(date.getFullYear(), date.getMonth
+L6054: Bal 2 -> 1 | };
+L6055: Bal 1 -> 1 | 
+L6056: Bal 1 -> 1 | return (
+L6057: Bal 1 -> 1 | <div className="animate-fade-in grid grid-cols-1 m
+L6058: Bal 1 -> 1 | <div className="md:col-span-2 bg-white rounded-xl 
+L6059: Bal 1 -> 1 | <div className="flex justify-between items-center 
+L6060: Bal 1 -> 1 | <h2 className="text-xl font-bold text-gray-800">{d
+L6061: Bal 1 -> 1 | <div className="flex gap-2">
+L6062: Bal 1 -> 1 | <button onClick={() => changeMonth(-1)} className=
+L6063: Bal 1 -> 1 | <button onClick={() => changeMonth(1)} className="
+L6064: Bal 1 -> 1 | </div>
+L6065: Bal 1 -> 1 | </div>
+L6066: Bal 1 -> 1 | <div className="grid grid-cols-7 gap-px mb-2 text-
+L6067: Bal 1 -> 1 | <div>Sun</div><div>Mon</div><div>Tue</div><div>Wed
+L6068: Bal 1 -> 1 | </div>
+L6069: Bal 1 -> 1 | <div className="grid grid-cols-7 border border-gra
+L6070: Bal 1 -> 1 | {renderCalendar()}
+L6071: Bal 1 -> 1 | </div>
+L6072: Bal 1 -> 1 | </div>
+L6073: Bal 1 -> 1 | 
+L6074: Bal 1 -> 1 | {/* Event Details Sidebar */}
+L6075: Bal 1 -> 1 | <div className="bg-white rounded-xl shadow-sm bord
+L6076: Bal 1 -> 1 | <h3 className="text-lg font-bold text-gray-800 mb-
+L6077: Bal 1 -> 2 | {selectedDateEvents.length > 0 ? (
+L6078: Bal 2 -> 2 | <div className="space-y-4">
+L6079: Bal 2 -> 3 | {selectedDateEvents.map((evt, idx) => (
+L6080: Bal 3 -> 3 | <div key={idx} className="p-4 rounded-lg bg-gray-5
+L6081: Bal 3 -> 3 | <div className={`text-xs font-bold uppercase mb-1 
+L6082: Bal 3 -> 3 | {evt.type === 'start' ? 'Batch Starting' : 'Batch 
+L6083: Bal 3 -> 3 | </div>
+L6084: Bal 3 -> 3 | <h4 className="font-bold text-gray-800">{evt.data.
+L6085: Bal 3 -> 3 | <p className="text-xs text-gray-500 mt-1">{evt.dat
+L6086: Bal 3 -> 3 | </div>
+L6087: Bal 3 -> 2 | ))}
+L6088: Bal 2 -> 2 | </div>
+L6089: Bal 2 -> 2 | ) : (
+L6090: Bal 2 -> 2 | <div className="text-center text-gray-400 py-10">
+L6091: Bal 2 -> 2 | <Icons.Calendar className="w-12 h-12 mx-auto mb-2 
+L6092: Bal 2 -> 2 | <p>Select a date with dots to see details</p>
+L6093: Bal 2 -> 2 | </div>
+L6094: Bal 2 -> 1 | )}
+L6095: Bal 1 -> 1 | </div>
+L6096: Bal 1 -> 1 | </div>
+L6097: Bal 1 -> 1 | );
+L6098: Bal 1 -> 0 | };
+⚠️ BALANCE DROPPED TO 0!
+L6099: Bal 0 -> 0 | 
+⚠️ BALANCE DROPPED TO 0!
+L6100: Bal 0 -> 1 | const LocationTab = () => {
+L6101: Bal 1 -> 1 | const [centers, setCenters] = useState([]);
+L6102: Bal 1 -> 1 | 
+L6103: Bal 1 -> 2 | useEffect(() => {
+L6104: Bal 2 -> 3 | const loadCenters = () => {
+L6105: Bal 3 -> 3 | const batches = window.Utils.getBatches();
+L6106: Bal 3 -> 3 | // Extract unique centers from batches
+L6107: Bal 3 -> 3 | // Assuming batch has 'trainingCentre', 'district'
+L6108: Bal 3 -> 3 | const centerMap = new Map();
+L6109: Bal 3 -> 4 | batches.forEach(b => {
+L6110: Bal 4 -> 5 | if (b.trainingCentre) {
+L6111: Bal 5 -> 6 | if (!centerMap.has(b.trainingCentre)) {
+L6112: Bal 6 -> 7 | centerMap.set(b.trainingCentre, {
+L6113: Bal 7 -> 7 | name: b.trainingCentre,
+L6114: Bal 7 -> 7 | id: b.centerId || 'N/A',
+L6115: Bal 7 -> 7 | district: b.district || 'Unknown',
+L6116: Bal 7 -> 7 | state: b.state || 'Unknown',
+L6117: Bal 7 -> 7 | spoc: b.spocName || 'N/A', // Assuming spocName ex
+L6118: Bal 7 -> 7 | address: b.centerAddress || '',
+L6119: Bal 7 -> 7 | activeBatches: 0
+L6120: Bal 7 -> 6 | });
+L6121: Bal 6 -> 5 | }
+L6122: Bal 5 -> 5 | centerMap.get(b.trainingCentre).activeBatches += 1
+L6123: Bal 5 -> 4 | }
+L6124: Bal 4 -> 3 | });
+L6125: Bal 3 -> 3 | setCenters(Array.from(centerMap.values()));
+L6126: Bal 3 -> 2 | };
+L6127: Bal 2 -> 2 | loadCenters();
+L6128: Bal 2 -> 2 | window.addEventListener('cloud-sync-complete', loa
+L6129: Bal 2 -> 2 | return () => window.removeEventListener('cloud-syn
+L6130: Bal 2 -> 1 | }, []);
+L6131: Bal 1 -> 1 | 
+L6132: Bal 1 -> 1 | return (
+L6133: Bal 1 -> 1 | <div className="animate-fade-in">
+L6134: Bal 1 -> 1 | <div className="flex justify-between items-center 
+L6135: Bal 1 -> 1 | <h2 className="text-2xl font-bold text-gray-800">A
+L6136: Bal 1 -> 1 | <span className="bg-blue-100 text-blue-800 px-3 py
+L6137: Bal 1 -> 1 | </div>
+L6138: Bal 1 -> 1 | 
+L6139: Bal 1 -> 1 | <div className="grid grid-cols-1 md:grid-cols-3 ga
+L6140: Bal 1 -> 2 | {centers.map((center, idx) => (
+L6141: Bal 2 -> 2 | <div key={idx} className="bg-white rounded-xl shad
+L6142: Bal 2 -> 2 | <div className="flex items-start justify-between m
+L6143: Bal 2 -> 2 | <div className="p-3 bg-indigo-50 text-indigo-600 r
+L6144: Bal 2 -> 2 | <Icons.MapPin className="w-6 h-6" />
+L6145: Bal 2 -> 2 | </div>
+L6146: Bal 2 -> 2 | <span className="text-xs font-bold bg-green-100 te
+L6147: Bal 2 -> 2 | {center.activeBatches} Active batches
+L6148: Bal 2 -> 2 | </span>
+L6149: Bal 2 -> 2 | </div>
+L6150: Bal 2 -> 2 | <h3 className="text-lg font-bold text-gray-800 mb-
+L6151: Bal 2 -> 2 | <p className="text-sm text-gray-500 mb-4">{center.
+L6152: Bal 2 -> 2 | 
+L6153: Bal 2 -> 2 | <div className="space-y-2 text-sm text-gray-600">
+L6154: Bal 2 -> 2 | <div className="flex items-center gap-2">
+L6155: Bal 2 -> 2 | <Icons.Map className="w-4 h-4 opacity-70" />
+L6156: Bal 2 -> 2 | <span>{center.district}, {center.state}</span>
+L6157: Bal 2 -> 2 | </div>
+L6158: Bal 2 -> 2 | <div className="flex items-center gap-2">
+L6159: Bal 2 -> 2 | <Icons.Home className="w-4 h-4 opacity-70" />
+L6160: Bal 2 -> 2 | <span className="truncate" title={center.address}>
+L6161: Bal 2 -> 2 | </div>
+L6162: Bal 2 -> 2 | </div>
+L6163: Bal 2 -> 2 | </div>
+L6164: Bal 2 -> 1 | ))}
+L6165: Bal 1 -> 1 | </div>
+L6166: Bal 1 -> 2 | {centers.length === 0 && (
+L6167: Bal 2 -> 2 | <div className="text-center py-20 bg-gray-50 round
+L6168: Bal 2 -> 2 | <Icons.MapPin className="w-16 h-16 mx-auto text-gr
+L6169: Bal 2 -> 2 | <h3 className="text-xl font-bold text-gray-400">No
+L6170: Bal 2 -> 2 | <p className="text-gray-500">Create Batches with C
+L6171: Bal 2 -> 2 | </div>
+L6172: Bal 2 -> 1 | )}
+L6173: Bal 1 -> 1 | </div>
+L6174: Bal 1 -> 1 | );
+L6175: Bal 1 -> 0 | };
+⚠️ BALANCE DROPPED TO 0!
+L6176: Bal 0 -> 0 | 
+⚠️ BALANCE DROPPED TO 0!
+L6177: Bal 0 -> 1 | const DashboardTab = () => {
+L6178: Bal 1 -> 1 | const [stats, setStats] = useState({ batches: 0, s
+L6179: Bal 1 -> 1 | const [recentBatches, setRecentBatches] = useState
+L6180: Bal 1 -> 1 | 
+L6181: Bal 1 -> 2 | useEffect(() => {
+L6182: Bal 2 -> 3 | const loadStats = () => {
+L6183: Bal 3 -> 3 | const batches = window.Utils.getBatches();
+L6184: Bal 3 -> 3 | const students = window.Utils.getStudents();
+L6185: Bal 3 -> 3 | const qps = window.Utils.getQuestionPapers();
+L6186: Bal 3 -> 3 | // Assessor count estimated from batches (unique u
+L6187: Bal 3 -> 3 | // A better way: Count unique assessors assigned t
+L6188: Bal 3 -> 3 | const assessors = new Set(batches.map(b => b.asses
+L6189: Bal 3 -> 3 | 
+L6190: Bal 3 -> 4 | setStats({
+L6191: Bal 4 -> 4 | batches: batches.length,
+L6192: Bal 4 -> 4 | students: students.length,
+L6193: Bal 4 -> 4 | qps: qps.length,
+L6194: Bal 4 -> 4 | assessors: assessors
+L6195: Bal 4 -> 3 | });
+L6196: Bal 3 -> 3 | setRecentBatches(batches.slice(-5).reverse());
+L6197: Bal 3 -> 2 | };
+L6198: Bal 2 -> 2 | loadStats();
+L6199: Bal 2 -> 2 | window.addEventListener('cloud-sync-complete', loa
+L6200: Bal 2 -> 2 | return () => window.removeEventListener('cloud-syn
+L6201: Bal 2 -> 1 | }, []);
+L6202: Bal 1 -> 1 | 
+L6203: Bal 1 -> 1 | return (
+L6204: Bal 1 -> 1 | <div className="animate-fade-in">
+L6205: Bal 1 -> 1 | <h2 className="text-2xl font-bold mb-6 text-gray-8
+L6206: Bal 1 -> 1 | 
+L6207: Bal 1 -> 1 | {/* System Management (Debugging Position) */}
+L6208: Bal 1 -> 1 | <div className="mb-8 bg-red-50 rounded-xl shadow-s
+L6209: Bal 1 -> 1 | <h3 className="text-lg font-bold text-red-800 mb-4
+L6210: Bal 1 -> 1 | <Icons.TriangleAlert className="w-5 h-5 text-red-6
+L6211: Bal 1 -> 1 | </h3>
+L6212: Bal 1 -> 1 | <div className="flex items-center justify-between"
+L6213: Bal 1 -> 1 | <div>
+L6214: Bal 1 -> 1 | <h4 className="font-bold text-gray-800">Factory Re
+L6215: Bal 1 -> 1 | <p className="text-sm text-gray-600 max-w-xl">
+L6216: Bal 1 -> 1 | This will permanently delete ALL data (Batches, St
+L6217: Bal 1 -> 1 | This action cannot be undone. Use with extreme cau
+L6218: Bal 1 -> 1 | </p>
+L6219: Bal 1 -> 1 | </div>
+L6220: Bal 1 -> 1 | <button
+L6221: Bal 1 -> 1 | onClick={window.Utils.factoryReset}
+L6222: Bal 1 -> 1 | className="bg-red-600 hover:bg-red-700 text-white 
+L6223: Bal 1 -> 1 | >
+L6224: Bal 1 -> 1 | <Icons.Trash2 className="w-5 h-5" />
+L6225: Bal 1 -> 1 | Reset App & Clear Cloud
+L6226: Bal 1 -> 1 | </button>
+L6227: Bal 1 -> 1 | </div>
+L6228: Bal 1 -> 1 | 
+L6229: Bal 1 -> 1 | {/* Cloud Verification Tool */}
+L6230: Bal 1 -> 1 | <div className="mt-4 pt-4 border-t border-red-200 
+L6231: Bal 1 -> 1 | <button
+L6232: Bal 1 -> 3 | onClick={async () => {
+L6233: Bal 3 -> 3 | const btn = document.getElementById('btn-check-clo
+L6234: Bal 3 -> 3 | if (btn) btn.innerText = "Checking...";
+L6235: Bal 3 -> 3 | 
+L6236: Bal 3 -> 3 | const cols = ['ssc', 'qps', 'nos', 'pcs', 'batches
+L6237: Bal 3 -> 3 | let report = "Cloud Data Status:\n----------------
+L6238: Bal 3 -> 3 | let total = 0;
+L6239: Bal 3 -> 3 | 
+L6240: Bal 3 -> 4 | for (const c of cols) {
+L6241: Bal 4 -> 5 | try {
+L6242: Bal 5 -> 5 | const snap = await db.collection(c).get();
+L6243: Bal 5 -> 5 | const count = snap.size;
+L6244: Bal 5 -> 5 | total += count;
+L6245: Bal 5 -> 5 | report += `${c}: ${count}\n`;
+L6246: Bal 5 -> 5 | } catch (e) {
+L6247: Bal 5 -> 5 | report += `${c}: Error (${e.message})\n`;
+L6248: Bal 5 -> 4 | }
+L6249: Bal 4 -> 3 | }
+L6250: Bal 3 -> 3 | 
+L6251: Bal 3 -> 3 | if (btn) btn.innerText = "Check Cloud Data";
+L6252: Bal 3 -> 3 | alert(report + `\nTotal Documents: ${total}`);
+L6253: Bal 3 -> 1 | }}
+L6254: Bal 1 -> 1 | id="btn-check-cloud"
+L6255: Bal 1 -> 1 | className="text-xs text-red-600 hover:text-red-800
+L6256: Bal 1 -> 1 | >
+L6257: Bal 1 -> 1 | <Icons.Database className="w-3 h-3" /> Check Cloud
+L6258: Bal 1 -> 1 | </button>
+L6259: Bal 1 -> 1 | </div>
+L6260: Bal 1 -> 1 | </div>
+L6261: Bal 1 -> 1 | 
+L6262: Bal 1 -> 1 | {/* Stats Grid */}
+L6263: Bal 1 -> 1 | <div className="grid grid-cols-1 md:grid-cols-4 ga
+L6264: Bal 1 -> 1 | <div className="bg-white p-6 rounded-xl shadow-sm 
+L6265: Bal 1 -> 1 | <div className="p-3 bg-blue-50 text-blue-600 round
+L6266: Bal 1 -> 1 | <div>
+L6267: Bal 1 -> 1 | <h3 className="text-2xl font-bold text-gray-800">{
+L6268: Bal 1 -> 1 | <p className="text-sm text-gray-500">Total Batches
+L6269: Bal 1 -> 1 | </div>
+L6270: Bal 1 -> 1 | </div>
+L6271: Bal 1 -> 1 | <div className="bg-white p-6 rounded-xl shadow-sm 
+L6272: Bal 1 -> 1 | <div className="p-3 bg-green-50 text-green-600 rou
+L6273: Bal 1 -> 1 | <div>
+L6274: Bal 1 -> 1 | <h3 className="text-2xl font-bold text-gray-800">{
+L6275: Bal 1 -> 1 | <p className="text-sm text-gray-500">Total Candida
+L6276: Bal 1 -> 1 | </div>
+L6277: Bal 1 -> 1 | </div>
+L6278: Bal 1 -> 1 | <div className="bg-white p-6 rounded-xl shadow-sm 
+L6279: Bal 1 -> 1 | <div className="p-3 bg-purple-50 text-purple-600 r
+L6280: Bal 1 -> 1 | <div>
+L6281: Bal 1 -> 1 | <h3 className="text-2xl font-bold text-gray-800">{
+L6282: Bal 1 -> 1 | <p className="text-sm text-gray-500">Question Pape
+L6283: Bal 1 -> 1 | </div>
+L6284: Bal 1 -> 1 | </div>
+L6285: Bal 1 -> 1 | <div className="bg-white p-6 rounded-xl shadow-sm 
+L6286: Bal 1 -> 1 | <div className="p-3 bg-orange-50 text-orange-600 r
+L6287: Bal 1 -> 1 | <div>
+L6288: Bal 1 -> 1 | <h3 className="text-2xl font-bold text-gray-800">{
+L6289: Bal 1 -> 1 | <p className="text-sm text-gray-500">Active Assess
+L6290: Bal 1 -> 1 | </div>
+L6291: Bal 1 -> 1 | </div>
+L6292: Bal 1 -> 1 | </div>
+L6293: Bal 1 -> 1 | 
+L6294: Bal 1 -> 1 | {/* Recent Activity */}
+L6295: Bal 1 -> 1 | <div className="bg-white rounded-xl shadow-sm bord
+L6296: Bal 1 -> 1 | <h3 className="text-lg font-bold text-gray-700 mb-
+L6297: Bal 1 -> 1 | <div className="overflow-x-auto">
+L6298: Bal 1 -> 1 | <table className="w-full text-left">
+L6299: Bal 1 -> 1 | <thead className="bg-gray-50 text-xs uppercase tex
+L6300: Bal 1 -> 1 | <tr>
+L6301: Bal 1 -> 1 | <th className="p-3 rounded-l-lg">Batch Name</th>
+L6302: Bal 1 -> 1 | <th className="p-3">Training Centre</th>
+L6303: Bal 1 -> 1 | <th className="p-3">Start Date</th>
+L6304: Bal 1 -> 1 | <th className="p-3">Status</th>
+L6305: Bal 1 -> 1 | <th className="p-3 rounded-r-lg text-right">Candid
+L6306: Bal 1 -> 1 | </tr>
+L6307: Bal 1 -> 1 | </thead>
+L6308: Bal 1 -> 1 | <tbody className="text-sm">
+L6309: Bal 1 -> 2 | {recentBatches.map(b => (
+L6310: Bal 2 -> 2 | <tr key={b.id} className="border-b last:border-0 h
+L6311: Bal 2 -> 2 | <td className="p-3 font-medium text-gray-800">{b.n
+L6312: Bal 2 -> 2 | <td className="p-3 text-gray-600">{b.trainingCentr
+L6313: Bal 2 -> 2 | <td className="p-3 text-gray-600">{b.startDate}</t
+L6314: Bal 2 -> 2 | <td className="p-3"><span className="bg-green-100 
+L6315: Bal 2 -> 2 | <td className="p-3 text-right font-bold text-indig
+L6316: Bal 2 -> 2 | </tr>
+L6317: Bal 2 -> 1 | ))}
+L6318: Bal 1 -> 1 | {recentBatches.length === 0 && <tr><td colSpan="5"
+L6319: Bal 1 -> 1 | </tbody>
+L6320: Bal 1 -> 1 | </table>
+L6321: Bal 1 -> 1 | </div>
+L6322: Bal 1 -> 1 | </div>
+L6323: Bal 1 -> 1 | 
+L6324: Bal 1 -> 1 | </div >
+L6325: Bal 1 -> 1 | );
+L6326: Bal 1 -> 0 | };
+⚠️ BALANCE DROPPED TO 0!
+L6327: Bal 0 -> 0 | 
+⚠️ BALANCE DROPPED TO 0!
+L6328: Bal 0 -> 0 | // ADMIN DASHBOARD
+⚠️ BALANCE DROPPED TO 0!
+L6329: Bal 0 -> 1 | const AdminDashboard = () => {
+L6330: Bal 1 -> 1 | const [activeTab, setActiveTab] = useState('qps');
+L6331: Bal 1 -> 1 | const [selectedQPForNOS, setSelectedQPForNOS] = us
+L6332: Bal 1 -> 1 | const [allQPapers, setAllQPapers] = useState([]); 
+L6333: Bal 1 -> 1 | 
+L6334: Bal 1 -> 2 | useEffect(() => {
+L6335: Bal 2 -> 2 | const loadQPs = () => setAllQPapers(window.Utils.g
+L6336: Bal 2 -> 2 | loadQPs();
+L6337: Bal 2 -> 2 | window.addEventListener('cloud-sync-complete', loa
+L6338: Bal 2 -> 2 | 
+L6339: Bal 2 -> 2 | // Real-Time Sync (Commented out Socket.io)
+L6340: Bal 2 -> 2 | // In Firebase, we can use db.collection(...).onSn
+L6341: Bal 2 -> 2 | // const socket = io(SERVER_URL);
+L6342: Bal 2 -> 2 | // socket.on('data-change', (data) => { ... });
+L6343: Bal 2 -> 2 | 
+L6344: Bal 2 -> 3 | return () => {
+L6345: Bal 3 -> 3 | window.removeEventListener('cloud-sync-complete', 
+L6346: Bal 3 -> 2 | };
+L6347: Bal 2 -> 1 | }, []);
+L6348: Bal 1 -> 1 | 
+L6349: Bal 1 -> 2 | const handleNavigateToNOS = (qp) => {
+L6350: Bal 2 -> 2 | setSelectedQPForNOS(qp);
+L6351: Bal 2 -> 2 | setActiveTab('nos');
+L6352: Bal 2 -> 1 | };
+L6353: Bal 1 -> 1 | 
+L6354: Bal 1 -> 1 | return (
+L6355: Bal 1 -> 1 | <div className="flex bg-gray-100 min-h-screen">
+L6356: Bal 1 -> 1 | <Sidebar activeTab={activeTab} setActiveTab={setAc
+L6357: Bal 1 -> 1 | <div className="flex-1 overflow-auto h-screen">
+L6358: Bal 1 -> 1 | {/* Header */}
+L6359: Bal 1 -> 1 | <header className="bg-white shadow-sm p-4 flex jus
+L6360: Bal 1 -> 1 | <div className="flex items-center text-sm text-gra
+L6361: Bal 1 -> 1 | <span className="hover:text-gray-700 cursor-pointe
+L6362: Bal 1 -> 1 | <Icons.ChevronRight />
+L6363: Bal 1 -> 1 | <span className="font-medium text-gray-900 capital
+L6364: Bal 1 -> 1 | </div>
+L6365: Bal 1 -> 1 | <div className="flex items-center gap-4">
+L6366: Bal 1 -> 1 | {/* CLOUD SYNC CONTROLS */}
+L6367: Bal 1 -> 1 | <div className="flex items-center gap-2 mr-2 borde
+L6368: Bal 1 -> 1 | <span id="sync-status-text" className="text-xs tex
+L6369: Bal 1 -> 1 | <button onClick={() => window.Utils.uploadToCloud(
+L6370: Bal 1 -> 1 | <Icons.Upload className="w-5 h-5" />
+L6371: Bal 1 -> 1 | </button>
+L6372: Bal 1 -> 1 | <button onClick={() => window.Utils.downloadFromCl
+L6373: Bal 1 -> 1 | <Icons.Download className="w-5 h-5" />
+L6374: Bal 1 -> 1 | </button>
+L6375: Bal 1 -> 1 | </div>
+L6376: Bal 1 -> 1 | 
+L6377: Bal 1 -> 1 | <div className="w-8 h-8 rounded-full bg-indigo-100
+L6378: Bal 1 -> 1 | <span className="text-sm font-medium">Administrato
+L6379: Bal 1 -> 1 | </div>
+L6380: Bal 1 -> 1 | </header>
+L6381: Bal 1 -> 1 | 
+L6382: Bal 1 -> 1 | <div className="p-8">
+L6383: Bal 1 -> 1 | {activeTab === 'dashboard' && <DashboardTab />}
+L6384: Bal 1 -> 1 | {activeTab === 'calendar' && <CalendarTab />}
+L6385: Bal 1 -> 1 | {activeTab === 'location' && <LocationTab />}
+L6386: Bal 1 -> 1 | 
+L6387: Bal 1 -> 1 | {activeTab === 'subjects' && <SubjectsTab />}
+L6388: Bal 1 -> 1 | {activeTab === 'marks' && <MarksTab />}
+L6389: Bal 1 -> 1 | {activeTab === 'qps' && <QPsTab onNavigateToNOS={h
+L6390: Bal 1 -> 1 | {activeTab === 'nos' && <NOSPC_Tab selectedQP={sel
+L6391: Bal 1 -> 1 | {activeTab === 'questionPapers' && <QuestionPapers
+L6392: Bal 1 -> 1 | {activeTab === 'batches' && <BatchesTab />}
+L6393: Bal 1 -> 1 | {activeTab === 'results' && <ResultsTab />}
+L6394: Bal 1 -> 1 | {activeTab === 'assessors' && <AssessorsTab />}
+L6395: Bal 1 -> 1 | </div>
+L6396: Bal 1 -> 1 | </div>
+L6397: Bal 1 -> 1 | </div >
+L6398: Bal 1 -> 1 | );
+L6399: Bal 1 -> 0 | };
+⚠️ BALANCE DROPPED TO 0!
+L6400: Bal 0 -> 0 | 
+⚠️ BALANCE DROPPED TO 0!
+L6401: Bal 0 -> 0 | 
+⚠️ BALANCE DROPPED TO 0!
+L6402: Bal 0 -> 0 | 
+⚠️ BALANCE DROPPED TO 0!
+L6403: Bal 0 -> 0 | 
+⚠️ BALANCE DROPPED TO 0!
+L6404: Bal 0 -> 0 | // Code Runner Component
+⚠️ BALANCE DROPPED TO 0!
+L6405: Bal 0 -> 1 | const CodeRunner = ({ code, onChange }) => {
+L6406: Bal 1 -> 1 | const [language, setLanguage] = useState('python')
+L6407: Bal 1 -> 1 | const [output, setOutput] = useState('');
+L6408: Bal 1 -> 1 | const [isRunning, setIsRunning] = useState(false);
+L6409: Bal 1 -> 1 | 
+L6410: Bal 1 -> 2 | const LANGUAGES = {
+L6411: Bal 2 -> 2 | python: { version: '3.10.0', name: 'Python 3' },
+L6412: Bal 2 -> 2 | javascript: { version: '18.15.0', name: 'Node.js' 
+L6413: Bal 2 -> 2 | c: { version: '10.2.0', name: 'C (GCC)' },
+L6414: Bal 2 -> 2 | cpp: { version: '10.2.0', name: 'C++ (GCC)' },
+L6415: Bal 2 -> 2 | java: { version: '15.0.2', name: 'Java ' }
+L6416: Bal 2 -> 1 | };
+L6417: Bal 1 -> 1 | 
+L6418: Bal 1 -> 2 | const runCode = async () => {
+L6419: Bal 2 -> 3 | if (!code || !code.trim()) {
+L6420: Bal 3 -> 3 | setOutput("Please type some code first.");
+L6421: Bal 3 -> 3 | return;
+L6422: Bal 3 -> 2 | }
+L6423: Bal 2 -> 2 | setIsRunning(true);
+L6424: Bal 2 -> 2 | setOutput("Running...");
+L6425: Bal 2 -> 2 | 
+L6426: Bal 2 -> 3 | try {
+L6427: Bal 3 -> 3 | const response = await fetch('https://emkc.org/api
+L6428: Bal 3 -> 3 | method: 'POST',
+L6429: Bal 3 -> 3 | headers: { 'Content-Type': 'application/json' },
+L6430: Bal 3 -> 4 | body: JSON.stringify({
+L6431: Bal 4 -> 4 | language: language,
+L6432: Bal 4 -> 4 | version: LANGUAGES[language].version,
+L6433: Bal 4 -> 4 | files: [{ content: code }]
+L6434: Bal 4 -> 3 | })
+L6435: Bal 3 -> 2 | });
+L6436: Bal 2 -> 2 | const data = await response.json();
+L6437: Bal 2 -> 3 | if (data.run) {
+L6438: Bal 3 -> 3 | setOutput(data.run.output || "No Output");
+L6439: Bal 3 -> 3 | } else {
+L6440: Bal 3 -> 3 | setOutput("Error: " + (data.message || "Unknown AP
+L6441: Bal 3 -> 2 | }
+L6442: Bal 2 -> 2 | } catch (e) {
+L6443: Bal 2 -> 2 | setOutput("Network Error: Could not reach compiler
+L6444: Bal 2 -> 2 | } finally {
+L6445: Bal 2 -> 2 | setIsRunning(false);
+L6446: Bal 2 -> 1 | }
+L6447: Bal 1 -> 0 | };
+⚠️ BALANCE DROPPED TO 0!
+L6448: Bal 0 -> 0 | 
+⚠️ BALANCE DROPPED TO 0!
+L6449: Bal 0 -> 0 | return (
+⚠️ BALANCE DROPPED TO 0!
+L6450: Bal 0 -> 0 | <div className="flex flex-col h-full border rounde
+⚠️ BALANCE DROPPED TO 0!
+L6451: Bal 0 -> 0 | <div className="flex items-center justify-between 
+⚠️ BALANCE DROPPED TO 0!
+L6452: Bal 0 -> 0 | <div className="flex items-center gap-2">
+⚠️ BALANCE DROPPED TO 0!
+L6453: Bal 0 -> 0 | <select value={language} onChange={e => setLanguag
+⚠️ BALANCE DROPPED TO 0!
+L6454: Bal 0 -> 0 | className="bg-gray-700 text-white text-sm p-1 roun
+⚠️ BALANCE DROPPED TO 0!
+L6455: Bal 0 -> 1 | {Object.entries(LANGUAGES).map(([key, info]) => (
+L6456: Bal 1 -> 1 | <option key={key} value={key}>{info.name}</option>
+L6457: Bal 1 -> 0 | ))}
+⚠️ BALANCE DROPPED TO 0!
+L6458: Bal 0 -> 0 | </select>
+⚠️ BALANCE DROPPED TO 0!
+L6459: Bal 0 -> 0 | <span className="text-xs text-gray-400">Powered by
+⚠️ BALANCE DROPPED TO 0!
+L6460: Bal 0 -> 0 | </div>
+⚠️ BALANCE DROPPED TO 0!
+L6461: Bal 0 -> 0 | <button onClick={runCode} disabled={isRunning}
+⚠️ BALANCE DROPPED TO 0!
+L6462: Bal 0 -> 0 | className={`flex items-center gap-1 px-3 py-1 roun
+⚠️ BALANCE DROPPED TO 0!
+L6463: Bal 0 -> 0 | {isRunning ? <Icons.Loader className="w-4 h-4 anim
+⚠️ BALANCE DROPPED TO 0!
+L6464: Bal 0 -> 0 | {isRunning ? 'Running...' : 'Run Code'}
+⚠️ BALANCE DROPPED TO 0!
+L6465: Bal 0 -> 0 | </button>
+⚠️ BALANCE DROPPED TO 0!
+L6466: Bal 0 -> 0 | </div>
+⚠️ BALANCE DROPPED TO 0!
+L6467: Bal 0 -> 0 | 
+⚠️ BALANCE DROPPED TO 0!
+L6468: Bal 0 -> 0 | <div className="grid grid-rows-2 h-[450px]">
+⚠️ BALANCE DROPPED TO 0!
+L6469: Bal 0 -> 0 | {/* Editor Area */}
+⚠️ BALANCE DROPPED TO 0!
+L6470: Bal 0 -> 0 | <textarea
+⚠️ BALANCE DROPPED TO 0!
+L6471: Bal 0 -> 0 | value={code || ''}
+⚠️ BALANCE DROPPED TO 0!
+L6472: Bal 0 -> 0 | onChange={e => onChange(e.target.value)}
+⚠️ BALANCE DROPPED TO 0!
+L6473: Bal 0 -> 0 | spellCheck="false"
+⚠️ BALANCE DROPPED TO 0!
+L6474: Bal 0 -> 0 | className="w-full h-full p-4 bg-gray-900 text-gray
+⚠️ BALANCE DROPPED TO 0!
+L6475: Bal 0 -> 0 | placeholder={`Type your ${LANGUAGES[language].name
+⚠️ BALANCE DROPPED TO 0!
+L6476: Bal 0 -> 0 | ></textarea>
+⚠️ BALANCE DROPPED TO 0!
+L6477: Bal 0 -> 0 | 
+⚠️ BALANCE DROPPED TO 0!
+L6478: Bal 0 -> 0 | {/* Output Area */}
+⚠️ BALANCE DROPPED TO 0!
+L6479: Bal 0 -> 0 | <div className="bg-black p-4 overflow-auto font-mo
+⚠️ BALANCE DROPPED TO 0!
+L6480: Bal 0 -> 0 | <div className="text-gray-500 mb-2 border-b border
+⚠️ BALANCE DROPPED TO 0!
+L6481: Bal 0 -> 0 | <pre className={`${output.includes('Error') ? 'tex
+⚠️ BALANCE DROPPED TO 0!
+L6482: Bal 0 -> 0 | {output || 'Result will appear here...'}
+⚠️ BALANCE DROPPED TO 0!
+L6483: Bal 0 -> 0 | </pre>
+⚠️ BALANCE DROPPED TO 0!
+L6484: Bal 0 -> 0 | </div>
+⚠️ BALANCE DROPPED TO 0!
+L6485: Bal 0 -> 0 | </div>
+⚠️ BALANCE DROPPED TO 0!
+L6486: Bal 0 -> 0 | </div>
+⚠️ BALANCE DROPPED TO 0!
+L6487: Bal 0 -> 0 | );
+⚠️ BALANCE DROPPED TO 0!
+L6488: Bal 0 -> -1 | };
+⚠️ BALANCE DROPPED TO -1!
+L6489: Bal -1 -> -1 | 
+⚠️ BALANCE DROPPED TO -1!
+L6490: Bal -1 -> -1 | // PRACTICAL QUESTION RUNNER
+⚠️ BALANCE DROPPED TO -1!
+L6491: Bal -1 -> 0 | const PracticalQuestionRunner = ({ question, answe
+⚠️ BALANCE DROPPED TO 0!
+L6492: Bal 0 -> 0 | const [isRecording, setIsRecording] = useState(fal
+⚠️ BALANCE DROPPED TO 0!
+L6493: Bal 0 -> 0 | const [mediaRecorder, setMediaRecorder] = useState
+⚠️ BALANCE DROPPED TO 0!
+L6494: Bal 0 -> 0 | const [videoChunks, setVideoChunks] = useState([])
+⚠️ BALANCE DROPPED TO 0!
+L6495: Bal 0 -> 0 | const [previewUrl, setPreviewUrl] = useState(answe
+⚠️ BALANCE DROPPED TO 0!
+L6496: Bal 0 -> 0 | const [photoUrl, setPhotoUrl] = useState(answer?.p
+⚠️ BALANCE DROPPED TO 0!
+L6497: Bal 0 -> 0 | const videoRef = useRef(null);
+⚠️ BALANCE DROPPED TO 0!
+L6498: Bal 0 -> 0 | const streamRef = useRef(null);
+⚠️ BALANCE DROPPED TO 0!
+L6499: Bal 0 -> 0 | 
+⚠️ BALANCE DROPPED TO 0!
+L6500: Bal 0 -> 0 | // Cleanup stream on unmount
+⚠️ BALANCE DROPPED TO 0!
+L6501: Bal 0 -> 1 | useEffect(() => {
+L6502: Bal 1 -> 1 | // Initialize camera on mount if no preview
+L6503: Bal 1 -> 1 | if (!previewUrl) startCamera();
+L6504: Bal 1 -> 2 | return () => {
+L6505: Bal 2 -> 3 | if (streamRef.current) {
+L6506: Bal 3 -> 3 | streamRef.current.getTracks().forEach(track => tra
+L6507: Bal 3 -> 2 | }
+L6508: Bal 2 -> 1 | };
+L6509: Bal 1 -> 0 | }, []);
+⚠️ BALANCE DROPPED TO 0!
+L6510: Bal 0 -> 0 | 
+⚠️ BALANCE DROPPED TO 0!
+L6511: Bal 0 -> 1 | const startCamera = async () => {
+L6512: Bal 1 -> 2 | try {
+L6513: Bal 2 -> 2 | const stream = await navigator.mediaDevices.getUse
+L6514: Bal 2 -> 2 | streamRef.current = stream;
+L6515: Bal 2 -> 2 | if (videoRef.current) videoRef.current.srcObject =
+L6516: Bal 2 -> 2 | } catch (e) {
+L6517: Bal 2 -> 2 | console.error("Camera Error", e);
+L6518: Bal 2 -> 2 | // alert("Camera Error: " + e.message); // Suppres
+L6519: Bal 2 -> 1 | }
+L6520: Bal 1 -> 0 | };
+⚠️ BALANCE DROPPED TO 0!
+L6521: Bal 0 -> 0 | 
+⚠️ BALANCE DROPPED TO 0!
+L6522: Bal 0 -> 1 | const startRecording = async () => {
+L6523: Bal 1 -> 1 | if (!streamRef.current) await startCamera();
+L6524: Bal 1 -> 1 | if (!streamRef.current) return;
+L6525: Bal 1 -> 1 | 
+L6526: Bal 1 -> 1 | const stream = streamRef.current;
+L6527: Bal 1 -> 1 | const recorder = new MediaRecorder(stream, { mimeT
+L6528: Bal 1 -> 1 | const chunks = [];
+L6529: Bal 1 -> 1 | recorder.ondataavailable = e => { if (e.data.size 
+L6530: Bal 1 -> 2 | recorder.onstop = async () => {
+L6531: Bal 2 -> 2 | const blob = new Blob(chunks, { type: 'video/webm'
+L6532: Bal 2 -> 2 | const url = URL.createObjectURL(blob);
+L6533: Bal 2 -> 2 | setPreviewUrl(url);
+L6534: Bal 2 -> 2 | 
+L6535: Bal 2 -> 2 | // Save to IndexedDB
+L6536: Bal 2 -> 2 | const key = `practical_q_${Date.now()}`;
+L6537: Bal 2 -> 3 | try {
+L6538: Bal 3 -> 3 | await VideoDB.saveVideo(key, blob);
+L6539: Bal 3 -> 3 | onAnswer({ ...answer, videoKey: key, photo: answer
+L6540: Bal 3 -> 3 | } catch (e) {
+L6541: Bal 3 -> 3 | console.error("Failed to save practical video", e)
+L6542: Bal 3 -> 3 | alert("Video save failed. check storage.");
+L6543: Bal 3 -> 2 | }
+L6544: Bal 2 -> 1 | };
+L6545: Bal 1 -> 1 | recorder.start();
+L6546: Bal 1 -> 1 | setMediaRecorder(recorder);
+L6547: Bal 1 -> 1 | setIsRecording(true);
+L6548: Bal 1 -> 0 | };
+⚠️ BALANCE DROPPED TO 0!
+L6549: Bal 0 -> 0 | 
+⚠️ BALANCE DROPPED TO 0!
+L6550: Bal 0 -> 1 | const stopRecording = () => {
+L6551: Bal 1 -> 1 | if (mediaRecorder) mediaRecorder.stop();
+L6552: Bal 1 -> 1 | setIsRecording(false);
+L6553: Bal 1 -> 0 | };
+⚠️ BALANCE DROPPED TO 0!
+L6554: Bal 0 -> 0 | 
+⚠️ BALANCE DROPPED TO 0!
+L6555: Bal 0 -> 1 | const capturePhoto = () => {
+L6556: Bal 1 -> 1 | if (!streamRef.current && !videoRef.current) { sta
+L6557: Bal 1 -> 1 | const canvas = document.createElement('canvas');
+L6558: Bal 1 -> 1 | canvas.width = 640; canvas.height = 480;
+L6559: Bal 1 -> 1 | canvas.getContext('2d').drawImage(videoRef.current
+L6560: Bal 1 -> 1 | const data = canvas.toDataURL('image/jpeg', 0.7);
+L6561: Bal 1 -> 1 | setPhotoUrl(data);
+L6562: Bal 1 -> 1 | onAnswer({ ...answer, photo: data });
+L6563: Bal 1 -> 0 | };
+⚠️ BALANCE DROPPED TO 0!
+L6564: Bal 0 -> 0 | 
+⚠️ BALANCE DROPPED TO 0!
+L6565: Bal 0 -> 0 | return (
+⚠️ BALANCE DROPPED TO 0!
+L6566: Bal 0 -> 0 | <div className="border rounded-xl p-4 bg-gray-50 h
+⚠️ BALANCE DROPPED TO 0!
+L6567: Bal 0 -> 0 | <div className="flex gap-4 mb-4 h-full">
+⚠️ BALANCE DROPPED TO 0!
+L6568: Bal 0 -> 0 | {/* Camera / Preview Area */}
+⚠️ BALANCE DROPPED TO 0!
+L6569: Bal 0 -> 0 | <div className="flex-1 bg-black rounded-lg overflo
+⚠️ BALANCE DROPPED TO 0!
+L6570: Bal 0 -> 1 | {previewUrl && !isRecording ? (
+L6571: Bal 1 -> 1 | <div className="relative h-full">
+L6572: Bal 1 -> 1 | <video src={previewUrl} controls className="w-full
+L6573: Bal 1 -> 1 | <button onClick={() => { setPreviewUrl(null); star
+L6574: Bal 1 -> 1 | <Icons.XCircle className="w-6 h-6" />
+L6575: Bal 1 -> 1 | </button>
+L6576: Bal 1 -> 1 | </div>
+L6577: Bal 1 -> 1 | ) : (
+L6578: Bal 1 -> 1 | <video ref={videoRef} autoPlay muted playsInline c
+L6579: Bal 1 -> 0 | )}
+⚠️ BALANCE DROPPED TO 0!
+L6580: Bal 0 -> 0 | 
+⚠️ BALANCE DROPPED TO 0!
+L6581: Bal 0 -> 0 | {/* Recording Indicator */}
+⚠️ BALANCE DROPPED TO 0!
+L6582: Bal 0 -> 1 | {isRecording && (
+L6583: Bal 1 -> 1 | <div className="absolute top-4 right-4 flex items-
+L6584: Bal 1 -> 1 | <div className="w-3 h-3 bg-white rounded-full"></d
+L6585: Bal 1 -> 1 | </div>
+L6586: Bal 1 -> 0 | )}
+⚠️ BALANCE DROPPED TO 0!
+L6587: Bal 0 -> 0 | </div>
+⚠️ BALANCE DROPPED TO 0!
+L6588: Bal 0 -> 0 | 
+⚠️ BALANCE DROPPED TO 0!
+L6589: Bal 0 -> 0 | {/* Controls & Instructions */}
+⚠️ BALANCE DROPPED TO 0!
+L6590: Bal 0 -> 0 | <div className="w-64 flex flex-col gap-4">
+⚠️ BALANCE DROPPED TO 0!
+L6591: Bal 0 -> 0 | <div className="bg-white p-4 rounded-lg shadow-sm 
+⚠️ BALANCE DROPPED TO 0!
+L6592: Bal 0 -> 0 | <h4 className="font-bold text-gray-700 mb-2">Instr
+⚠️ BALANCE DROPPED TO 0!
+L6593: Bal 0 -> 0 | <ul className="list-disc pl-4 space-y-1 text-gray-
+⚠️ BALANCE DROPPED TO 0!
+L6594: Bal 0 -> 0 | <li>Ensure good lighting.</li>
+⚠️ BALANCE DROPPED TO 0!
+L6595: Bal 0 -> 0 | <li>Keep your face/hands visible.</li>
+⚠️ BALANCE DROPPED TO 0!
+L6596: Bal 0 -> 0 | <li>Description: {question.question}</li>
+⚠️ BALANCE DROPPED TO 0!
+L6597: Bal 0 -> 0 | </ul>
+⚠️ BALANCE DROPPED TO 0!
+L6598: Bal 0 -> 0 | </div>
+⚠️ BALANCE DROPPED TO 0!
+L6599: Bal 0 -> 0 | 
+⚠️ BALANCE DROPPED TO 0!
+L6600: Bal 0 -> 1 | {!isRecording ? (
+L6601: Bal 1 -> 1 | <button onClick={startRecording} className="bg-red
+L6602: Bal 1 -> 1 | <div className="w-4 h-4 bg-white rounded-full"></d
+L6603: Bal 1 -> 1 | </button>
+L6604: Bal 1 -> 1 | ) : (
+L6605: Bal 1 -> 1 | <button onClick={stopRecording} className="bg-gray
+L6606: Bal 1 -> 1 | <div className="w-4 h-4 bg-red-500 rounded-sm"></d
+L6607: Bal 1 -> 1 | </button>
+L6608: Bal 1 -> 0 | )}
+⚠️ BALANCE DROPPED TO 0!
+L6609: Bal 0 -> 0 | 
+⚠️ BALANCE DROPPED TO 0!
+L6610: Bal 0 -> 0 | <button onClick={capturePhoto} className="bg-blue-
+⚠️ BALANCE DROPPED TO 0!
+L6611: Bal 0 -> 0 | <Icons.Camera /> Capture Photo
+⚠️ BALANCE DROPPED TO 0!
+L6612: Bal 0 -> 0 | </button>
+⚠️ BALANCE DROPPED TO 0!
+L6613: Bal 0 -> 0 | 
+⚠️ BALANCE DROPPED TO 0!
+L6614: Bal 0 -> 0 | {/* Photo Preview */}
+⚠️ BALANCE DROPPED TO 0!
+L6615: Bal 0 -> 1 | {photoUrl && (
+L6616: Bal 1 -> 1 | <div className="mt-auto border-2 border-dashed bor
+L6617: Bal 1 -> 1 | <img src={photoUrl} className="w-full h-32 object-
+L6618: Bal 1 -> 1 | <button onClick={() => { setPhotoUrl(null); onAnsw
+L6619: Bal 1 -> 1 | <Icons.XCircle className="w-4 h-4" />
+L6620: Bal 1 -> 1 | </button>
+L6621: Bal 1 -> 1 | </div>
+L6622: Bal 1 -> 0 | )}
+⚠️ BALANCE DROPPED TO 0!
+L6623: Bal 0 -> 0 | </div>
+⚠️ BALANCE DROPPED TO 0!
+L6624: Bal 0 -> 0 | </div>
+⚠️ BALANCE DROPPED TO 0!
+L6625: Bal 0 -> 0 | </div>
+⚠️ BALANCE DROPPED TO 0!
+L6626: Bal 0 -> 0 | );
+⚠️ BALANCE DROPPED TO 0!
+L6627: Bal 0 -> -1 | };
+⚠️ BALANCE DROPPED TO -1!
+L6628: Bal -1 -> -1 | 
+⚠️ BALANCE DROPPED TO -1!
+L6629: Bal -1 -> -1 | // STUDENT PORTAL
+⚠️ BALANCE DROPPED TO -1!
+L6630: Bal -1 -> -1 | 
+⚠️ BALANCE DROPPED TO -1!

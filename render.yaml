@@ -1,0 +1,24 @@
+services:
+  - type: web
+    name: portel-backend
+    env: node
+    plan: free
+    root: server
+    buildCommand: npm install
+    startCommand: npm start
+    branch: master
+    envVars:
+      - key: PORT
+        value: 10000
+      - key: DATABASE_URL
+        fromDatabase:
+          name: portel-db
+          property: connectionString
+      - key: NODE_VERSION
+        value: 13.14.0
+
+databases:
+  - name: portel-db
+    plan: free
+    databaseName: portel
+    user: portel_user

@@ -1,0 +1,50 @@
+﻿        // MAIN APP
+        const App = () => {
+            const [user, setUser] = useState(null);
+
+            // AUTO-DOWNLOAD ON START (Silent) & PERIODIC SYNC
+            useEffect(() => {
+                // HEAL DATA BEFORE SYNC
+                if (window.Utils.healData) window.Utils.healData();
+
+                const initSync = async () => {
+                    if (navigator.onLine && db) {
+                        try {
+                            console.log("Initial Auto-Sync...");
+                            await window.Utils.downloadFromCloud(true);
+                        } catch (e) { console.error("Initial Sync Failed", e); }
+                    }
+                };
+                initSync();
+
+                const pollInterval = setInterval(async () => {
+                    if (navigator.onLine && db) {
+                        try {
+                            await window.Utils.downloadFromCloud(true);
+                        } catch (e) { }
+                    }
+                }, 30000); // 30s polling
+
+                return () => clearInterval(pollInterval);
+            }, []);
+
+
+            // useEffect(() => { if (window.lucide) window.lucide.createIcons(); }); // REMOVED: Managed by LucideIcon
+            if (!user) return <LoginScreen onLogin={setUser} />;
+            return (
+                <div className="min-h-screen bg-slate-50">
+                    <header className="bg-white shadow-sm border-b px-8 py-4 flex justify-between items-center sticky top-0 z-50">
+                        <div className="flex items-center gap-2 font-bold text-xl text-gray-800">
+                            <div className="bg-indigo-600 text-white rounded p-1">N</div>
+                            NSXpertise
+                        </div>
+                        <div className="flex gap-4 items-center">
+                            {/* GLOBAL CLOUD SYNC */}
+                            <div className="flex items-center gap-2 bg-gray-50 rounded-lg p-1 border">
+                                <button onClick={() => window.Utils.uploadToCloud()} className="p-1 px-2 text-blue-600 hover:bg-blue-100 rounded text-xs font-bold flex items-center gap-1" title="Upload to Cloud">
+                                    <Icons.Upload className="w-4 h-4" /> Upload
+                                </button>
+                                <div className="w-px h-4 bg-gray-300"></div>
+                                <button onClick={() => window.Utils.downloadFromCloud()} className="p-1 px-2 text-green-600 hover:bg-green-100 rounded text-xs font-bold flex items-center gap-1" title="Download from Cloud">
+                                    <Icons.Download className="w-4 h-4" /> Download
+                                </button>

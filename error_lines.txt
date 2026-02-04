@@ -1,0 +1,8 @@
+Index 402319 is at Line 6187
+Line 6187:                                                                             alert("Image not available on this device. Please sync from the source device.");
+Line 6188:                                                                         }
+
+Index 405498 is at Line 6230
+Line 6230:                                             <span className="text-sm font-normal text-gray-500 bg-gray-100 px-2 py-1 rounded">QP: {currentQP?.code || 'N/A'}</span>
+Line 6231:                                         </h4>
+

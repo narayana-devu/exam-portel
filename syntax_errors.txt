@@ -1,0 +1,32 @@
+Found 4 errors:
+Unexpected closing ')' at index 492996
+Context:
+            </React.Fragment>
+                    )}
+                </React.Fragment>
+            )
+
+Unexpected closing '}' at index 492997
+Context:
+           </React.Fragment>
+                    )}
+                </React.Fragment>
+            );
+
+Unexpected closing ')' at index 493045
+Context:
+ )}
+                </React.Fragment>
+            );
+        };
+
+        const container = document.
+
+Unexpected closing '}' at index 493056
+Context:
+         </React.Fragment>
+            );
+        };
+
+        const container = document.getElementB
+

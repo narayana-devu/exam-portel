@@ -1,0 +1,30 @@
+﻿                                <span className={navigator.onLine ? "text-green-600 font-bold flex items-center gap-1" : "text-red-500 font-bold flex items-center gap-1"}>
+                                    <div className={`w-2 h-2 rounded-full ${navigator.onLine ? 'bg-green-500' : 'bg-red-500'}`}></div>
+                                    {navigator.onLine ? "Cloud Connected" : "Offline Mode"}
+                                </span>
+                                <span>v5.0 (Production)</span>
+                            </div>
+                            {error && <p className="text-red-500 text-sm text-center bg-red-50 p-2 rounded">{error}</p>}
+                            <div className="flex gap-2">
+                                <button type="submit" className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 rounded-xl shadow-lg transform hover:scale-[1.02] transition-all">
+                                    Login as {role.charAt(0).toUpperCase() + role.slice(1)}
+                                </button>
+                                <button type="button" onClick={async () => {
+                                    if (confirm("Force Upload Local Data to Cloud? (Use this if other devices are missing data)")) {
+                                        await window.Utils.uploadToCloud();
+                                    }
+                                }} className="px-4 py-3 bg-gray-200 text-gray-700 rounded-xl hover:bg-gray-300 transition-colors" title="Force Upload to Cloud">
+                                    <Icons.Upload className="w-5 h-5" />
+                                </button>
+                                <button type="button" onClick={async () => {
+                                    await window.Utils.downloadFromCloud();
+                                    setDebugInfo(prev => ({ ...prev, studentCount: window.Utils.getStudents().length }));
+                                }} className="px-4 py-3 bg-gray-200 text-gray-700 rounded-xl hover:bg-gray-300 transition-colors" title="Sync Latest Data">
+                                    <Icons.Download className="w-5 h-5" />
+                                </button>
+                            </div>
+                            <div className="text-center text-xs text-gray-400 mt-4 space-y-1">
+                                <p>Demo: admin/admin</p>
+                                <p className="text-gray-400 text-[10px] mt-2">v5.3 (Production)</p>
+                            </div>
+                        </form>

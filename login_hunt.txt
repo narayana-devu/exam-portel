@@ -1,0 +1,200 @@
+﻿                                {dayEvents.length > 0 && <span className="w-2 h-2 rounded-full bg-blue-500"></span>}
+                            </div>
+                            <div className="mt-1 space-y-1 overflow-hidden h-14">
+                                {dayEvents.map((ev, i) => (
+                                    <div key={i} className={`text-[10px] truncate px-1 rounded ${ev.type === 'start' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                                        {ev.title}
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    );
+                }
+                return days;
+            };
+
+            const changeMonth = (offset) => {
+                setDate(new Date(date.getFullYear(), date.getMonth() + offset, 1));
+            };
+
+            return (
+                <div className="animate-fade-in grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div className="md:col-span-2 bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+                        <div className="flex justify-between items-center mb-6">
+                            <h2 className="text-xl font-bold text-gray-800">{date.toLocaleString('default', { month: 'long', year: 'numeric' })}</h2>
+                            <div className="flex gap-2">
+                                <button onClick={() => changeMonth(-1)} className="p-2 hover:bg-gray-100 rounded-full"><Icons.ChevronLeft /></button>
+                                <button onClick={() => changeMonth(1)} className="p-2 hover:bg-gray-100 rounded-full"><Icons.ChevronRight /></button>
+                            </div>
+                        </div>
+                        <div className="grid grid-cols-7 gap-px mb-2 text-center text-xs font-bold text-gray-500 uppercase">
+                            <div>Sun</div><div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div>
+                        </div>
+                        <div className="grid grid-cols-7 border border-gray-100 rounded-lg overflow-hidden">
+                            {renderCalendar()}
+                        </div>
+                    </div>
+
+                    {/* Event Details Sidebar */}
+                    <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+                        <h3 className="text-lg font-bold text-gray-800 mb-4">Events</h3>
+                        {selectedDateEvents.length > 0 ? (
+                            <div className="space-y-4">
+                                {selectedDateEvents.map((evt, idx) => (
+                                    <div key={idx} className="p-4 rounded-lg bg-gray-50 border border-gray-200">
+                                        <div className={`text-xs font-bold uppercase mb-1 ${evt.type === 'start' ? 'text-green-600' : 'text-red-600'}`}>
+                                            {evt.type === 'start' ? 'Batch Starting' : 'Batch Ending'}
+                                        </div>
+                                        <h4 className="font-bold text-gray-800">{evt.data.name}</h4>
+                                        <p className="text-xs text-gray-500 mt-1">{evt.data.qpName || 'No QP Assigned'}</p>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="text-center text-gray-400 py-10">
+                                <Icons.Calendar className="w-12 h-12 mx-auto mb-2 opacity-50" />
+                                <p>Select a date with dots to see details</p>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            );
+        };
+
+        const LocationTab = () => {
+            const [centers, setCenters] = useState([]);
+
+            useEffect(() => {
+                const loadCenters = () => {
+                    const batches = window.Utils.getBatches();
+                    // Extract unique centers from batches
+                    // Assuming batch has 'trainingCentre', 'district', 'state', 'centerId', 'centerAddress'
+                    const centerMap = new Map();
+                    batches.forEach(b => {
+                        if (b.trainingCentre) {
+                            if (!centerMap.has(b.trainingCentre)) {
+                                centerMap.set(b.trainingCentre, {
+                                    name: b.trainingCentre,
+                                    id: b.centerId || 'N/A',
+                                    district: b.district || 'Unknown',
+                                    state: b.state || 'Unknown',
+                                    spoc: b.spocName || 'N/A', // Assuming spocName exists or strictly spocEmail
+                                    address: b.centerAddress || '',
+                                    activeBatches: 0
+                                });
+                            }
+                            centerMap.get(b.trainingCentre).activeBatches += 1;
+                        }
+                    });
+                    setCenters(Array.from(centerMap.values()));
+                };
+                loadCenters();
+                window.addEventListener('cloud-sync-complete', loadCenters);
+                return () => window.removeEventListener('cloud-sync-complete', loadCenters);
+            }, []);
+
+            return (
+                <div className="animate-fade-in">
+                    <div className="flex justify-between items-center mb-6">
+                        <h2 className="text-2xl font-bold text-gray-800">Assessment Locations</h2>
+                        <span className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm font-bold">{centers.length} Centers Active</span>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        {centers.map((center, idx) => (
+                            <div key={idx} className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 hover:shadow-md transition">
+                                <div className="flex items-start justify-between mb-4">
+                                    <div className="p-3 bg-indigo-50 text-indigo-600 rounded-lg">
+                                        <Icons.MapPin className="w-6 h-6" />
+                                    </div>
+                                    <span className="text-xs font-bold bg-green-100 text-green-700 px-2 py-1 rounded-full">
+                                        {center.activeBatches} Active batches
+                                    </span>
+                                </div>
+                                <h3 className="text-lg font-bold text-gray-800 mb-1">{center.name}</h3>
+                                <p className="text-sm text-gray-500 mb-4">{center.id}</p>
+
+                                <div className="space-y-2 text-sm text-gray-600">
+                                    <div className="flex items-center gap-2">
+                                        <Icons.Map className="w-4 h-4 opacity-70" />
+                                        <span>{center.district}, {center.state}</span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <Icons.Home className="w-4 h-4 opacity-70" />
+                                        <span className="truncate" title={center.address}>{center.address || 'No Address Provided'}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                    {centers.length === 0 && (
+                        <div className="text-center py-20 bg-gray-50 rounded-xl border border-dashed border-gray-300">
+                            <Icons.MapPin className="w-16 h-16 mx-auto text-gray-300 mb-4" />
+                            <h3 className="text-xl font-bold text-gray-400">No Training Centers Found</h3>
+                            <p className="text-gray-500">Create Batches with Center details to populate this map.</p>
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        const DashboardTab = () => {
+            const [stats, setStats] = useState({ batches: 0, students: 0, qps: 0, assessors: 0 });
+            const [recentBatches, setRecentBatches] = useState([]);
+
+            useEffect(() => {
+                const loadStats = () => {
+                    const batches = window.Utils.getBatches();
+                    const students = window.Utils.getStudents();
+                    const qps = window.Utils.getQuestionPapers();
+                    // Assessor count estimated from batches (unique usernames) or just hardcode for demo
+                    // A better way: Count unique assessors assigned to batches
+                    const assessors = new Set(batches.map(b => b.assessorUsername).filter(u => u)).size;
+
+                    setStats({
+                        batches: batches.length,
+                        students: students.length,
+                        qps: qps.length,
+                        assessors: assessors
+                    });
+                    setRecentBatches(batches.slice(-5).reverse());
+                };
+                loadStats();
+                window.addEventListener('cloud-sync-complete', loadStats);
+                return () => window.removeEventListener('cloud-sync-complete', loadStats);
+            }, []);
+
+            return (
+                <div className="animate-fade-in">
+                    <h2 className="text-2xl font-bold mb-6 text-gray-800">Administrator Dashboard</h2>
+
+                    {/* Stats Grid */}
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+                        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex items-center gap-4">
+                            <div className="p-3 bg-blue-50 text-blue-600 rounded-lg"><Icons.Users className="w-8 h-8" /></div>
+                            <div>
+                                <h3 className="text-2xl font-bold text-gray-800">{stats.batches}</h3>
+                                <p className="text-sm text-gray-500">Total Batches</p>
+                            </div>
+                        </div>
+                        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex items-center gap-4">
+                            <div className="p-3 bg-green-50 text-green-600 rounded-lg"><Icons.User className="w-8 h-8" /></div>
+                            <div>
+                                <h3 className="text-2xl font-bold text-gray-800">{stats.students}</h3>
+                                <p className="text-sm text-gray-500">Total Candidates</p>
+                            </div>
+                        </div>
+                        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex items-center gap-4">
+                            <div className="p-3 bg-purple-50 text-purple-600 rounded-lg"><Icons.FileText className="w-8 h-8" /></div>
+                            <div>
+                                <h3 className="text-2xl font-bold text-gray-800">{stats.qps}</h3>
+                                <p className="text-sm text-gray-500">Question Papers</p>
+                            </div>
+                        </div>
+                        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex items-center gap-4">
+                            <div className="p-3 bg-orange-50 text-orange-600 rounded-lg"><Icons.Eye className="w-8 h-8" /></div>
+                            <div>
+                                <h3 className="text-2xl font-bold text-gray-800">{stats.assessors}</h3>
+                                <p className="text-sm text-gray-500">Active Assessors</p>
+                            </div>
+                        </div>

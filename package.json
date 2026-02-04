@@ -1,0 +1,10 @@
+{
+    "name": "portel-master",
+    "version": "1.0.0",
+    "description": "Assessment Management System",
+    "scripts": {
+        "deploy": "node bump_version.js"
+    },
+    "author": "",
+    "license": "ISC"
+}

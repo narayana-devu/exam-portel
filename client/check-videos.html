@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Video Recording Verification</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            padding: 20px;
+        }
+
+        .video-item {
+            margin-bottom: 20px;
+            padding: 10px;
+            border: 1px solid #ccc;
+            background-color: #f9f9f9;
+        }
+
+        video {
+            max-width: 400px;
+            display: block;
+            margin-top: 10px;
+        }
+
+        button {
+            padding: 12px 20px;
+            margin-right: 10px;
+            color: white;
+            border: none;
+            cursor: pointer;
+            border-radius: 5px;
+            font-weight: bold;
+        }
+
+        .btn-check {
+            background: #4F46E5;
+        }
+
+        .btn-check:hover {
+            background: #4338CA;
+        }
+
+        .btn-reset {
+            background: #DC2626;
+        }
+
+        .btn-reset:hover {
+            background: #B91C1C;
+        }
+
+        .btn-meta {
+            background: #059669;
+        }
+
+        .btn-meta:hover {
+            background: #047857;
+        }
+
+        #results {
+            margin-top: 20px;
+        }
+
+        .error-msg {
+            color: #DC2626;
+            background: #FEE2E2;
+            padding: 15px;
+            border-radius: 5px;
+            border: 1px solid #FECACA;
+        }
+
+        .success-msg {
+            color: #047857;
+            background: #D1FAE5;
+            padding: 15px;
+            border-radius: 5px;
+            border: 1px solid #A7F3D0;
+        }
+
+        pre {
+            background: #eee;
+            padding: 10px;
+            overflow-x: auto;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Video & Metadata Verification</h1>
+    <p>Use this tool to verify if videos and data are effectively saved.</p>
+
+    <div>
+        <button class="btn-check" onclick="checkVideos()">1. Check Recorded Videos (DB)</button>
+        <button class="btn-meta" onclick="checkMetadata()">2. Check Response Data (Meta)</button>
+        <button class="btn-reset" onclick="resetDatabase()">⚠️ Reset Database (Fix Error)</button>
+    </div>
+
+    <div id="results"></div>
+
+    <script>
+        // Version 2 to match main app
+        const VideoDB = {
+            dbName: 'ProctoringDB',
+            storeName: 'videos',
+            init: async () => {
+                return new Promise((resolve, reject) => {
+                    const request = indexedDB.open(VideoDB.dbName, 2);
+                    request.onupgradeneeded = (event) => {
+                        const db = event.target.result;
+                        if (!db.objectStoreNames.contains(VideoDB.storeName)) {
+                            db.createObjectStore(VideoDB.storeName);
+                        }
+                    };
+                    request.onsuccess = (event) => resolve(event.target.result);
+                    request.onerror = (event) => reject(event.target.error);
+                });
+            },
+            getAllKeys: async () => {
+                const db = await VideoDB.init();
+                return new Promise((resolve, reject) => {
+                    const tx = db.transaction(VideoDB.storeName, 'readonly');
+                    const store = tx.objectStore(VideoDB.storeName);
+                    const request = store.getAllKeys();
+                    request.onsuccess = () => resolve(request.result);
+                    request.onerror = (e) => reject(e.target.error);
+                });
+            },
+            getVideo: async (key) => {
+                const db = await VideoDB.init();
+                return new Promise((resolve, reject) => {
+                    const tx = db.transaction(VideoDB.storeName, 'readonly');
+                    const store = tx.objectStore(VideoDB.storeName);
+                    const request = store.get(key);
+                    request.onsuccess = () => resolve(request.result);
+                    request.onerror = (e) => reject(e.target.error);
+                });
+            }
+        };
+
+        async function checkVideos() {
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.innerHTML = '<p>Scanning database...</p>';
+
+            try {
+                const keys = await VideoDB.getAllKeys();
+                if (keys.length === 0) {
+                    resultsDiv.innerHTML = '<div class="error-msg"><h3>❌ No videos found in database.</h3><p>Recording is NOT saving to disk. Try Reset Database, then Record again.</p></div>';
+                    return;
+                }
+
+                resultsDiv.innerHTML = `<div class="success-msg"><h3>✅ Found ${keys.length} video segments!</h3><p>Video storage is working.</p></div>`;
+
+                for (const key of keys) {
+                    try {
+                        const blob = await VideoDB.getVideo(key);
+                        if (blob) {
+                            const url = URL.createObjectURL(blob);
+                            const div = document.createElement('div');
+                            div.className = 'video-item';
+                            div.innerHTML = `
+                                <strong>Key:</strong> ${key}<br>
+                                <strong>Size:</strong> ${(blob.size / 1024 / 1024).toFixed(2)} MB<br>
+                                <video src="${url}" controls></video>
+                            `;
+                            resultsDiv.appendChild(div);
+                        }
+                    } catch (e) { console.error("Error reading video blob", e); }
+                }
+            } catch (err) {
+                resultsDiv.innerHTML = `
+                    <div class="error-msg">
+                        <h3>❌ Database Error: ${err.message}</h3>
+                        <p>Clicks the <strong>Reset Database</strong> button above to fix this.</p>
+                    </div>`;
+            }
+        }
+
+        function checkMetadata() {
+            const resultsDiv = document.getElementById('results');
+            const responsesStr = localStorage.getItem('se_responses');
+
+            if (!responsesStr) {
+                resultsDiv.innerHTML = '<div class="error-msg"><h3>❌ No Response Data Found</h3><p>localStorage "se_responses" is empty.</p></div>';
+                return;
+            }
+
+            try {
+                const responses = JSON.parse(responsesStr);
+                let evidenceCount = 0;
+                let html = '<div class="success-msg"><h3>✅ Response Data Analysis</h3>';
+
+                responses.forEach((r, i) => {
+                    html += `<strong>Student ID:</strong> ${r.studentId} | <strong>Exam:</strong> ${r.examType}<br>`;
+                    if (r.evidence && Array.isArray(r.evidence)) {
+                        html += `Evidence Count: ${r.evidence.length}<br>`;
+                        evidenceCount += r.evidence.length;
+                        html += `<pre>${JSON.stringify(r.evidence, null, 2)}</pre>`;
+                    } else {
+                        html += `Evidence: None or Invalid<br>`;
+                    }
+                    html += '<hr>';
+                });
+
+                html += `</div>`;
+                if (evidenceCount === 0) html = '<div class="error-msg"><h3>⚠️ Responses exist, but NO EVIDENCE found.</h3><p>Metadata is not saving.</p></div>' + html;
+
+                resultsDiv.innerHTML = html;
+
+            } catch (e) {
+                resultsDiv.innerHTML = `<div class="error-msg"><h3>JSON Parse Error</h3>${e.message}</div>`;
+            }
+        }
+
+        function resetDatabase() {
+            if (!confirm("Are you sure? This will delete all locally stored exam videos to fix the database error.")) return;
+
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.innerHTML = 'Resetting database...';
+
+            const req = indexedDB.deleteDatabase('ProctoringDB');
+            req.onsuccess = () => {
+                resultsDiv.innerHTML = '<div class="success-msg"><h3>✅ Database Reset Successfully!</h3><p>Now go to Exam Portal -> Refresh -> Record New Video.</p></div>';
+            };
+            req.onerror = (e) => {
+                resultsDiv.innerHTML = `<div class="error-msg"><h3>❌ Reset Failed: ${e.target.error}</h3></div>`;
+            };
+        }
+    </script>
+</body>
+
+</html>

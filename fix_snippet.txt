@@ -1,0 +1,10 @@
+﻿                                        </div>
+
+                                        <div className="space-y-4">
+                                            <p className="text-gray-700 font-medium">
+                                                <span className="font-bold">Note :</span> It will accept only Excel files with *.xls extension only.
+                                            </p>
+                                            <p className="text-gray-700">
+                                                Use the same format as given below : <a href="#" className="text-green-500 hover:underline"><span onClick={downloadSampleFormat} className="text-green-600 hover:underline cursor-pointer">Download</span>
+                                            </p>
+

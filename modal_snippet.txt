@@ -1,0 +1,240 @@
+﻿                                        Export To <Icons.ChevronDown className="w-4 h-4" />
+                                    </button>
+                                    <button onClick={() => setShowImportModal(true)} className="bg-purple-600 text-white px-4 py-2 rounded flex items-center gap-2 hover:bg-purple-700 text-xs shadow-md shadow-purple-200">
+                                        <Icons.UserPlus className="w-4 h-4" /> Import Students
+                                    </button>
+                                    <button
+                                        onClick={() => {
+                                            setNewBatch({ ...newBatch, id: '', sscId: filterSSC, qpId: filterQP });
+                                            setShowCreateModal(true);
+                                        }}
+                                        disabled={!filterSSC || !filterQP}
+                                        title={(!filterSSC || !filterQP) ? "Please select SSC and QP first" : "Create New Batch"}
+                                        className={`bg-red-500 text-white px-4 py-2 rounded flex items-center gap-2 hover:bg-red-600 text-xs shadow-md shadow-red-200 ${(!filterSSC || !filterQP) ? 'opacity-50 cursor-not-allowed grayscale' : ''}`}
+                                    >
+                                        <Icons.Plus className="w-4 h-4" /> Add New Batch
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* Batches Grid/Table */}
+                            <div className="bg-white rounded-lg border shadow-sm overflow-hidden mb-8">
+                                <div className="overflow-x-auto">
+                                    <table className="w-full text-left">
+                                        <thead className="bg-gray-50 border-b">
+                                            <tr>
+                                                <th className="p-3 text-left font-bold text-gray-600 border-r w-12">Sr.#</th>
+                                                <th className="p-3 text-left font-bold text-gray-600 border-r w-32">Batch Name</th>
+                                                <th className="p-3 text-left font-bold text-gray-600 border-r w-24">Center ID</th>
+                                                <th className="p-3 text-left font-bold text-gray-600 border-r w-24">Total Students</th>
+                                                <th className="p-3 text-left font-bold text-gray-600 border-r w-32">Start Date</th>
+                                                <th className="p-3 text-left font-bold text-gray-600 border-r w-32">End Date</th>
+                                                <th className="p-3 text-left font-bold text-gray-600 border-r w-24">State</th>
+                                                <th className="p-3 text-left font-bold text-gray-600 border-r w-24">District</th>
+                                                <th className="p-3 text-center font-bold text-gray-600 border-r w-16">Edit</th>
+                                                <th className="p-3 text-center font-bold text-gray-600 border-r w-24">Students</th>
+                                                <th className="p-3 text-center font-bold text-gray-600 border-r w-24">Assessor</th>
+                                                <th className="p-3 text-center font-bold text-gray-600 border-r w-24">Theory QP</th>
+                                                <th className="p-3 text-center font-bold text-gray-600 border-r w-24">Practical QP</th>
+                                                <th className="p-3 text-center font-bold text-gray-600 border-r w-24">Viva QP</th>
+                                                <th className="p-3 text-center font-bold text-gray-600 w-16">B</th>
+                                            </tr>
+                                        </thead >
+                                        <tbody className="divide-y">
+                                            {filteredBatches.map((batch, idx) => (
+                                                <tr key={batch.id} className="hover:bg-gray-50">
+                                                    <td className="p-3 border-r text-center">{idx + 1}</td>
+                                                    <td className="p-3 border-r font-medium text-gray-700">{batch.name}</td>
+                                                    <td className="p-3 border-r text-gray-600">{batch.centerId || '-'}</td>
+                                                    <td className="p-3 border-r text-center">
+                                                        {window.Utils.getStudentsByBatch(batch.id).length}
+                                                    </td>
+                                                    <td className="p-3 border-r text-xs text-gray-600">{batch.startDate ? new Date(batch.startDate).toLocaleString() : '-'}</td>
+                                                    <td className="p-3 border-r text-xs text-gray-600">{batch.endDate ? new Date(batch.endDate).toLocaleDateString() : '-'}</td>
+                                                    <td className="p-3 border-r text-gray-600">{batch.state || '-'}</td>
+                                                    <td className="p-3 border-r text-gray-600">{batch.district || '-'}</td>
+                                                    <td className="p-3 border-r text-center">
+                                                        <button onClick={() => handleEditBatch(batch)} className="bg-cyan-700 text-white p-2 rounded hover:bg-cyan-800"><Icons.Edit3 className="w-4 h-4" /></button>
+                                                    </td>
+                                                    <td className="p-3 border-r text-center">
+                                                        <button onClick={() => { setSelectedBatch(batch); setShowStudentModal(true); }}
+                                                            className="bg-cyan-700 text-white px-3 py-1 rounded flex items-center justify-center gap-1 hover:bg-cyan-800 text-xs mx-auto">
+                                                            <Icons.Eye className="w-3 h-3" /> View
+                                                        </button>
+                                                    </td>
+                                                    <td className="p-3 border-r text-center text-xs">
+                                                        {(() => {
+                                                            const assessor = window.Utils.getAssessors().find(a => a.batchId === batch.id);
+                                                            return assessor ? (
+                                                                <div className="font-mono bg-yellow-50 px-2 py-1 rounded inline-block border border-yellow-200 text-yellow-800">
+                                                                    <div className="font-bold">{assessor.username}</div>
+                                                                    <div className="text-[10px] text-yellow-700">Pass: {assessor.password}</div>
+                                                                </div>
+                                                            ) : (
+                                                                <button onClick={() => {
+                                                                    alert('Please create an assessor for this batch from the Assessors tab');
+                                                                }} className="bg-gray-100 hover:bg-gray-200 text-gray-600 px-3 py-1 rounded text-xs border border-gray-300">
+                                                                    Assign
+                                                                </button>
+                                                            );
+                                                        })()}
+                                                    </td>
+                                                    <td className="p-3 border-r text-center">
+                                                        {batch.theoryPaperId ? (
+                                                            <div className="flex items-center justify-center gap-1">
+                                                                <span className="bg-cyan-700 text-white px-2 py-1 rounded text-xs">{getQPName(batch.theoryPaperId)}</span>
+                                                                <button onClick={() => {
+                                                                    const qp = questionPapers.find(q => q.id === batch.theoryPaperId);
+                                                                    setSelectedBatch(batch); setAssignmentType('Theory'); setSelectedAssignQP(batch.theoryPaperId);
+                                                                    setAssignSSC(qp ? qp.sscId : ''); setAssignQPDef(qp ? qp.qpId : '');
+                                                                    setShowAssignModal(true);
+                                                                }} className="text-gray-500 hover:text-blue-600">
+                                                                    <Icons.Edit3 className="w-3 h-3" />
+                                                                </button>
+                                                            </div>
+                                                        ) : (
+                                                            <button onClick={() => {
+                                                                setSelectedBatch(batch); setAssignmentType('Theory'); setSelectedAssignQP('');
+                                                                setAssignSSC(''); setAssignQPDef('');
+                                                                setShowAssignModal(true);
+                                                            }} className="text-blue-600 underline text-xs">Assign</button>
+                                                        )}
+                                                    </td>
+                                                    <td className="p-3 border-r text-center">
+                                                        {batch.practicalPaperId ? (
+                                                            <div className="flex items-center justify-center gap-1">
+                                                                <span className="bg-cyan-700 text-white px-2 py-1 rounded text-xs">{getQPName(batch.practicalPaperId)}</span>
+                                                                <button onClick={() => {
+                                                                    const qp = questionPapers.find(q => q.id === batch.practicalPaperId);
+                                                                    setSelectedBatch(batch); setAssignmentType('Practical'); setSelectedAssignQP(batch.practicalPaperId);
+                                                                    setAssignSSC(qp ? qp.sscId : ''); setAssignQPDef(qp ? qp.qpId : '');
+                                                                    setShowAssignModal(true);
+                                                                }} className="text-gray-500 hover:text-blue-600">
+                                                                    <Icons.Edit3 className="w-3 h-3" />
+                                                                </button>
+                                                            </div>
+                                                        ) : (
+                                                            <button onClick={() => {
+                                                                setSelectedBatch(batch); setAssignmentType('Practical'); setSelectedAssignQP('');
+                                                                setAssignSSC(''); setAssignQPDef('');
+                                                                setShowAssignModal(true);
+                                                            }} className="text-blue-600 underline text-xs">Assign</button>
+                                                        )}
+                                                    </td>
+                                                    <td className="p-3 border-r text-center">
+                                                        {batch.vivaPaperId ? (
+                                                            <div className="flex items-center justify-center gap-1">
+                                                                <span className="bg-cyan-700 text-white px-2 py-1 rounded text-xs">{getQPName(batch.vivaPaperId)}</span>
+                                                                <button onClick={() => {
+                                                                    const qp = questionPapers.find(q => q.id === batch.vivaPaperId);
+                                                                    setSelectedBatch(batch); setAssignmentType('Viva'); setSelectedAssignQP(batch.vivaPaperId);
+                                                                    setAssignSSC(qp ? qp.sscId : ''); setAssignQPDef(qp ? qp.qpId : '');
+                                                                    setShowAssignModal(true);
+                                                                }} className="text-gray-500 hover:text-blue-600">
+                                                                    <Icons.Edit3 className="w-3 h-3" />
+                                                                </button>
+                                                            </div>
+                                                        ) : (
+                                                            <button onClick={() => {
+                                                                setSelectedBatch(batch); setAssignmentType('Viva'); setSelectedAssignQP('');
+                                                                setAssignSSC(''); setAssignQPDef('');
+                                                                setShowAssignModal(true);
+                                                            }} className="text-blue-600 underline text-xs">Assign</button>
+                                                        )}
+                                                    </td>
+                                                    <td className="p-3 text-center flex items-center justify-center gap-2">
+                                                        <button onClick={() => setVivaSession({ batch })} className="bg-indigo-600 text-white p-2 rounded hover:bg-indigo-700 shadow-sm transition-colors" title="Start Viva Meeting"><Icons.Video className="w-4 h-4" /></button>
+                                                        <button onClick={() => { if (confirm('Delete Batch?')) { window.Utils.deleteBatch(batch.id); setBatches(window.Utils.getBatches()); setFilteredBatches(window.Utils.getBatches()); window.Utils.uploadToCloud(true); } }}
+                                                            className="bg-cyan-700 text-white p-2 rounded hover:bg-cyan-800"><Icons.Trash2 className="w-4 h-4" /></button>
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                            {filteredBatches.length === 0 && <tr><td colSpan="14" className="p-8 text-center text-gray-400">No batches records found</td></tr>}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                            {filteredBatches.length === 0 && <div className="text-center text-gray-400 py-4">No batches found matching your criteria.</div>}
+                        </>
+                    )}
+
+                    {/* New Import Students Modal */}
+                    {
+                        showImportModal && (
+                            <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 overflow-y-auto font-sans">
+                                <div className="bg-gray-100 w-full max-w-4xl my-8 shadow-xl rounded-lg overflow-hidden">
+                                    {/* Header */}
+                                    <div className="bg-gray-200 px-6 py-4 flex justify-between items-center border-b border-gray-300">
+                                        <h3 className="text-xl font-bold text-gray-800">Import Students</h3>
+                                        <button onClick={() => setShowImportModal(false)} className="text-gray-500 hover:text-gray-700">
+                                            <Icons.XCircle className="w-6 h-6" />
+                                        </button>
+                                    </div>
+
+                                    <div className="p-8 bg-white m-4 rounded-lg shadow-sm">
+                                        <div className="grid grid-cols-[200px_1fr] gap-4 mb-6">
+                                            <div className="font-bold text-gray-700 text-right">Sector Skill Council :</div>
+                                            <div className="text-gray-600">Beauty Wellness Sector Skill Council</div>
+
+                                            <div className="font-bold text-gray-700 text-right">Qualification Pack :</div>
+                                            <div className="text-gray-600">Assistant Hair Dresser & Stylist</div>
+                                        </div>
+
+                                        <div className="space-y-4">
+                                            <p className="text-gray-700 font-medium">
+                                                <span className="font-bold">Note :</span> It will accept only Excel files with *.xls extension only.
+                                            </p>
+                                            <p className="text-gray-700">
+                                                Use the same format as given below : <a href="#" className="text-green-500 hover:underline">Download</a>
+                                            </p>
+
+                                            {/* Format Table */}
+                                            <div className="border border-gray-200 rounded overflow-hidden mb-6">
+                                                <table className="w-full text-left border-collapse">
+                                                    <thead>
+                                                        <tr className="bg-gray-50">
+                                                            <th className="p-3 border border-gray-200 font-bold text-gray-700">BatchName</th>
+                                                            <th className="p-3 border border-gray-200 font-bold text-gray-700">Enrollment No</th>
+                                                            <th className="p-3 border border-gray-200 font-bold text-gray-700">Name of Training Agency</th>
+                                                            <th className="p-3 border border-gray-200 font-bold text-gray-700">Name of the Trainee</th>
+                                                            <th className="p-3 border border-gray-200 font-bold text-gray-700">Gender(M/F/T)</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        <tr>
+                                                            <td className="p-8 border border-gray-200"></td>
+                                                            <td className="p-8 border border-gray-200"></td>
+                                                            <td className="p-8 border border-gray-200"></td>
+                                                            <td className="p-8 border border-gray-200"></td>
+                                                            <td className="p-8 border border-gray-200"></td>
+                                                        </tr>
+                                                    </tbody>
+                                                </table>
+                                            </div>
+
+                                            {/* File Input */}
+                                            <div className="bg-gray-100 p-6 rounded border border-gray-200">
+                                                <label className="block font-bold text-red-500 mb-2">* Select Excel File :</label>
+                                                <div className="flex bg-white border border-gray-300 rounded p-1 max-w-md">
+                                                    <input id="bulkImportFile" type="file" accept=".xlsx, .xls" className="w-full p-1" />
+                                                </div>
+                                            </div>
+
+                                            <div className="pt-4">
+                                                <button onClick={handleBulkStudentImport} className="bg-red-500 text-white px-6 py-3 rounded shadow hover:bg-red-600 font-medium">
+                                                    Validate Sheet
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )
+                    }
+
+                    {
+                        showCreateModal && (
+                            <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 overflow-y-auto font-sans">
+                                <div className="bg-white rounded-xl p-8 w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+                                    <h3 className="text-2xl font-bold mb-6 text-gray-800">{newBatch.id ? 'Edit Batch' : 'Add New Batch'}</h3>
+                                    <form onSubmit={handleCreateBatch} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">

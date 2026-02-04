@@ -1,0 +1,100 @@
+# Task Checklist - Fixing Qualification Pack Edit & Batch Filtering
+
+- [x] Phase 1: Basic Edit Flow <!-- id: 0 -->
+    - [x] Research broken edit functionality <!-- id: 1 -->
+    - [x] Implement window.Utils fixes <!-- id: 2 -->
+    - [x] Add handleEdit and Modal fixes in QPsTab <!-- id: 3 -->
+- [x] Phase 2: Missing Fields & Filtering <!-- id: 4 -->
+    - [x] Add Cutoff input fields in QPsTab modal <!-- id: 5 -->
+    - [x] Fix SSC -> QP filtering in BatchesTab <!-- id: 6 -->
+    - [x] Disable QP dropdown in BatchesTab if no SSC selected <!-- id: 7 -->
+- [x] Verification <!-- id: 8 -->
+    - [x] Verify Cutoff persistence in QPsTab <!-- id: 9 -->
+    - [x] Verify correct filtering in BatchesTab <!-- id: 10 -->
+    - [x] Final Firebase deploy and smoke test <!-- id: 11 -->
+- [x] Fix Batch Modal Editing <!-- id: 12 -->
+    - [x] Enable SSC and QP fields in CreateBatchModal <!-- id: 13 -->
+    - [x] Implement SSC -> QP filtering inside CreateBatchModal <!-- id: 14 -->
+- [x] Fix Assign QP Hierarchy <!-- id: 15 -->
+    - [x] Enforce SSC -> QP -> Question Paper strict hierarchy in Assign Modal
+- [x] Enforce Question Papers Tab Hierarchy <!-- id: 17 -->
+    - [x] Locate Question Papers component <!-- id: 18 -->
+    - [x] Implement SSC -> QP dependency (Fixed type mismatch bug) <!-- id: 19 -->
+    - [x] Verify filtering logic <!-- id: 20 -->
+
+- [x] Fix Assessor Data Cloud Sync <!-- id: 21 -->
+    - [x] Investigate `saveBatch` and Assessor data storage <!-- id: 22 -->
+    - [x] Verify `uploadToCloud` includes Assessor/Batch data <!-- id: 23 -->
+    - [x] Verify `downloadFromCloud` fetches latest data (Added auto-sync on load) <!-- id: 24 -->
+
+- [x] Enable Evidence View for All Exams (Theory/Practical) <!-- id: 25 -->
+
+- [x] Fix Video Sync (Handling data:video in download) <!-- id: 26 -->
+
+- [x] **Big File Engine (Chunked Sync)**
+    - [x] Splitting large videos (>900KB) into chunks
+    - [x] Uploading chunks to `synced_chunks` collection
+    - [x] Reassembling chunks on download
+    - [x] **VERIFIED:** Large videos now sync and play.
+- [x] **Data Healer (Fix Missing Evidence)**
+    - [x] Added `healData` script to repair corrupted nested arrays.
+    - [x] **VERIFIED:** Hidden photos/videos are restored.
+    - [x] **Feature: Web-Based Marks Entry (Excel-like Grid)** <!-- id: 4470 -->
+        - [x] **Component:** Markup and integration into AdminDashboard.
+        - [x] Debug: Factory Reset Button visible on Dashboard
+- [x] Debug: Factory Reset Sync (Zombie Data)
+- [x] Debug: Cloud Data Verification Tool (Dashboard).
+        - [x] **Logic:** Filter Batches, Students, and PCs.
+        - [x] **UI:** Editable Grid (Students vs PCs) with Auto-Total.
+        - [x] **Sub-feature:** Question Paper Validation (Must cover all PCs).
+        - [x] Verify Marks Saving logic.
+    - [x] **Bug Fix:** Resolve syntax errors in index.html (QPsTab).
+        - [x] Fix invalid brace at line 1840.
+        - [x] Removed duplicate and unclosed `QPsTab` definition (lines 1324-1403).
+    - [x] **UI Fix:** Marks Tab not visible.
+        - [x] Moved "Marks Entry" to Assessment section in Sidebar.
+    - [ ] **Feature:** Refactor Marks Grid to NOS-based (Theory, Practical, Viva).
+        - [x] Fetch and display NOS list in grid headers.
+        - [x] Create input fields for T/P/V per NOS per student.
+        - [x] Implement NOS-level mark saving and total calculation.
+
+    - [x] **UX Improvement:** Auto-load Marks Grid on Batch Selection.
+        - [x] Remove "Load Students" button.
+        - [x] Remove "Load Students" button.
+        - [x] Trigger grid load automatically.
+    - [x] **Troubleshooting:**
+        - [x] Verify button removal on disk.
+        - [x] Add version badge to UI.
+        - [x] Provide cache-busting URL to user.
+    - [x] **UI Polish: Custom Scrollbars for Marks Grid**
+        - [x] Add custom CSS for webkit-scrollbar.
+        - [x] Verify horizontal and vertical scrolling with sticky columns. (Forced horizontal overflow)
+    - [x] **UI Polish: Add Top Save Button**
+        - [x] Add "Add Marks" button (renamed from Save) to the header.
+    - [x] **UI Polish: Redesign Marks Entry Grid**
+        - [x] Implement Student Card layout (Details Left, Marks Right).
+        - [x] Add Attendance checkbox and Individual Save button.
+        - [x] Render nested NOS table with Total/Scored columns.
+    - [x] **UI Polish: Dual View Toggle**
+        - [x] Restore Spreadsheet Grid as default view.
+        - [x] Make "Add Marks" toggle to Student Card view.
+        - [x] Add "Back to Grid" button.
+    - [ ] **Debugging: Fix Login Issue**
+        - [x] Investigate "unresponsive login button".
+        - [x] Add `try-catch` and `alerts` to Login logic.
+        - [x] Secure `authenticateAssessor` against malformed data.
+    - [x] **UI Refinement: Total Consolidations**
+        - [x] Make Spreadhseet Grid Read-Only.
+        - [x] Add "Total Scored" column to Student Card View (Theory + Practical + Viva).
+        - [x] Fix "Total Max Marks" displaying as "-" in columns.
+    - [x] **Feature: Excel Upload for Marks**
+        - [x] Add "Upload Marks" button to MarksTab header.
+        - [x] Implement `handleMarksUpload` function (parse Excel).
+        - [x] Logic: Match Student ID & NOS Code -> Update `marksData`.
+        - [x] Logic: Handle "Attendance" column (Auto-mark Present/Absent).
+        - [x] Add "Download Sample Template" for Marks.
+
+    - [x] **Final Verification**
+        - [x] Verify Mobile Responsiveness of Marks Tab (Cards View).
+        - [x] Verify Horizontal Scroll of Grid View on small screens.
+        - [x] Verify Excel Upload controls layout on mobile.

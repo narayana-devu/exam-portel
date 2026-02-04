@@ -1,0 +1,40 @@
+﻿            return <div>Unknown View</div>;
+        };
+
+
+        // MAIN APP
+        const App = () => {
+            const [user, setUser] = React.useState(null);
+
+            React.useEffect(() => {
+                try {
+                    const saved = localStorage.getItem('se_user');
+                    if (saved) setUser(JSON.parse(saved));
+                } catch (e) { console.error(e); }
+            }, []);
+
+            const handleLogin = (u) => {
+                localStorage.setItem('se_user', JSON.stringify(u));
+                setUser(u);
+            };
+
+            const handleLogout = () => {
+                localStorage.removeItem('se_user');
+                setUser(null);
+            };
+
+            if (!user) {
+                return <Login onLogin={handleLogin} />;
+            }
+
+            return <Dashboard user={user} onLogout={handleLogout} />;
+        };
+
+        const container = document.getElementById('root');
+        const root = ReactDOM.createRoot(container);
+        root.render(
+            <App />);
+    </script>
+</body>
+
+</html>
