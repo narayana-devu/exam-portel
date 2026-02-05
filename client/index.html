@@ -1111,6 +1111,17 @@
                 window.Utils.uploadToCloud(true, 'responses');
                 return true;
             },
+
+            formatTime12h: (timeStr) => {
+                if (!timeStr) return '';
+                try {
+                    const [h, m] = timeStr.split(':');
+                    const hh = parseInt(h);
+                    const suffix = hh >= 12 ? 'PM' : 'AM';
+                    const h12 = hh % 12 || 12;
+                    return `${h12}:${m} ${suffix}`;
+                } catch (e) { return timeStr; }
+            }
         };
     </script>
 
@@ -1339,7 +1350,7 @@
                             </div>
                             <div className="text-center text-xs text-gray-400 mt-4 space-y-1">
                                 <p>Demo: admin/admin</p>
-                                <p className="text-gray-400 text-[10px] mt-2">v19.0.5 (Stable)</p>
+                                <p className="text-gray-400 text-[10px] mt-2">v19.0.6 (Stable)</p>
                             </div>
                         </form>
                     </div>
@@ -4480,12 +4491,12 @@
                                                         {window.Utils.getStudentsByBatch(batch.id).length}
                                                     </td>
                                                     <td className="p-3 border-r text-xs text-gray-600">
-                                                        {batch.startDate ? batch.startDate : '-'}
-                                                        {batch.startTime && <div className="text-[10px] font-bold text-indigo-600">{batch.startTime}</div>}
+                                                        {batch.startDate ? (batch.startDate.includes('T') ? batch.startDate.split('T')[0] : batch.startDate) : '-'}
+                                                        {batch.startTime && <div className="text-[10px] font-bold text-indigo-600">{window.Utils.formatTime12h(batch.startTime)}</div>}
                                                     </td>
                                                     <td className="p-3 border-r text-xs text-gray-600">
-                                                        {batch.endDate ? batch.endDate : '-'}
-                                                        {batch.endTime && <div className="text-[10px] font-bold text-red-600">{batch.endTime}</div>}
+                                                        {batch.endDate ? (batch.endDate.includes('T') ? batch.endDate.split('T')[0] : batch.endDate) : '-'}
+                                                        {batch.endTime && <div className="text-[10px] font-bold text-red-600">{window.Utils.formatTime12h(batch.endTime)}</div>}
                                                     </td>
                                                     <td className="p-3 border-r text-gray-600">{batch.state || '-'}</td>
                                                     <td className="p-3 border-r text-gray-600">{batch.district || '-'}</td>
@@ -7689,34 +7700,44 @@
             }, [examMode, timeLeft, isSubmitting]);
 
             const startExam = async (mode) => {
-                let batch = window.Utils.getBatches().find(b => b.id === user.batchId);
+                let batch = window.Utils.getBatches().find(b => String(b.id) === String(user.batchId));
 
                 // AUTO-HEAL: If batch not found locally, try one-time sync before erroring
-                if (!batch) {
+                if (!batch && user.batchId) {
+                    console.log(`[Auto-Heal] Batch ${user.batchId} missing locally. Syncing...`);
                     const btn = document.getElementById('sync-status-text');
                     if (btn) btn.innerText = "Finding Batch...";
                     try {
                         await window.Utils.downloadFromCloud(true);
-                        batch = window.Utils.getBatches().find(b => b.id === user.batchId);
+                        batch = window.Utils.getBatches().find(b => String(b.id) === String(user.batchId));
                     } catch (e) {
                         console.error("Auto-heal batch sync failed", e);
                     }
                 }
 
                 if (!batch) {
-                    alert('Exam Error: Your assigned Batch was not found.\nPlease contact Admin to re-assign/update.');
+                    alert(`Exam Error: Your assigned Batch (ID: ${user.batchId || 'NONE'}) was not found locally.\n\nPlease check your internet and try again, or contact Admin.`);
                     return;
                 }
 
-                // Helper to parse potential DD/MM/YYYY or YYYY-MM-DD
+                // Helper to parse potential DD-MM-YYYY, DD/MM/YYYY or YYYY-MM-DD
                 const parseDateTime = (dateStr, timeStr) => {
                     if (!dateStr || !timeStr) return null;
-                    let d = new Date(`${dateStr}T${timeStr}`);
+                    // Remove ISO T part if accidentally included
+                    const pureDate = dateStr.split('T')[0];
+
+                    // Try direct parse (works for YYYY-MM-DD)
+                    let d = new Date(`${pureDate}T${timeStr}`);
+
                     if (isNaN(d.getTime())) {
-                        if (dateStr.includes('/')) {
-                            const parts = dateStr.split('/');
+                        // Handle DD-MM-YYYY or DD/MM/YYYY
+                        const sep = pureDate.includes('-') ? '-' : (pureDate.includes('/') ? '/' : null);
+                        if (sep) {
+                            const parts = pureDate.split(sep);
                             if (parts.length === 3) {
-                                d = new Date(`${parts[2]}-${parts[1]}-${parts[0]}T${timeStr}`);
+                                // If first part is 4 digits, assume YYYY-MM-DD (already tried but for safety)
+                                if (parts[0].length === 4) d = new Date(`${parts[0]}-${parts[1]}-${parts[2]}T${timeStr}`);
+                                else d = new Date(`${parts[2]}-${parts[1]}-${parts[0]}T${timeStr}`);
                             }
                         }
                     }
