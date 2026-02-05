@@ -1349,7 +1349,7 @@
                             </div>
                             <div className="text-center text-xs text-gray-400 mt-4 space-y-1">
                                 <p>Demo: admin/admin</p>
-                                <p className="text-gray-400 text-[10px] mt-2">v19.0.7 (Stable)</p>
+                                <p className="text-gray-400 text-[10px] mt-2">v19.0.8 (Stable)</p>
                             </div>
                         </form>
                     </div>
@@ -7699,6 +7699,8 @@
             }, [examMode, timeLeft, isSubmitting]);
 
             const startExam = async (mode) => {
+                let batch = window.Utils.getBatches().find(b => String(b.id) === String(user.batchId));
+
                 // AUTO-HEAL: If batch not found locally, try one-time sync before erroring
                 if (!batch && user.batchId) {
                     console.log(`[Auto-Heal] Batch ${user.batchId} missing locally. Syncing...`);
