@@ -5500,22 +5500,18 @@
                     if (active) {
                         let finalUrl = item.img || item.url;
 
-                        // SECURE PROXY LOGIC (v18.2)
+                        // SECURE PROXY LOGIC (v18.3 Robust)
                         // If it's an S3 URL, route through our server proxy to avoid 403 Forbidden
                         if (finalUrl && finalUrl.includes('amazonaws.com') && !finalUrl.includes('media-stream')) {
-                            const urlObj = new URL(finalUrl);
-                            // Extract Key: /bucket/key or just /key depending on path style
-                            let s3Key = urlObj.pathname.startsWith('/') ? urlObj.pathname.substring(1) : urlObj.pathname;
-                            // Remove bucket name if path-style URL (optional, but our code generates path-style)
-                            // Actually, our uploadToS3 returns `data.Location` which is full URL.
-                            // The key is the part after the domain.
-                            // e.g. https://bucket.s3.region.amazonaws.com/media/photos/file.jpg -> media/photos/file.jpg
-
-                            // Simple hack: if key starts with bucket name, strip it? Unlikely with virtual-hosted-style.
-                            // Let's assume standard virtual host: https://bucket.s3.region.amazonaws.com/KEY
-
-                            // Important: We need the API Key for the proxy
-                            finalUrl = `${API_BASE}/media-stream?key=${encodeURIComponent(s3Key)}&apiKey=${window.API_KEY || 'portel_secure_key_2025'}`;
+                            try {
+                                const urlObj = new URL(finalUrl);
+                                let s3Key = urlObj.pathname.startsWith('/') ? urlObj.pathname.substring(1) : urlObj.pathname;
+                                s3Key = decodeURIComponent(s3Key);
+                                console.log(`[Proxy] Photo Key: ${s3Key}`);
+                                finalUrl = `${API_BASE}/media-stream?key=${encodeURIComponent(s3Key)}&apiKey=portel_secure_key_2025`;
+                            } catch (e) {
+                                console.error("Proxy URL Parse Error", e);
+                            }
                         }
 
                         setSrc(finalUrl);
@@ -5617,11 +5613,25 @@
                             if (active) {
                                 let finalUrl = part.downloadUrl || part.url;
 
-                                // SECURE PROXY LOGIC (v18.2) for VIDEO
+                                // SECURE PROXY LOGIC (v18.3 Robust)
                                 if (finalUrl && finalUrl.includes('amazonaws.com') && !finalUrl.includes('media-stream')) {
-                                    const urlObj = new URL(finalUrl);
-                                    let s3Key = urlObj.pathname.startsWith('/') ? urlObj.pathname.substring(1) : urlObj.pathname;
-                                    finalUrl = `${API_BASE}/media-stream?key=${encodeURIComponent(s3Key)}&apiKey=${window.API_KEY || 'portel_secure_key_2025'}`;
+                                    try {
+                                        const urlObj = new URL(finalUrl);
+                                        // Robust Key Extraction: Handle both /bucket/key and /key styles
+                                        // We assume the part after the last / is the filename, but we need the full key.
+                                        // Standard AWS URL: https://bucket.s3.region.amazonaws.com/FOLDER/FILE
+                                        // Pathname: /FOLDER/FILE
+                                        // Key: FOLDER/FILE
+                                        let s3Key = urlObj.pathname.startsWith('/') ? urlObj.pathname.substring(1) : urlObj.pathname;
+
+                                        // Decoding is critical for spaces/symbols
+                                        s3Key = decodeURIComponent(s3Key);
+
+                                        console.log(`[Proxy] Converting ${finalUrl} -> Key: ${s3Key}`);
+                                        finalUrl = `${API_BASE}/media-stream?key=${encodeURIComponent(s3Key)}&apiKey=portel_secure_key_2025`;
+                                    } catch (e) {
+                                        console.error("Proxy URL Parse Error", e);
+                                    }
                                 }
 
                                 setSrc(finalUrl);
