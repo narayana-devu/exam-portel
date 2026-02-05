@@ -4156,82 +4156,128 @@
 
                 const reader = new FileReader();
                 reader.onload = (evt) => {
-                    const data = new Uint8Array(evt.target.result);
-                    const workbook = XLSX.read(data, { type: 'array' });
-                    const sheet = workbook.Sheets[workbook.SheetNames[0]];
-                    const rows = XLSX.utils.sheet_to_json(sheet); // [{BatchName: '...', Enrollment No: '...', ...}]
+                    try {
+                        const data = new Uint8Array(evt.target.result);
+                        const workbook = XLSX.read(data, { type: 'array' });
+                        const sheet = workbook.Sheets[workbook.SheetNames[0]];
+                        const rows = XLSX.utils.sheet_to_json(sheet); // [{BatchName: '...', Enrollment No: '...', ...}]
 
-                    let addedCount = 0;
-                    let errors = [];
-
-                    // Get fresh batch list to ensure we match correctly
-                    const currentBatches = window.Utils.getBatches();
-
-                    // Pre-fetch student counts for involved batches to maintain sequence
-                    const batchCounts = {};
-
-                    rows.forEach((row, index) => {
-                        // Expected keys: "BatchName", "Enrollment No", "Name of the Trainee"
-                        // Flexible matching for keys
-                        const batchName = row['BatchName'] || row['Batch Name'];
-                        const enrollmentNo = row['Enrollment No'] || row['EnrollmentNo'];
-                        const studentName = row['Name of the Trainee'] || row['Trainee Name'] || row['Name'] || row['Student Name'] || row['StudentName'] || row['Candidate Name'] || row['CandidateName'] || row['Full Name'] || row['FullName'] || row['Trainee'];
-
-                        // Debug log to identify column issues
-                        if (!studentName || studentName === 'U') console.log('Row detection:', row);
-
-                        if (!batchName) {
-                            errors.push(`Row ${index + 2}: Missing Batch Name`);
+                        // 1. INTROSPECTION: Check if sheet is empty or headers are weird
+                        if (rows.length === 0) {
+                            alert("Error: The uploaded sheet appears to be empty.");
                             return;
                         }
 
-                        // Find batch
-                        const targetBatch = currentBatches.find(b => b.name.trim().toLowerCase() === batchName.toString().trim().toLowerCase());
+                        // Debug: Check first row keys
+                        const firstRowKeys = Object.keys(rows[0]);
+                        console.log("[Bulk Import] Detected Headers:", firstRowKeys);
 
-                        if (!targetBatch) {
-                            errors.push(`Row ${index + 2}: Batch "${batchName}" not found`);
-                            return;
+                        let addedCount = 0;
+                        let errors = [];
+                        let skippedCount = 0;
+
+                        // Get fresh batch list to ensure we match correctly
+                        const currentBatches = window.Utils.getBatches();
+
+                        // Pre-fetch student counts for involved batches to maintain sequence
+                        const batchCounts = {};
+
+                        rows.forEach((row, index) => {
+                            // FLEXIBLE HEADER MATCHING (Case-insensitive, trim)
+                            const getVal = (keys) => {
+                                for (let k of keys) {
+                                    // Direct match
+                                    if (row[k] !== undefined) return row[k];
+                                    // Case-insensitive match in row keys
+                                    const foundKey = Object.keys(row).find(rk => rk.trim().toLowerCase() === k.trim().toLowerCase());
+                                    if (foundKey) return row[foundKey];
+                                }
+                                return null;
+                            };
+
+                            const batchName = getVal(['BatchName', 'Batch Name', 'Batch', 'Project']);
+                            const enrollmentNo = getVal(['Enrollment No', 'EnrollmentNo', 'Enrollment', 'Reg No', 'Registration No']);
+                            // Add 'Candidate Name' and other potential headers
+                            const studentName = getVal(['Name of the Trainee', 'Trainee Name', 'Name', 'Student Name', 'StudentName', 'Candidate Name', 'CandidateName', 'Full Name', 'FullName', 'Trainee']);
+                            const gender = getVal(['Gender', 'Gender(M/F/T)', 'Sex']);
+
+                            // Debug log for specific rows if needed
+                            // console.log(`Row ${index + 2}:`, { batchName, studentName, enrollmentNo });
+
+                            if (!batchName) {
+                                errors.push(`Row ${index + 2}: Skipped - Missing 'BatchName' (Found keys: ${Object.keys(row).join(', ')})`);
+                                skippedCount++;
+                                return;
+                            }
+
+                            // Find batch (Case-insensitive)
+                            const targetBatch = currentBatches.find(b => b.name.trim().toLowerCase() === String(batchName).trim().toLowerCase());
+
+                            if (!targetBatch) {
+                                errors.push(`Row ${index + 2}: Skipped - Batch "${batchName}" not found in system.`);
+                                skippedCount++;
+                                return;
+                            }
+
+                            if (!studentName) {
+                                errors.push(`Row ${index + 2}: Skipped - Missing Student Name`);
+                                skippedCount++;
+                                return;
+                            }
+
+                            // Initialize count for this batch if not done yet
+                            if (batchCounts[targetBatch.id] === undefined) {
+                                batchCounts[targetBatch.id] = window.Utils.getStudentsByBatch(targetBatch.id).length;
+                            }
+
+                            // DUPLICATE CHECK (Optional but recommended)
+                            // const existing = window.Utils.getStudentsByBatch(targetBatch.id);
+                            // if (enrollmentNo && existing.find(s => s.enrollmentNo === String(enrollmentNo))) { ... }
+
+                            const sequence = 100 + batchCounts[targetBatch.id];
+
+                            // Auto-increment name if it is just "U" (Legacy logic, kept for safety)
+                            let finalName = studentName;
+                            if (String(studentName).trim().toUpperCase() === 'U') {
+                                finalName = `U${batchCounts[targetBatch.id] + 1}`;
+                            }
+
+                            const student = {
+                                id: window.Utils.generateId(),
+                                name: finalName,
+                                username: sequence.toString(), // Sequential username: 100, 101...
+                                enrollmentNo: enrollmentNo ? String(enrollmentNo) : '',
+                                password: enrollmentNo ? String(enrollmentNo) : 'password',
+                                batchId: targetBatch.id,
+                                role: 'student',
+                                gender: gender || ''
+                            };
+                            window.Utils.saveStudent(student);
+
+                            batchCounts[targetBatch.id]++; // Increment local count
+                            addedCount++;
+                        });
+
+                        // SUMMARY REPORT
+                        let msg = `Processing Complete.\n\nTotal Rows Found: ${rows.length}\nSuccessfully Imported: ${addedCount}\nSkipped/Failed: ${skippedCount}`;
+
+                        if (errors.length > 0) {
+                            msg += `\n\n--- SKIP LOG (First 10) ---\n` + errors.slice(0, 10).join('\n');
+                            if (errors.length > 10) msg += `\n...and ${errors.length - 10} more.`;
+                        } else {
+                            msg += `\n\nAll rows imported successfully!`;
                         }
 
-                        if (!studentName) {
-                            errors.push(`Row ${index + 2}: Missing Student Name`);
-                            return;
-                        }
+                        // Copy log to clipboard for easier debugging?
+                        console.log("Full Import Log:", errors);
 
-                        // Initialize count for this batch if not done yet
-                        if (batchCounts[targetBatch.id] === undefined) {
-                            batchCounts[targetBatch.id] = window.Utils.getStudentsByBatch(targetBatch.id).length;
-                        }
+                        alert(msg);
+                        setShowImportModal(false);
 
-                        const sequence = 100 + batchCounts[targetBatch.id];
-
-                        // Auto-increment name if it is just "U"
-                        let finalName = studentName;
-                        if (studentName.trim().toUpperCase() === 'U') {
-                            finalName = `U${batchCounts[targetBatch.id] + 1}`;
-                        }
-
-                        const student = {
-                            id: window.Utils.generateId(),
-                            name: finalName, // Use the auto-incremented name
-                            username: sequence.toString(), // Sequential username: 100, 101...
-                            enrollmentNo: enrollmentNo ? enrollmentNo.toString() : '', // Save Excel Enrollment No separately
-                            password: enrollmentNo ? enrollmentNo.toString() : 'password', // Password is Enrollment No
-                            batchId: targetBatch.id,
-                            role: 'student'
-                        };
-                        window.Utils.saveStudent(student);
-
-                        batchCounts[targetBatch.id]++; // Increment local count
-                        addedCount++;
-                    });
-
-                    let msg = `Successfully uploaded ${addedCount} students across batches.`;
-                    if (errors.length > 0) {
-                        msg += `\n\nErrors:\n` + errors.slice(0, 10).join('\n') + (errors.length > 10 ? '\n...' : '');
+                    } catch (err) {
+                        console.error("Excel Parse Error", err);
+                        alert("Critical Error parsing Excel file: " + err.message);
                     }
-                    alert(msg);
-                    setShowImportModal(false);
                 };
                 reader.readAsArrayBuffer(file);
             };
