@@ -1284,7 +1284,7 @@
                             </div>
                             <div className="text-center text-xs text-gray-400 mt-4 space-y-1">
                                 <p>Demo: admin/admin</p>
-                                <p className="text-gray-400 text-[10px] mt-2">v19.0.1 (Stable)</p>
+                                <p className="text-gray-400 text-[10px] mt-2">v19.0.2 (Stable)</p>
                             </div>
                         </form>
                     </div>
@@ -5472,18 +5472,24 @@
                             const pPaper = allQPapers.find(p => p.id === b.practicalPaperId);
                             const vPaper = allQPapers.find(p => p.id === b.vivaPaperId);
 
-                            if (filterQP) {
-                                // Check if either assigned paper belongs to the selected QP ID
-                                console.log("Filtering QP", filterQP, "Batch", b.name, "T:", tPaper?.qpId, "P:", pPaper?.qpId, "V:", vPaper?.qpId);
-                                const matchesTheory = tPaper && String(tPaper.qpId) === String(filterQP);
-                                const matchesPractical = pPaper && String(pPaper.qpId) === String(filterQP);
-                                const matchesViva = vPaper && String(vPaper.qpId) === String(filterQP);
-                                return matchesTheory || matchesPractical || matchesViva;
+                            // 1. If SSC Filter is set, check if any paper belongs to that SSC
+                            if (filterSSC) {
+                                const matchesSSC = (tPaper && tPaper.sscId === filterSSC) ||
+                                    (pPaper && pPaper.sscId === filterSSC) ||
+                                    (vPaper && vPaper.sscId === filterSSC);
+                                if (!matchesSSC) return false;
                             }
 
+                            // 2. If QP Filter is set, check if any paper belongs to that QP ID
+                            if (filterQP) {
+                                const matchesQP = (tPaper && String(tPaper.qpId) === String(filterQP)) ||
+                                    (pPaper && String(pPaper.qpId) === String(filterQP)) ||
+                                    (vPaper && String(vPaper.qpId) === String(filterQP));
+                                if (!matchesQP) return false;
+                            }
 
-
-                            return false;
+                            // 3. Show by default if no filters block it
+                            return true;
                         }).map(b => (
                             <div key={b.id} onClick={() => setSelectedBatch(b)} className="bg-white p-6 rounded shadow cursor-pointer hover:shadow-lg border-l-4 border-indigo-500 group relative">
                                 <button
