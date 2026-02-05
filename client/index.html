@@ -1071,6 +1071,46 @@
                 }
             },
             // Duplicate removed
+            deleteEvidence: async (studentId, examType, evidenceItemOrSession) => {
+                const responses = window.Utils.getResponses();
+                const respIdx = responses.findIndex(r => r.studentId === studentId && r.examType === examType);
+                if (respIdx === -1) return;
+
+                const response = responses[respIdx];
+                const itemsToDelete = evidenceItemOrSession.isGroup ? evidenceItemOrSession.parts : [evidenceItemOrSession];
+
+                for (const item of itemsToDelete) {
+                    // 1. Delete from Cloud (S3)
+                    if (item.url && item.url.includes('amazonaws.com')) {
+                        try {
+                            const urlObj = new URL(item.url);
+                            let s3Key = urlObj.pathname.startsWith('/') ? urlObj.pathname.substring(1) : urlObj.pathname;
+                            s3Key = decodeURIComponent(s3Key);
+                            console.log(`[Delete] Cloud Key: ${s3Key}`);
+                            await fetch(`${API_BASE}/media?key=${encodeURIComponent(s3Key)}&apiKey=portel_secure_key_2025`, { method: 'DELETE' });
+                        } catch (e) { console.error("Cloud delete failed", e); }
+                    }
+
+                    // 2. Delete from Local (IndexedDB)
+                    const localKey = (item.storage === 'indexeddb' || !item.url) ? item.img : null;
+                    if (localKey && !localKey.startsWith('data:') && !localKey.startsWith('blob:')) {
+                        try { await VideoDB.deleteVideo(localKey); console.log(`[Delete] Local Key: ${localKey}`); } catch (e) { }
+                    }
+
+                    // 3. Remove from metadata array
+                    // Matching by key or img (exact match)
+                    response.evidence = response.evidence.filter(ev =>
+                        (ev.key && ev.key !== item.key) ||
+                        (!ev.key && ev.img !== item.img)
+                    );
+                }
+
+                response.synced = false;
+                responses[respIdx] = response;
+                localStorage.setItem(DB_KEYS.RESPONSES, JSON.stringify(responses));
+                window.Utils.uploadToCloud(true, 'responses');
+                return true;
+            },
         };
     </script>
 
@@ -1299,7 +1339,7 @@
                             </div>
                             <div className="text-center text-xs text-gray-400 mt-4 space-y-1">
                                 <p>Demo: admin/admin</p>
-                                <p className="text-gray-400 text-[10px] mt-2">v19.0.3 (Stable)</p>
+                                <p className="text-gray-400 text-[10px] mt-2">v19.0.4 (Stable)</p>
                             </div>
                         </form>
                     </div>
@@ -5667,6 +5707,16 @@
                             }
                         }}
                     />
+
+                    {/* Delete Button */}
+                    <button
+                        onClick={(e) => { e.stopPropagation(); if (confirm('Delete this photo?')) onRemove(item); }}
+                        className="absolute top-1 left-1 bg-red-600 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity z-20 shadow-lg hover:bg-red-700"
+                        title="Delete Evidence"
+                    >
+                        <Icons.Trash2 className="w-3 h-3" />
+                    </button>
+
                     <div className="absolute inset-0 hidden flex-col items-center justify-center bg-gray-200 text-gray-500 p-2 text-center">
                         <Icons.XCircle className="w-8 h-8 mb-1" />
                         <span className="text-[10px] font-bold">Media Not Found</span>
@@ -5686,7 +5736,7 @@
             );
         };
 
-        const SessionPlayer = ({ parts }) => {
+        const SessionPlayer = ({ parts, onRemove }) => {
             const [index, setIndex] = React.useState(0);
             const [src, setSrc] = React.useState(null);
             const [sourceType, setSourceType] = React.useState(null); // 'Local' | 'Cloud'
@@ -5827,6 +5877,15 @@
                         <div className="bg-indigo-600 text-white text-[10px] px-2 py-1 font-bold z-10 backdrop-blur-sm bg-opacity-80">
                             Part {index + 1}/{parts.length}
                         </div>
+
+                        {/* Delete Session Button */}
+                        <button
+                            onClick={(e) => { e.stopPropagation(); if (confirm('Delete this entire video session?')) onRemove(parts[0].sessionId ? { isGroup: true, parts } : parts[0]); }}
+                            className="bg-red-600 text-white p-1 opacity-0 group-hover:opacity-100 transition-opacity z-20 shadow-lg hover:bg-red-700"
+                            title="Delete Session"
+                        >
+                            <Icons.Trash2 className="w-3 h-3" />
+                        </button>
                     </div>
                 </div>
             );
@@ -6299,13 +6358,22 @@
                                             {grouped.map((e, i) => (
                                                 <div key={i} className="relative group bg-gray-100 rounded overflow-hidden border">
                                                     {e.isGroup ? (
-                                                        <SessionPlayer parts={e.parts} />
+                                                        <SessionPlayer parts={e.parts} onRemove={async (item) => {
+                                                            const success = await window.Utils.deleteEvidence(student.id, examType, item);
+                                                            if (success) loadStudentResponse(student);
+                                                        }} />
                                                     ) : (
                                                         <>
                                                             {e.type.includes('VIDEO') ? (
-                                                                <SessionPlayer parts={[e]} />
+                                                                <SessionPlayer parts={[e]} onRemove={async (item) => {
+                                                                    const success = await window.Utils.deleteEvidence(student.id, examType, item);
+                                                                    if (success) loadStudentResponse(student);
+                                                                }} />
                                                             ) : (
-                                                                <EvidenceImage item={e} />
+                                                                <EvidenceImage item={e} onRemove={async (item) => {
+                                                                    const success = await window.Utils.deleteEvidence(student.id, examType, item);
+                                                                    if (success) loadStudentResponse(student);
+                                                                }} />
                                                             )}
                                                         </>
                                                     )}

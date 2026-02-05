@@ -262,7 +262,7 @@ dbAdapter.init();
 // Let's protect it with the same auth to avoid leaking bucket name to public.
 app.get('/api/diagnostics', authMiddleware, (req, res) => {
     res.json({
-        version: 'v19.0.3',
+        version: 'v19.0.4',
         storage_type: dbAdapter.type,
         s3_enabled: !!s3,
         bucket_name: process.env.BUCKET_NAME || 'Not Set',
@@ -375,14 +375,9 @@ const upload = multer({
 });
 
 app.post('/api/upload-media', authMiddleware, upload.single('file'), async (req, res) => {
-    if (!req.file) {
-        return res.status(400).json({ error: 'No file provided' });
-    }
-
-    if (!s3) {
-        // Fallback to local disk (optional, or just error)
-        return res.status(503).json({ error: 'S3 storage not configured' });
-    }
+    // ... (existing code remains SAME)
+    if (!req.file) return res.status(400).json({ error: 'No file provided' });
+    if (!s3) return res.status(503).json({ error: 'S3 storage not configured' });
 
     try {
         const ext = path.extname(req.file.originalname).toLowerCase();
@@ -398,18 +393,30 @@ app.post('/api/upload-media', authMiddleware, upload.single('file'), async (req,
         }
 
         const fileName = `${folder}/${Date.now()}_${req.file.originalname}`;
-        console.log(`[S3] Uploading to: ${fileName} (${contentType})`);
-
         const s3Url = await uploadToS3(fileName, req.file.buffer, contentType);
 
-        if (s3Url) {
-            console.log(`[S3] Success: ${s3Url}`);
-            res.json({ success: true, url: s3Url });
-        } else {
-            throw new Error('S3 upload failed (Check server logs for detail)');
-        }
+        if (s3Url) res.json({ success: true, url: s3Url });
+        else throw new Error('S3 upload failed');
     } catch (e) {
-        console.error("Media Upload Error", e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// DELETE MEDIA FROM S3
+app.delete('/api/media', authMiddleware, async (req, res) => {
+    const { key } = req.query;
+    if (!key) return res.status(400).json({ error: 'Key required' });
+    if (!s3) return res.status(503).json({ error: 'S3 not configured' });
+
+    try {
+        console.log(`[S3] Deleting object: ${key}`);
+        await s3.deleteObject({
+            Bucket: process.env.BUCKET_NAME,
+            Key: key
+        }).promise();
+        res.json({ success: true });
+    } catch (e) {
+        console.error("S3 Delete Error:", e);
         res.status(500).json({ error: e.message });
     }
 });
