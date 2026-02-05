@@ -5483,7 +5483,7 @@
             React.useEffect(() => {
                 let active = true;
                 const load = async () => {
-                    // 1. Try Local IndexedDB
+                    // 1. Try Local IndexedDB (Priority)
                     const key = (item.storage === 'indexeddb' || !item.url) ? item.img : null;
                     if (key && !key.startsWith('data:') && !key.startsWith('blob:')) {
                         try {
@@ -5496,10 +5496,30 @@
                         } catch (e) { }
                     }
 
-                    // 2. Fallback to direct img (Base64 or URL)
+                    // 2. Logic for Cloud URLs
                     if (active) {
-                        setSrc(item.img || item.url);
-                        setIsLocal(!item.url || item.img?.startsWith('data:'));
+                        let finalUrl = item.img || item.url;
+
+                        // SECURE PROXY LOGIC (v18.2)
+                        // If it's an S3 URL, route through our server proxy to avoid 403 Forbidden
+                        if (finalUrl && finalUrl.includes('amazonaws.com') && !finalUrl.includes('media-stream')) {
+                            const urlObj = new URL(finalUrl);
+                            // Extract Key: /bucket/key or just /key depending on path style
+                            let s3Key = urlObj.pathname.startsWith('/') ? urlObj.pathname.substring(1) : urlObj.pathname;
+                            // Remove bucket name if path-style URL (optional, but our code generates path-style)
+                            // Actually, our uploadToS3 returns `data.Location` which is full URL.
+                            // The key is the part after the domain.
+                            // e.g. https://bucket.s3.region.amazonaws.com/media/photos/file.jpg -> media/photos/file.jpg
+
+                            // Simple hack: if key starts with bucket name, strip it? Unlikely with virtual-hosted-style.
+                            // Let's assume standard virtual host: https://bucket.s3.region.amazonaws.com/KEY
+
+                            // Important: We need the API Key for the proxy
+                            finalUrl = `${API_BASE}/media-stream?key=${encodeURIComponent(s3Key)}&apiKey=${window.API_KEY || 'portel_secure_key_2025'}`;
+                        }
+
+                        setSrc(finalUrl);
+                        setIsLocal(!item.url || (item.img && item.img.startsWith('data:')));
                     }
                 };
                 load();
@@ -5595,7 +5615,16 @@
                             }
                         } else if (part.downloadUrl || part.url) {
                             if (active) {
-                                setSrc(part.downloadUrl || part.url);
+                                let finalUrl = part.downloadUrl || part.url;
+
+                                // SECURE PROXY LOGIC (v18.2) for VIDEO
+                                if (finalUrl && finalUrl.includes('amazonaws.com') && !finalUrl.includes('media-stream')) {
+                                    const urlObj = new URL(finalUrl);
+                                    let s3Key = urlObj.pathname.startsWith('/') ? urlObj.pathname.substring(1) : urlObj.pathname;
+                                    finalUrl = `${API_BASE}/media-stream?key=${encodeURIComponent(s3Key)}&apiKey=${window.API_KEY || 'portel_secure_key_2025'}`;
+                                }
+
+                                setSrc(finalUrl);
                                 setSourceType('Cloud');
                                 setIsLoading(false);
                             }

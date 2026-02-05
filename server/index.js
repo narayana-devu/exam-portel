@@ -449,14 +449,50 @@ app.post('/api/synced_chunks', async (req, res) => {
             res.status(500).json({ error: e.message });
         }
     } else {
-        // Fallback to Standard DB implementation
-        // Reuse the generic logic but we must handle it manually here since we hijacked the route
-        const items = Array.isArray(req.body) ? req.body : [req.body];
-        dbAdapter.sync('synced_chunks', items, (err) => {
+        // Fallback to non-S3 logic (save to local DB)
+        const fallbackItems = Array.isArray(req.body) ? req.body : [req.body];
+        dbAdapter.sync('synced_chunks', fallbackItems, (err) => {
             if (err) return res.status(500).json({ error: err.message });
-            res.json({ success: true, count: items.length });
+            res.json({ success: true, count: fallbackItems.length });
         });
     }
+});
+
+// SECURE MEDIA PROXY (Streams S3 Content via Server Credentials)
+app.get('/api/media-stream', (req, res) => {
+    const key = req.query.key;
+    const clientKey = req.query.apiKey;
+
+    // 1. Security Check
+    if (clientKey !== API_KEY) {
+        return res.status(403).send('Unauthorized');
+    }
+
+    if (!s3 || !key) {
+        return res.status(400).send('Bad Request: Missing S3 config or Key');
+    }
+
+    // 2. Stream from S3
+    const params = {
+        Bucket: process.env.BUCKET_NAME,
+        Key: key
+    };
+
+    // Optional: Set Content-Type based on extension
+    const ext = path.extname(key).toLowerCase();
+    if (['.jpg', '.jpeg'].includes(ext)) res.setHeader('Content-Type', 'image/jpeg');
+    if (['.png'].includes(ext)) res.setHeader('Content-Type', 'image/png');
+    if (['.webm'].includes(ext)) res.setHeader('Content-Type', 'video/webm');
+    if (['.mp4'].includes(ext)) res.setHeader('Content-Type', 'video/mp4');
+
+    s3.getObject(params)
+        .createReadStream()
+        .on('error', (err) => {
+            console.error("Stream Error:", err.code, key);
+            if (err.code === 'NoSuchKey') res.status(404).send('Not Found');
+            else res.status(500).send(err.message);
+        })
+        .pipe(res);
 });
 // createCRUDEndpoints('synced_chunks', 'synced_chunks'); // Replaced by custom handler above
 
