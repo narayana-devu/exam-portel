@@ -313,11 +313,51 @@ function createCRUDEndpoints(tableName, routeName) {
         const items = req.body;
         if (!Array.isArray(items)) return res.status(400).json({ error: "Expected array" });
 
-        dbAdapter.sync(tableName, items, (err) => {
-            if (err) return res.status(500).json({ error: err.message });
-            io.emit('data-change', { table: tableName, action: 'sync' });
-            res.json({ success: true, count: items.length });
-        });
+        const performSync = (finalItems) => {
+            dbAdapter.sync(tableName, finalItems, (err) => {
+                if (err) return res.status(500).json({ error: err.message });
+                io.emit('data-change', { table: tableName, action: 'sync' });
+                res.json({ success: true, count: finalItems.length });
+            });
+        };
+
+        // SMART MERGE FOR RESPONSES (Prevent URL Data Loss from Stale Admins)
+        if (tableName === 'se_responses') {
+            dbAdapter.getAll(tableName, (err, rows) => {
+                if (!err && rows) {
+                    const existingMap = new Map();
+                    rows.forEach(r => {
+                        try {
+                            const d = JSON.parse(r.data);
+                            existingMap.set(d.id, d);
+                        } catch (e) { }
+                    });
+
+                    items.forEach(newItem => {
+                        const oldItem = existingMap.get(newItem.id);
+                        if (oldItem && oldItem.evidence && newItem.evidence) {
+                            newItem.evidence.forEach(newEv => {
+                                // Restore URL if missing in new but present in old
+                                const key = newEv.key || newEv.img;
+                                if ((!newEv.url || newEv.url === "") && key) {
+                                    const oldEv = oldItem.evidence.find(e => (e.key === key || e.img === key));
+                                    if (oldEv && oldEv.url) {
+                                        // console.log(`[SmartMerge] Restoring URL for ${key}`);
+                                        newEv.url = oldEv.url;
+                                        newEv.uploaded = true;
+                                        newEv.storage = 's3';
+                                    }
+                                }
+                            });
+                        }
+                    });
+                }
+                performSync(items);
+            });
+            return;
+        }
+
+        performSync(items);
     });
 }
 
