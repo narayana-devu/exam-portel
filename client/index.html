@@ -377,60 +377,97 @@
 
                                 // PRE-PROCESS: Upload Media (Images & Videos) from IndexedDB to S3
                                 if (route === 'responses') {
+                                    // 1. Gather all actionable media items first
+                                    const mediaQueue = [];
+
                                     for (let item of pendingItems) {
                                         if (item.evidence && Array.isArray(item.evidence)) {
-                                            let hasMediaUpdates = false;
-                                            for (let j = 0; j < item.evidence.length; j++) {
-                                                const ev = item.evidence[j];
-                                                // Check for pending media
+                                            item.evidence.forEach(ev => {
                                                 const isIndexedDB = ev.type === 'VIDEO_INDEXED_DB' || ev.storage === 'indexeddb';
                                                 const localKey = ev.key || ev.img;
-
-                                                // Skip if we already know this file is missing (stops console spam)
-                                                if (ev._fileMissing) continue;
-
-                                                if (isIndexedDB && localKey && !ev.url && !ev.uploaded) {
-                                                    try {
-                                                        const blob = await window.VideoDB.getVideo(localKey);
-                                                        if (blob) {
-                                                            if (statusBtn && !silent) statusBtn.innerText = `Uploading Media...`;
-
-                                                            const extension = blob.type.includes('video') ? 'webm' : 'jpg';
-                                                            const formData = new FormData();
-                                                            formData.append('file', blob, `${item.studentId}_${localKey}.${extension}`);
-
-                                                            const uploadRes = await fetch(`${API_BASE}/upload-media`, {
-                                                                method: 'POST',
-                                                                headers: { 'x-api-key': 'portel_secure_key_2025' },
-                                                                body: formData
-                                                            });
-
-                                                            if (uploadRes.ok) {
-                                                                const json = await uploadRes.json();
-                                                                ev.url = json.url;
-                                                                ev.img = json.url;
-                                                                if (ev.type === 'VIDEO_INDEXED_DB') ev.type = 'VIDEO_S3';
-                                                                ev.uploaded = true;
-                                                                ev.storage = 's3';
-                                                                hasMediaUpdates = true;
-                                                                console.log(`[Sync] Media Uploaded: ${json.url}`);
-                                                            } else {
-                                                                console.error("Media Upload Failed", uploadRes.statusText);
-                                                            }
-                                                        } else {
-                                                            // Missing Blob Logic: Mark it so we don't retry locally forever
-                                                            console.warn(`[Sync] File Missing for key: ${localKey}. Marking as unrecoverable to stop retry loop.`);
-                                                            ev._fileMissing = true;
-                                                            hasMediaUpdates = true; // Trigger save to persist this flag
-                                                        }
-                                                    } catch (err) {
-                                                        console.error("Media Upload Exception", err);
-                                                    }
+                                                // Only add if needs upload and not known missing
+                                                if (isIndexedDB && localKey && !ev.url && !ev.uploaded && !ev._fileMissing) {
+                                                    mediaQueue.push({ ev, item, localKey }); // Store ref to ev and parent item
                                                 }
-                                            }
-                                            if (hasMediaUpdates) {
-                                                localStorage.setItem(key, JSON.stringify(items));
-                                            }
+                                            });
+                                        }
+                                    }
+
+                                    // 2. Process in Batches of 3 (Parallel Uploads)
+                                    // This drastically improves speed over sequential awaiting
+                                    if (mediaQueue.length > 0) {
+                                        if (statusBtn && !silent) statusBtn.innerText = `Uploading ${mediaQueue.length} Media Files...`;
+                                        console.log(`[Sync] Starting Parallel Upload for ${mediaQueue.length} files (Batch Size: 3)`);
+
+                                        const BATCH_SIZE = 3;
+                                        for (let i = 0; i < mediaQueue.length; i += BATCH_SIZE) {
+                                            const batch = mediaQueue.slice(i, i + BATCH_SIZE);
+
+                                            await Promise.all(batch.map(async ({ ev, item, localKey }) => {
+                                                try {
+                                                    const blob = await window.VideoDB.getVideo(localKey);
+                                                    if (blob) {
+                                                        const extension = blob.type.includes('video') ? 'webm' : 'jpg';
+                                                        const formData = new FormData();
+                                                        formData.append('file', blob, `${item.studentId}_${localKey}.${extension}`);
+
+                                                        const uploadRes = await fetch(`${API_BASE}/upload-media`, {
+                                                            method: 'POST',
+                                                            headers: { 'x-api-key': 'portel_secure_key_2025' },
+                                                            body: formData
+                                                        });
+
+                                                        if (uploadRes.ok) {
+                                                            const json = await uploadRes.json();
+                                                            ev.url = json.url;
+                                                            ev.img = json.url;
+                                                            if (ev.type === 'VIDEO_INDEXED_DB') ev.type = 'VIDEO_S3';
+                                                            ev.uploaded = true;
+                                                            ev.storage = 's3';
+                                                            console.log(`[Sync] Media Uploaded: ${json.url}`);
+
+                                                            // Trigger save for this specific item's batch immediately? 
+                                                            // Or wait? Better to wait for bulk save, but flag it here.
+                                                            // We'll save all at end of batch or end of all.
+                                                        } else {
+                                                            console.error("Media Upload Failed", uploadRes.statusText);
+                                                        }
+                                                    } else {
+                                                        console.warn(`[Sync] File Missing: ${localKey}`);
+                                                        ev._fileMissing = true;
+                                                    }
+                                                } catch (err) {
+                                                    console.error("Media Upload Exception", err);
+                                                }
+                                            }));
+
+                                            // Optional: Update UI progress
+                                            if (statusBtn && !silent) statusBtn.innerText = `Uploaded ${Math.min(i + BATCH_SIZE, mediaQueue.length)}/${mediaQueue.length} Files...`;
+                                        }
+
+                                        // Save updates locally after all uploads (so we have URLs)
+                                        // We need to save the *parent items* that were modified.
+                                        const uniqueParents = [...new Set(mediaQueue.map(q => q.item))];
+                                        // But wait, pendingItems is already the list.
+                                        // Just assume if queue was > 0, we have updates.
+                                        // Actually, `items` passed to uploadToCloud is just the pending list.
+                                        // We need to update the source in localStorage.
+                                        // The outer loop handles `localStorage.setItem(key, ...)` BUT passed `pendingItems`.
+                                        // We modified `pendingItems` in place.
+                                        // So we just need to ensure the outer save happens.
+
+                                        // Re-save logic from original code:
+                                        // `if (hasMediaUpdates) localStorage.setItem(key, JSON.stringify(items));`
+                                        // We need to mimic this.
+                                        if (mediaQueue.length > 0) {
+                                            // We don't have easy access to the full `items` array from `pendingItems` if it was filtered?
+                                            // Wait, `items` variable in the scope IS the full list from localStorage.
+                                            // `pendingItems` is `items` filtered or just `items`.
+                                            // Looking at context: `let pendingItems = items;` (usually).
+                                            // Let's assume we can confirm `items` is in scope or we must re-read.
+                                            // The original code had: `if (hasMediaUpdates) localStorage.setItem(key, JSON.stringify(items));`
+                                            // So `items` is available.
+                                            localStorage.setItem(key, JSON.stringify(items));
                                         }
                                     }
                                 }
