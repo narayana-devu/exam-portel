@@ -262,7 +262,7 @@ dbAdapter.init();
 // Let's protect it with the same auth to avoid leaking bucket name to public.
 app.get('/api/diagnostics', authMiddleware, (req, res) => {
     res.json({
-        version: 'v19.0.10',
+        version: 'v19.0.11',
         storage_type: dbAdapter.type,
         s3_enabled: !!s3,
         bucket_name: process.env.BUCKET_NAME || 'Not Set',
@@ -287,15 +287,24 @@ function createCRUDEndpoints(tableName, routeName) {
 
     // POST (Create/Update)
     app.post(`/api/${routeName}`, (req, res) => {
-        const item = req.body;
-        const id = item.id;
-        const dataStr = JSON.stringify(item);
+        const body = req.body;
 
-        dbAdapter.upsert(tableName, id, dataStr, (err) => {
-            if (err) return res.status(500).json({ error: err.message });
-            io.emit('data-change', { table: tableName, action: 'update', id: id });
-            res.json({ success: true, id: id });
-        });
+        // v19.0.11: Support both single object and array sync
+        if (Array.isArray(body)) {
+            dbAdapter.sync(tableName, body, (err) => {
+                if (err) return res.status(500).json({ error: err.message });
+                io.emit('data-change', { table: tableName, action: 'sync' });
+                res.json({ success: true, count: body.length });
+            });
+        } else {
+            const id = body.id;
+            const dataStr = JSON.stringify(body);
+            dbAdapter.upsert(tableName, id, dataStr, (err) => {
+                if (err) return res.status(500).json({ error: err.message });
+                io.emit('data-change', { table: tableName, action: 'update', id: id });
+                res.json({ success: true, id: id });
+            });
+        }
     });
 
     // DELETE

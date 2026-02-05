@@ -509,12 +509,10 @@
                         }
                     }
 
-                    if (success > 0 && !silent) {
-                        if (statusBtn) statusBtn.innerText = "Sync Complete";
-                        console.log(`[Sync] Successfully synced ${success} items.`);
-                    }
+                    return failCount === 0 && success > 0;
                 } catch (globalErr) {
                     console.error("Global Sync Error", globalErr);
+                    return false;
                 } finally {
                     window.Utils._syncLock = false;
                 }
@@ -797,8 +795,12 @@
                     if (!silent) alert("Success: Batch Saved & Synced to Cloud!");
                 } else {
                     // Fallback to background sync
-                    await window.Utils.uploadToCloud(true, 'batches');
-                    if (!silent) alert("Batch Saved Locally.\nAuto-syncing to Cloud in background...");
+                    const backgroundOk = await window.Utils.uploadToCloud(true, 'batches');
+                    if (!silent && !backgroundOk) {
+                        alert("Batch Saved Locally but Cloud Sync FAILED.\nPlease check connection and TRY AGAIN (Save again).");
+                    } else if (!silent && backgroundOk) {
+                        alert("Success: Batch Saved & Synced to Cloud (Background)!");
+                    }
                 }
             },
             updateBatches: (batches) => localStorage.setItem(DB_KEYS.BATCHES, JSON.stringify(batches)),
@@ -1339,7 +1341,7 @@
                                     <div className={`w-2 h-2 rounded-full ${navigator.onLine ? 'bg-green-500' : 'bg-red-500'}`}></div>
                                     {navigator.onLine ? "Cloud Connected" : "Offline Mode"}
                                 </span>
-                                <span>v19.0.10 (Stable)</span>
+                                <span>v19.0.11 (Stable)</span>
                             </div>
                             {error && <p className="text-red-500 text-sm text-center bg-red-50 p-2 rounded">{error}</p>}
                             <div className="flex gap-2">
@@ -1362,7 +1364,7 @@
                             </div>
                             <div className="text-center text-xs text-gray-400 mt-4 space-y-1">
                                 <p>Demo: admin/admin</p>
-                                <p className="text-gray-400 text-[10px] mt-2">v19.0.10 (Stable)</p>
+                                <p className="text-gray-400 text-[10px] mt-2">v19.0.11 (Stable)</p>
                             </div>
                         </form>
                     </div>
@@ -1385,7 +1387,7 @@
                 <div className="w-64 bg-slate-800 text-white min-h-screen flex flex-col">
                     <div className="p-6 border-b border-slate-700">
                         <h1 className="text-xl font-bold">NSXpertise</h1>
-                        <p className="text-xs text-slate-400 mt-1">v19.0.10</p>
+                        <p className="text-xs text-slate-400 mt-1">v19.0.11</p>
                     </div>
                     <nav className="flex-1 p-4 space-y-1">
                         {menuItems.map(item => (
@@ -8213,7 +8215,7 @@
                                 "Local Batches Found": batches.length,
                                 "Local Batch IDs": batches.map(b => b.id),
                                 "Browser Online": navigator.onLine,
-                                "Last App Version": "v19.0.10"
+                                "Last App Version": "v19.0.11"
                             };
                             console.table(diag);
                             const msg = "--- STUDENT DIAGNOSTICS ---\n\n" +
