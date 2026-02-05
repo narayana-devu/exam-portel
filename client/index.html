@@ -382,9 +382,12 @@
                                             let hasMediaUpdates = false;
                                             for (let j = 0; j < item.evidence.length; j++) {
                                                 const ev = item.evidence[j];
-                                                // Check for any pending media (Video or Image) stored in IndexedDB
+                                                // Check for pending media
                                                 const isIndexedDB = ev.type === 'VIDEO_INDEXED_DB' || ev.storage === 'indexeddb';
                                                 const localKey = ev.key || ev.img;
+
+                                                // Skip if we already know this file is missing (stops console spam)
+                                                if (ev._fileMissing) continue;
 
                                                 if (isIndexedDB && localKey && !ev.url && !ev.uploaded) {
                                                     try {
@@ -405,7 +408,7 @@
                                                             if (uploadRes.ok) {
                                                                 const json = await uploadRes.json();
                                                                 ev.url = json.url;
-                                                                ev.img = json.url; // Ensure img is updated for photos
+                                                                ev.img = json.url;
                                                                 if (ev.type === 'VIDEO_INDEXED_DB') ev.type = 'VIDEO_S3';
                                                                 ev.uploaded = true;
                                                                 ev.storage = 's3';
@@ -415,7 +418,10 @@
                                                                 console.error("Media Upload Failed", uploadRes.statusText);
                                                             }
                                                         } else {
-                                                            console.warn("Skipping: Blob missing in IndexedDB for key", localKey);
+                                                            // Missing Blob Logic: Mark it so we don't retry locally forever
+                                                            console.warn(`[Sync] File Missing for key: ${localKey}. Marking as unrecoverable to stop retry loop.`);
+                                                            ev._fileMissing = true;
+                                                            hasMediaUpdates = true; // Trigger save to persist this flag
                                                         }
                                                     } catch (err) {
                                                         console.error("Media Upload Exception", err);
