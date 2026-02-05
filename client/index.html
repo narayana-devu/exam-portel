@@ -525,7 +525,7 @@
                     'question_papers': DB_KEYS.QUESTION_PAPERS,
                     'assessors': 'se_assessors'
                 };
-                let success = 0;
+                let successCount = 0;
                 const statusBtn = document.getElementById('sync-status-text');
                 if (statusBtn && !silent) statusBtn.innerText = "Downloading...";
 
@@ -541,37 +541,36 @@
                                 const localMap = new Map();
                                 localItems.forEach(i => localMap.set(i.id, i));
 
-                                // SYNC: Add/Update items from Cloud AND Remove items deleted in Cloud
-                                const serverIds = new Set(data.map(s => s.id));
-
                                 // 1. Identify and remove local items that were previously synced but are now missing in Cloud
-                                for (const [id, item] of localMap.entries()) {
-                                    if (item.synced && !serverIds.has(id)) {
-                                        console.log(`[Sync] Removing locally deleted item: ${id} from ${route}`);
-                                        localMap.delete(id);
+                                // ONLY if NOT silent (Regular Sync). Auto-heal (silent) should NEVER delete for safety.
+                                if (!silent) {
+                                    const serverIds = new Set(data.map(s => s.id));
+                                    for (const [id, item] of localMap.entries()) {
+                                        if (item.synced && !serverIds.has(id)) {
+                                            console.log(`[Sync] Removing locally deleted item: ${id} from ${route}`);
+                                            localMap.delete(id);
+                                        }
                                     }
                                 }
 
                                 // 2. Update existing or add new items from Cloud
                                 data.forEach(s => {
                                     const local = localMap.get(s.id);
-                                    // Overwrite if local doesn't exist OR if local is already "clean" (synced=true)
-                                    // If local is not synced, we keep local changes (safety first)
-                                    if (!local || local.synced) {
+                                    if (!local || local.synced || silent) {
                                         localMap.set(s.id, { ...s, synced: true });
                                     }
                                 });
 
-                                const merged = Array.from(localMap.values());
-                                localStorage.setItem(key, JSON.stringify(merged));
-                                success++;
+                                localStorage.setItem(key, JSON.stringify(Array.from(localMap.values())));
+                                successCount++;
                             }
                         }
                     } catch (e) { console.error(`Download error ${route}`, e); }
                 }
-                if (!silent) alert(`Downloaded ${success} collections from Server.`);
+                if (!silent) alert(`Downloaded ${successCount} collections from Server.`);
                 if (statusBtn && !silent) statusBtn.innerText = "Synced";
                 window.dispatchEvent(new Event('cloud-sync-complete'));
+                return successCount > 0;
             },
 
             getSSC: () => JSON.parse(localStorage.getItem(DB_KEYS.SSC) || '[]'),
@@ -1350,7 +1349,7 @@
                             </div>
                             <div className="text-center text-xs text-gray-400 mt-4 space-y-1">
                                 <p>Demo: admin/admin</p>
-                                <p className="text-gray-400 text-[10px] mt-2">v19.0.6 (Stable)</p>
+                                <p className="text-gray-400 text-[10px] mt-2">v19.0.7 (Stable)</p>
                             </div>
                         </form>
                     </div>
@@ -7700,23 +7699,31 @@
             }, [examMode, timeLeft, isSubmitting]);
 
             const startExam = async (mode) => {
-                let batch = window.Utils.getBatches().find(b => String(b.id) === String(user.batchId));
-
                 // AUTO-HEAL: If batch not found locally, try one-time sync before erroring
                 if (!batch && user.batchId) {
                     console.log(`[Auto-Heal] Batch ${user.batchId} missing locally. Syncing...`);
-                    const btn = document.getElementById('sync-status-text');
-                    if (btn) btn.innerText = "Finding Batch...";
+                    const statusText = document.getElementById('sync-status-text');
+                    if (statusText) statusText.innerText = "Checking Cloud for Batch...";
+
                     try {
-                        await window.Utils.downloadFromCloud(true);
+                        // Force a non-destructive download
+                        const ok = await window.Utils.downloadFromCloud(true);
                         batch = window.Utils.getBatches().find(b => String(b.id) === String(user.batchId));
+                        if (statusText) statusText.innerText = batch ? "Batch Found!" : "Sync Complete";
                     } catch (e) {
                         console.error("Auto-heal batch sync failed", e);
                     }
                 }
 
                 if (!batch) {
-                    alert(`Exam Error: Your assigned Batch (ID: ${user.batchId || 'NONE'}) was not found locally.\n\nPlease check your internet and try again, or contact Admin.`);
+                    const errorMsg = `Exam Error: Your assigned Batch (ID: ${user.batchId || 'NONE'}) was not found locally even after sync.\n\n` +
+                        `1. Ensure you have an internet connection.\n` +
+                        `2. Ask Admin to ensure the Batch is "Synced" to Cloud.\n` +
+                        `3. Click OK to try Syncing one more time.`;
+
+                    if (confirm(errorMsg)) {
+                        await window.Utils.downloadFromCloud(false); // Manual sync if they confirm
+                    }
                     return;
                 }
 
