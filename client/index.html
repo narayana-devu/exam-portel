@@ -343,8 +343,11 @@
                     let skipped = 0;
                     let failCount = 0;
 
+                    let failCount = 0;
+
                     if (!navigator.onLine) {
                         if (!silent) alert("No Internet Connection. Sync skipped.");
+                        window.Utils._syncLock = false; // RELEASE LOCK
                         return;
                     }
 
@@ -363,7 +366,7 @@
                                     if (forceAll) return true;
                                     if (!i.synced) return true;
                                     if (route === 'responses' && i.evidence) {
-                                        return i.evidence.some(ev => (ev.storage === 'indexeddb' || ev.type === 'VIDEO_INDEXED_DB') && !ev.url);
+                                        return i.evidence.some(ev => (ev.storage === 'indexeddb' || ev.type === 'VIDEO_INDEXED_DB') && !ev.url && !ev._fileMissing);
                                     }
                                     return false;
                                 });
@@ -484,7 +487,7 @@
                                     // ULTRA-SAFE: Only mark as synced if ALL media within this batch was uploaded
                                     items.forEach(i => {
                                         if (route === 'responses' && i.evidence) {
-                                            const hasUnuploadedMedia = i.evidence.some(ev => (ev.storage === 'indexeddb' || ev.type === 'VIDEO_INDEXED_DB') && !ev.url);
+                                            const hasUnuploadedMedia = i.evidence.some(ev => (ev.storage === 'indexeddb' || ev.type === 'VIDEO_INDEXED_DB') && !ev.url && !ev._fileMissing);
                                             if (hasUnuploadedMedia) {
                                                 i.synced = false;
                                                 return;
