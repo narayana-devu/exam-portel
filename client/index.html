@@ -899,6 +899,18 @@
                 localStorage.setItem(DB_KEYS.STUDENTS, JSON.stringify(list));
                 window.Utils.uploadToCloud(true, 'students');
             },
+            saveStudentsBulk: (students) => {
+                const list = window.Utils.getStudents();
+                students.forEach(s => {
+                    if (!s.id) s.id = Date.now().toString(36) + Math.random().toString(36).substr(2);
+                    s.synced = false;
+                    const existingIndex = list.findIndex(ex => ex.id === s.id);
+                    if (existingIndex >= 0) list[existingIndex] = s;
+                    else list.push(s);
+                });
+                localStorage.setItem(DB_KEYS.STUDENTS, JSON.stringify(list));
+                window.Utils.uploadToCloud(true, 'students');
+            },
             deleteStudent: (id) => {
                 window.Utils.deleteFromCloud('students', id);
                 let list = window.Utils.getStudents().filter(s => s.id !== id);
@@ -4181,6 +4193,7 @@
 
                         // Pre-fetch student counts for involved batches to maintain sequence
                         const batchCounts = {};
+                        const newStudentsToSave = [];
 
                         rows.forEach((row, index) => {
                             // FLEXIBLE HEADER MATCHING (Case-insensitive, trim)
@@ -4242,8 +4255,11 @@
                                 finalName = `U${batchCounts[targetBatch.id] + 1}`;
                             }
 
+                            // Generate ID with slight entry variance to avoid collision in fast loops
+                            const uniqueId = window.Utils.generateId() + '_' + index;
+
                             const student = {
-                                id: window.Utils.generateId(),
+                                id: uniqueId,
                                 name: finalName,
                                 username: sequence.toString(), // Sequential username: 100, 101...
                                 enrollmentNo: enrollmentNo ? String(enrollmentNo) : '',
@@ -4252,11 +4268,16 @@
                                 role: 'student',
                                 gender: gender || ''
                             };
-                            window.Utils.saveStudent(student);
+                            newStudentsToSave.push(student);
 
                             batchCounts[targetBatch.id]++; // Increment local count
                             addedCount++;
                         });
+
+                        // SAVE IN BULK (Fixes Race Condition)
+                        if (newStudentsToSave.length > 0) {
+                            window.Utils.saveStudentsBulk(newStudentsToSave);
+                        }
 
                         // SUMMARY REPORT
                         let msg = `Processing Complete.\n\nTotal Rows Found: ${rows.length}\nSuccessfully Imported: ${addedCount}\nSkipped/Failed: ${skippedCount}`;
