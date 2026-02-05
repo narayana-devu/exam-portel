@@ -1339,7 +1339,7 @@
                                     <div className={`w-2 h-2 rounded-full ${navigator.onLine ? 'bg-green-500' : 'bg-red-500'}`}></div>
                                     {navigator.onLine ? "Cloud Connected" : "Offline Mode"}
                                 </span>
-                                <span>v19.0.1 (Stable)</span>
+                                <span>v19.0.10 (Stable)</span>
                             </div>
                             {error && <p className="text-red-500 text-sm text-center bg-red-50 p-2 rounded">{error}</p>}
                             <div className="flex gap-2">
@@ -1362,7 +1362,7 @@
                             </div>
                             <div className="text-center text-xs text-gray-400 mt-4 space-y-1">
                                 <p>Demo: admin/admin</p>
-                                <p className="text-gray-400 text-[10px] mt-2">v19.0.9 (Stable)</p>
+                                <p className="text-gray-400 text-[10px] mt-2">v19.0.10 (Stable)</p>
                             </div>
                         </form>
                     </div>
@@ -1385,7 +1385,7 @@
                 <div className="w-64 bg-slate-800 text-white min-h-screen flex flex-col">
                     <div className="p-6 border-b border-slate-700">
                         <h1 className="text-xl font-bold">NSXpertise</h1>
-                        <p className="text-xs text-slate-400 mt-1">v19.0.1</p>
+                        <p className="text-xs text-slate-400 mt-1">v19.0.10</p>
                     </div>
                     <nav className="flex-1 p-4 space-y-1">
                         {menuItems.map(item => (
@@ -7712,7 +7712,7 @@
             }, [examMode, timeLeft, isSubmitting]);
 
             const startExam = async (mode) => {
-                let batch = window.Utils.getBatches().find(b => String(b.id) === String(user.batchId));
+                let batch = window.Utils.getBatches().find(b => String(b.id || '').trim() === String(user.batchId || '').trim());
 
                 // AUTO-HEAL: If batch not found locally, try one-time sync before erroring
                 if (!batch && user.batchId) {
@@ -7723,16 +7723,17 @@
                     try {
                         // Force a non-destructive download
                         const ok = await window.Utils.downloadFromCloud(true);
-                        batch = window.Utils.getBatches().find(b => String(b.id) === String(user.batchId));
+                        batch = window.Utils.getBatches().find(b => String(b.id || '').trim() === String(user.batchId || '').trim());
                         if (statusText) statusText.innerText = batch ? "Batch Found!" : "Sync Complete";
                     } catch (e) {
                         console.error("Auto-heal batch sync failed", e);
                     }
                 }
 
-                // v19.0.9: Diagnostic Logger for support
+                // v19.0.10: Enhanced Diagnostic Logger
                 console.log("[Diagnostic] Current Batch Lookup:", {
                     assignedId: user.batchId,
+                    assignedIdTrimmed: String(user.batchId || '').trim(),
                     foundLocally: !!batch,
                     localBatchCount: window.Utils.getBatches().length,
                     localIds: window.Utils.getBatches().map(b => b.id)
@@ -8201,7 +8202,33 @@
 
             return (
                 <div className="p-8">
-                    <h2 className="text-2xl font-bold mb-6">Student Portal</h2>
+                    <div className="flex justify-between items-center mb-6">
+                        <h2 className="text-2xl font-bold">Student Portal</h2>
+                        <button onClick={async () => {
+                            const batches = window.Utils.getBatches();
+                            const diag = {
+                                "My User ID": user.id,
+                                "My Assigned Batch ID": user.batchId,
+                                "My Assigned Batch ID (Trimmed)": String(user.batchId || '').trim(),
+                                "Local Batches Found": batches.length,
+                                "Local Batch IDs": batches.map(b => b.id),
+                                "Browser Online": navigator.onLine,
+                                "Last App Version": "v19.0.10"
+                            };
+                            console.table(diag);
+                            const msg = "--- STUDENT DIAGNOSTICS ---\n\n" +
+                                Object.entries(diag).map(([k, v]) => `${k}: ${JSON.stringify(v)}`).join("\n") +
+                                "\n\nActions:\n1. Click OK to FORCE SYNC Everything.\n2. Take a screenshot of this and send to Admin.";
+                            if (confirm(msg)) {
+                                const statusText = document.getElementById('sync-status-text');
+                                if (statusText) statusText.innerText = "Force Syncing...";
+                                await window.Utils.downloadFromCloud(false);
+                                location.reload();
+                            }
+                        }} className="bg-gray-200 hover:bg-gray-300 text-gray-700 px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2">
+                            <Icons.TriangleAlert className="w-4 h-4 text-orange-500" /> Troubleshoot
+                        </button>
+                    </div>
                     <div className="grid gap-6 md:grid-cols-2">
                         <div onClick={() => startExam('Theory')} className="bg-white p-8 rounded shadow cursor-pointer hover:shadow-lg border-l-4 border-indigo-600">
                             <h3 className="text-xl font-bold text-indigo-900">Theory Exam</h3>

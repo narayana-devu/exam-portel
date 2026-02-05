@@ -262,7 +262,7 @@ dbAdapter.init();
 // Let's protect it with the same auth to avoid leaking bucket name to public.
 app.get('/api/diagnostics', authMiddleware, (req, res) => {
     res.json({
-        version: 'v19.0.9',
+        version: 'v19.0.10',
         storage_type: dbAdapter.type,
         s3_enabled: !!s3,
         bucket_name: process.env.BUCKET_NAME || 'Not Set',
@@ -322,7 +322,7 @@ function createCRUDEndpoints(tableName, routeName) {
         };
 
         // SMART MERGE FOR RESPONSES (Prevent URL Data Loss from Stale Admins)
-        if (tableName === 'se_responses') {
+        if (tableName === 'responses') {
             dbAdapter.getAll(tableName, (err, rows) => {
                 if (!err && rows) {
                     const existingMap = new Map();
