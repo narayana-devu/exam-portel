@@ -262,7 +262,7 @@ dbAdapter.init();
 // Let's protect it with the same auth to avoid leaking bucket name to public.
 app.get('/api/diagnostics', authMiddleware, (req, res) => {
     res.json({
-        version: 'v19.0.4',
+        version: 'v19.0.5',
         storage_type: dbAdapter.type,
         s3_enabled: !!s3,
         bucket_name: process.env.BUCKET_NAME || 'Not Set',

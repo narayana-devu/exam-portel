@@ -1339,7 +1339,7 @@
                             </div>
                             <div className="text-center text-xs text-gray-400 mt-4 space-y-1">
                                 <p>Demo: admin/admin</p>
-                                <p className="text-gray-400 text-[10px] mt-2">v19.0.4 (Stable)</p>
+                                <p className="text-gray-400 text-[10px] mt-2">v19.0.5 (Stable)</p>
                             </div>
                         </form>
                     </div>
@@ -4479,8 +4479,14 @@
                                                     <td className="p-3 border-r text-center">
                                                         {window.Utils.getStudentsByBatch(batch.id).length}
                                                     </td>
-                                                    <td className="p-3 border-r text-xs text-gray-600">{batch.startDate ? new Date(batch.startDate).toLocaleString() : '-'}</td>
-                                                    <td className="p-3 border-r text-xs text-gray-600">{batch.endDate ? new Date(batch.endDate).toLocaleDateString() : '-'}</td>
+                                                    <td className="p-3 border-r text-xs text-gray-600">
+                                                        {batch.startDate ? batch.startDate : '-'}
+                                                        {batch.startTime && <div className="text-[10px] font-bold text-indigo-600">{batch.startTime}</div>}
+                                                    </td>
+                                                    <td className="p-3 border-r text-xs text-gray-600">
+                                                        {batch.endDate ? batch.endDate : '-'}
+                                                        {batch.endTime && <div className="text-[10px] font-bold text-red-600">{batch.endTime}</div>}
+                                                    </td>
                                                     <td className="p-3 border-r text-gray-600">{batch.state || '-'}</td>
                                                     <td className="p-3 border-r text-gray-600">{batch.district || '-'}</td>
                                                     <td className="p-3 border-r text-center">
@@ -4890,27 +4896,19 @@
 
                                             <div className="grid grid-cols-3 items-center">
                                                 <label className="text-xs font-bold text-gray-700">Start Time:</label>
-                                                <div className="col-span-2 flex gap-2">
-                                                    <input type="time" className="flex-1 p-2 border border-gray-300 rounded text-sm text-gray-500"
+                                                <div className="col-span-2">
+                                                    <input type="time" className="w-full p-2 border border-gray-300 rounded text-sm text-gray-700"
                                                         value={newBatch.startTime} onChange={e => setNewBatch({ ...newBatch, startTime: e.target.value })}
                                                     />
-                                                    <select className="p-2 border border-gray-300 rounded text-sm bg-white">
-                                                        <option>AM</option>
-                                                        <option>PM</option>
-                                                    </select>
                                                 </div>
                                             </div>
 
                                             <div className="grid grid-cols-3 items-center">
                                                 <label className="text-xs font-bold text-gray-700">End Time:</label>
-                                                <div className="col-span-2 flex gap-2">
-                                                    <input type="time" className="flex-1 p-2 border border-gray-300 rounded text-sm text-gray-500"
+                                                <div className="col-span-2">
+                                                    <input type="time" className="w-full p-2 border border-gray-300 rounded text-sm text-gray-700"
                                                         value={newBatch.endTime} onChange={e => setNewBatch({ ...newBatch, endTime: e.target.value })}
                                                     />
-                                                    <select className="p-2 border border-gray-300 rounded text-sm bg-white">
-                                                        <option>PM</option>
-                                                        <option>AM</option>
-                                                    </select>
                                                 </div>
                                             </div>
 
@@ -7692,6 +7690,18 @@
 
             const startExam = async (mode) => {
                 let batch = window.Utils.getBatches().find(b => b.id === user.batchId);
+
+                // AUTO-HEAL: If batch not found locally, try one-time sync before erroring
+                if (!batch) {
+                    const btn = document.getElementById('sync-status-text');
+                    if (btn) btn.innerText = "Finding Batch...";
+                    try {
+                        await window.Utils.downloadFromCloud(true);
+                        batch = window.Utils.getBatches().find(b => b.id === user.batchId);
+                    } catch (e) {
+                        console.error("Auto-heal batch sync failed", e);
+                    }
+                }
 
                 if (!batch) {
                     alert('Exam Error: Your assigned Batch was not found.\nPlease contact Admin to re-assign/update.');
