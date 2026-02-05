@@ -339,6 +339,10 @@
                         'responses': DB_KEYS.RESPONSES,
                         'assessors': 'se_assessors'
                     };
+
+                    // SYNC LOCK SAFETY: Reset lock after 30s if it hangs
+                    setTimeout(() => { if (window.Utils._syncLock) { console.warn("[Sync] Lock timeout - forcing release"); window.Utils._syncLock = false; } }, 30000);
+
                     let success = 0;
                     let skipped = 0;
                     let failCount = 0;
@@ -766,7 +770,7 @@
 
             // ... (Other functions) ...
 
-            saveBatch: async (batch) => {
+            saveBatch: async (batch, silent = false) => {
                 let list = window.Utils.getBatches();
                 if (!batch.id) batch.id = Date.now().toString(36) + Math.random().toString(36).substr(2);
                 batch.synced = false; // Add this
@@ -780,12 +784,21 @@
 
                 localStorage.setItem(DB_KEYS.BATCHES, JSON.stringify(list));
 
-                // Explicit Feedback for Admin
-                const saved = await window.Utils.uploadToCloud(true, 'batches');
-                if (saved) {
-                    // alert("Batch Saved & Synced to Cloud Successfully!");
+                // v19.0.9: PRIORITIZE Direct Save to S3 for instant confirmation
+                const directOk = await window.Utils.saveToCloud('batches', batch);
+                if (directOk) {
+                    batch.synced = true;
+                    // Update list with synced status
+                    const updatedList = window.Utils.getBatches();
+                    const idx = updatedList.findIndex(b => b.id === batch.id);
+                    if (idx >= 0) updatedList[idx].synced = true;
+                    localStorage.setItem(DB_KEYS.BATCHES, JSON.stringify(updatedList));
+
+                    if (!silent) alert("Success: Batch Saved & Synced to Cloud!");
                 } else {
-                    // alert("Batch Saved Locally but Cloud Sync FAILED.\nPlease check connection and try again.");
+                    // Fallback to background sync
+                    await window.Utils.uploadToCloud(true, 'batches');
+                    if (!silent) alert("Batch Saved Locally.\nAuto-syncing to Cloud in background...");
                 }
             },
             updateBatches: (batches) => localStorage.setItem(DB_KEYS.BATCHES, JSON.stringify(batches)),
@@ -1349,7 +1362,7 @@
                             </div>
                             <div className="text-center text-xs text-gray-400 mt-4 space-y-1">
                                 <p>Demo: admin/admin</p>
-                                <p className="text-gray-400 text-[10px] mt-2">v19.0.8 (Stable)</p>
+                                <p className="text-gray-400 text-[10px] mt-2">v19.0.9 (Stable)</p>
                             </div>
                         </form>
                     </div>
@@ -7716,6 +7729,14 @@
                         console.error("Auto-heal batch sync failed", e);
                     }
                 }
+
+                // v19.0.9: Diagnostic Logger for support
+                console.log("[Diagnostic] Current Batch Lookup:", {
+                    assignedId: user.batchId,
+                    foundLocally: !!batch,
+                    localBatchCount: window.Utils.getBatches().length,
+                    localIds: window.Utils.getBatches().map(b => b.id)
+                });
 
                 if (!batch) {
                     const errorMsg = `Exam Error: Your assigned Batch (ID: ${user.batchId || 'NONE'}) was not found locally even after sync.\n\n` +
