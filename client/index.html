@@ -541,10 +541,22 @@
                                 const localMap = new Map();
                                 localItems.forEach(i => localMap.set(i.id, i));
 
-                                // ULTRA-SAFE MERGE: Never delete local items
-                                // Server state only updates local items that are marked as synced
+                                // SYNC: Add/Update items from Cloud AND Remove items deleted in Cloud
+                                const serverIds = new Set(data.map(s => s.id));
+
+                                // 1. Identify and remove local items that were previously synced but are now missing in Cloud
+                                for (const [id, item] of localMap.entries()) {
+                                    if (item.synced && !serverIds.has(id)) {
+                                        console.log(`[Sync] Removing locally deleted item: ${id} from ${route}`);
+                                        localMap.delete(id);
+                                    }
+                                }
+
+                                // 2. Update existing or add new items from Cloud
                                 data.forEach(s => {
                                     const local = localMap.get(s.id);
+                                    // Overwrite if local doesn't exist OR if local is already "clean" (synced=true)
+                                    // If local is not synced, we keep local changes (safety first)
                                     if (!local || local.synced) {
                                         localMap.set(s.id, { ...s, synced: true });
                                     }
@@ -801,12 +813,15 @@
                 // 4. Delete Related Responses (Cleanup)
                 let allResponses = window.Utils.getResponses();
                 // Filter out responses belonging to deleted students OR the batch itself
+                let responsesToDelete = allResponses.filter(r => r.batchId === id || studentsToDelete.find(s => s.id === r.studentId));
+
+                // CRITICAL: Actually delete from Cloud too
+                if (responsesToDelete.length > 0) {
+                    console.log(`[Sync] Deleting ${responsesToDelete.length} responses from Cloud for batch ${id}`);
+                    responsesToDelete.forEach(r => window.Utils.deleteFromCloud('responses', r.id));
+                }
+
                 let remainingResponses = allResponses.filter(r => r.batchId !== id && !studentsToDelete.find(s => s.id === r.studentId));
-                // Note: We don't individually delete responses from cloud to save API calls, 
-                // but we should ideally. For now, rely on bulk overwrite logic or garbage collection.
-                // Or better:
-                // let responsesToDelete = allResponses.filter(r => r.batchId === id);
-                // responsesToDelete.forEach(r => window.Utils.deleteFromCloud('responses', r.id));
                 localStorage.setItem(DB_KEYS.RESPONSES, JSON.stringify(remainingResponses));
             },
             deleteAllBatches: () => {
@@ -1284,7 +1299,7 @@
                             </div>
                             <div className="text-center text-xs text-gray-400 mt-4 space-y-1">
                                 <p>Demo: admin/admin</p>
-                                <p className="text-gray-400 text-[10px] mt-2">v19.0.2 (Stable)</p>
+                                <p className="text-gray-400 text-[10px] mt-2">v19.0.3 (Stable)</p>
                             </div>
                         </form>
                     </div>
