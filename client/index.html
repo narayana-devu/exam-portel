@@ -1368,7 +1368,7 @@
                                     <div className={`w-2 h-2 rounded-full ${navigator.onLine ? 'bg-green-500' : 'bg-red-500'}`}></div>
                                     {navigator.onLine ? "Cloud Connected" : "Offline Mode"}
                                 </span>
-                                <span>v27 (Stable)</span>
+                                <span>v28 (Stable)</span>
                             </div>
                             {error && <p className="text-red-500 text-sm text-center bg-red-50 p-2 rounded">{error}</p>}
                             <div className="flex gap-2">
@@ -1392,7 +1392,7 @@
                             </div>
                             <div className="text-center text-xs text-gray-400 mt-4 space-y-1">
                                 <p>Demo: admin/admin</p>
-                                <p className="text-gray-400 text-[10px] mt-2">v27 (Stable)</p>
+                                <p className="text-gray-400 text-[10px] mt-2">v28 (Stable)</p>
                             </div>
                         </form>
                     </div>
@@ -7521,7 +7521,7 @@
 
             // SEGMENTED RECORDING LOGIC (StudentPortal)
             useEffect(() => {
-                const shouldRecord = examMode && !isLocked && (webcamActive || examMode === 'VivaLive' || examMode === 'VivaWait');
+                const shouldRecord = examMode && !isLocked && !isSubmitting && (webcamActive || examMode === 'VivaLive' || examMode === 'VivaWait');
 
                 if (!shouldRecord) {
                     if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
@@ -7563,7 +7563,7 @@
                         const fullBlob = new Blob(videoChunksRef.current, { type: options.mimeType || 'video/webm' });
                         const fullKey = `vid_full_${user.id}_${Date.now()}`;
 
-                        if (fullBlob.size < 10000) { // < 10KB is likely a junk/cleanup fragment
+                        if (fullBlob.size < 100000) { // < 100KB is likely a junk/cleanup fragment
                             console.log("Video too small (" + fullBlob.size + " bytes). Discarding.");
                             videoChunksRef.current = [];
                             return;
@@ -7641,7 +7641,6 @@
                         const srcVid = document.createElement('video');
                         srcVid.srcObject = rawStream;
                         srcVid.muted = true;
-                        srcVid.play();
 
                         const draw = () => {
                             if (srcVid.readyState === 4) {
@@ -7663,16 +7662,22 @@
                             }
                             compositeReqRef.current = requestAnimationFrame(draw);
                         };
-                        draw();
 
-                        // Create Canvas Stream
-                        const finalStream = canvas.captureStream(30);
-                        // Add Audio Tracks from Mic
-                        rawStream.getAudioTracks().forEach(t => finalStream.addTrack(t));
+                        srcVid.oncanplay = () => {
+                            console.log("Theory Cam Ready. Starting Canvas Stream.");
+                            srcVid.play();
+                            draw();
 
-                        const video = videoRef.current;
-                        if (video) video.srcObject = finalStream;
-                        setMediaStream(finalStream); // Set processed stream
+                            // Create Canvas Stream
+                            const finalStream = canvas.captureStream(30);
+                            // Add Audio Tracks from Mic
+                            rawStream.getAudioTracks().forEach(t => finalStream.addTrack(t));
+
+                            const video = videoRef.current;
+                            if (video) video.srcObject = finalStream;
+                            setMediaStream(finalStream); // Trigger recorder only when data is flowing
+                            setStreamActive(true); // AUTO-START UI: Hide 'Start Camera' button
+                        };
                     }).catch(e => {
                         console.error("Camera Error", e);
                         alert("Camera/Audio Access Denied! Please allow access to proceed.");
@@ -8457,7 +8462,7 @@
                                 "Cloud Batch IDs": cloudBatches.map(b => b.id).join(", "),
                                 "Cloud Student's BatchID": cloudStudent ? cloudStudent.batchId : "N/A",
                                 "Browser Online": navigator.onLine,
-                                "App Version": "v27.0.0"
+                                "App Version": "v28.0.0"
                             };
                             console.table(diag);
                             const msg = "--- STUDENT DIAGNOSTICS (v19.0.13) ---\n\n" +
