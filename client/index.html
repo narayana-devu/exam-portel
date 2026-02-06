@@ -1367,7 +1367,7 @@
                                     <div className={`w-2 h-2 rounded-full ${navigator.onLine ? 'bg-green-500' : 'bg-red-500'}`}></div>
                                     {navigator.onLine ? "Cloud Connected" : "Offline Mode"}
                                 </span>
-                                <span>v19.0.25 (Stable)</span>
+                                <span>v19.0.26 (Stable)</span>
                             </div>
                             {error && <p className="text-red-500 text-sm text-center bg-red-50 p-2 rounded">{error}</p>}
                             <div className="flex gap-2">
@@ -1391,7 +1391,7 @@
                             </div>
                             <div className="text-center text-xs text-gray-400 mt-4 space-y-1">
                                 <p>Demo: admin/admin</p>
-                                <p className="text-gray-400 text-[10px] mt-2">v19.0.25 (Stable)</p>
+                                <p className="text-gray-400 text-[10px] mt-2">v19.0.26 (Stable)</p>
                             </div>
                         </form>
                     </div>
@@ -8038,24 +8038,29 @@
 
                                 // Add Full Video to Evidence
                                 const fullEvidence = {
-                                    img: null, key: fullKey, time: new Date().toISOString(),
+                                    img: fullKey, key: fullKey, time: new Date().toISOString(),
                                     type: 'VIDEO_FULL_MERGED', storage: 'indexeddb',
                                     isFullVideo: true
                                 };
                                 currentResp.evidence.push(fullEvidence);
                                 await window.Utils.saveResponse(currentResp);
-                                console.log(`Full Video Generated: ${fullKey} (${(fullBlob.size / 1024 / 1024).toFixed(2)} MB)`);
+
+                                // DEBUG ALERTS (v19.0.26)
+                                console.log(`Full Video Generated: ${fullKey}`);
+                                // alert(`DEBUG: Merged ${validBlobs.length} segments.\nFull Video Size: ${(fullBlob.size/1024/1024).toFixed(2)} MB\nQueueing Upload...`);
                             }
                         }
                     }
                 } catch (mergeErr) {
                     console.error("Full Video Merge Failed", mergeErr);
+                    // alert("DEBUG: Merge Failed! Check Console.");
                 }
                 if (window.studentRecordingInterval) clearInterval(window.studentRecordingInterval);
 
                 // RE-FETCH EVIDENCE (Includes the just-saved video)
-                const currentResp = window.Utils.getResponses().find(r => r.studentId === user.id && r.examType === examMode);
-                let finalEvidence = currentResp?.evidence || [];
+                // We need to re-fetch because saveResponse updates LocalStorage
+                const updatedRespForUpload = window.Utils.getResponses().find(r => r.studentId === user.id && r.examType === examMode);
+                const finalEvidence = updatedRespForUpload?.evidence || []; // Use updated evidence list
 
                 // Add Final Photo
                 if (finalPhoto) finalEvidence.push(finalPhoto);
