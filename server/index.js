@@ -408,6 +408,27 @@ const upload = multer({
     limits: { fileSize: 500 * 1024 * 1024 } // 500MB limit for continuous videos (v19.0.17)
 });
 
+// --- S3 PRESIGNED URL (For Large Videos v19.0.18) ---
+app.get('/api/presigned-url', authMiddleware, async (req, res) => {
+    if (!s3) return res.status(503).json({ error: 'S3 not configured' });
+    const { fileName, contentType } = req.query;
+    if (!fileName) return res.status(400).json({ error: 'fileName is required' });
+
+    const params = {
+        Bucket: process.env.BUCKET_NAME,
+        Key: fileName,
+        Expires: 3600, // 1 hour
+        ContentType: contentType || 'application/octet-stream'
+    };
+
+    try {
+        const url = await s3.getSignedUrlPromise('putObject', params);
+        res.json({ uploadUrl: url, fileKey: fileName });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
 app.post('/api/upload-media', authMiddleware, upload.single('file'), async (req, res) => {
     // ... (existing code remains SAME)
     if (!req.file) return res.status(400).json({ error: 'No file provided' });

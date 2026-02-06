@@ -412,30 +412,60 @@
                                                 try {
                                                     const blob = await window.VideoDB.getVideo(localKey);
                                                     if (blob) {
-                                                        const extension = blob.type.includes('video') ? 'webm' : 'jpg';
-                                                        const formData = new FormData();
-                                                        formData.append('file', blob, `${item.studentId}_${localKey}.${extension}`);
+                                                        const isVideo = blob.type.includes('video');
+                                                        const extension = isVideo ? 'webm' : 'jpg';
+                                                        const fileName = `media/${isVideo ? 'videos' : 'photos'}/${Date.now()}_${item.studentId}_${localKey}.${extension}`;
 
-                                                        const uploadRes = await fetch(`${API_BASE}/upload-media`, {
-                                                            method: 'POST',
-                                                            headers: { 'x-api-key': 'portel_secure_key_2025' },
-                                                            body: formData
-                                                        });
+                                                        if (isVideo && blob.size > 1024 * 1024) { // > 1MB use direct S3
+                                                            console.log(`[Sync] Requesting Presigned URL for ${fileName} (${(blob.size / 1024 / 1024).toFixed(2)} MB)`);
+                                                            const preRes = await fetch(`${API_BASE}/presigned-url?fileName=${encodeURIComponent(fileName)}&contentType=${encodeURIComponent(blob.type)}`, {
+                                                                headers: { 'x-api-key': 'portel_secure_key_2025' }
+                                                            });
 
-                                                        if (uploadRes.ok) {
-                                                            const json = await uploadRes.json();
-                                                            ev.url = json.url;
-                                                            ev.img = json.url;
-                                                            if (ev.type === 'VIDEO_INDEXED_DB') ev.type = 'VIDEO_S3';
-                                                            ev.uploaded = true;
-                                                            ev.storage = 's3';
-                                                            console.log(`[Sync] Media Uploaded: ${json.url}`);
+                                                            if (preRes.ok) {
+                                                                const { uploadUrl } = await preRes.json();
+                                                                const s3Res = await fetch(uploadUrl, {
+                                                                    method: 'PUT',
+                                                                    body: blob,
+                                                                    headers: { 'Content-Type': blob.type }
+                                                                });
 
-                                                            // Trigger save for this specific item's batch immediately? 
-                                                            // Or wait? Better to wait for bulk save, but flag it here.
-                                                            // We'll save all at end of batch or end of all.
+                                                                if (s3Res.ok) {
+                                                                    const finalUrl = uploadUrl.split('?')[0];
+                                                                    ev.url = finalUrl;
+                                                                    ev.img = finalUrl;
+                                                                    if (ev.type === 'VIDEO_INDEXED_DB') ev.type = 'VIDEO_S3';
+                                                                    ev.uploaded = true;
+                                                                    ev.storage = 's3';
+                                                                    console.log(`[Sync] Direct S3 Upload Success: ${finalUrl}`);
+                                                                } else {
+                                                                    console.error("Direct S3 PUT Failed");
+                                                                }
+                                                            } else {
+                                                                console.error("Presigned URL Request Failed");
+                                                            }
                                                         } else {
-                                                            console.error("Media Upload Failed", uploadRes.statusText);
+                                                            // Standard Upload for small files
+                                                            const formData = new FormData();
+                                                            formData.append('file', blob, `${item.studentId}_${localKey}.${extension}`);
+
+                                                            const uploadRes = await fetch(`${API_BASE}/upload-media`, {
+                                                                method: 'POST',
+                                                                headers: { 'x-api-key': 'portel_secure_key_2025' },
+                                                                body: formData
+                                                            });
+
+                                                            if (uploadRes.ok) {
+                                                                const json = await uploadRes.json();
+                                                                ev.url = json.url;
+                                                                ev.img = json.url;
+                                                                if (ev.type === 'VIDEO_INDEXED_DB') ev.type = 'VIDEO_S3';
+                                                                ev.uploaded = true;
+                                                                ev.storage = 's3';
+                                                                console.log(`[Sync] Media Uploaded: ${json.url}`);
+                                                            } else {
+                                                                console.error("Media Upload Failed", uploadRes.statusText);
+                                                            }
                                                         }
                                                     } else {
                                                         console.warn(`[Sync] File Missing: ${localKey}`);
@@ -1356,7 +1386,7 @@
                             </div>
                             <div className="text-center text-xs text-gray-400 mt-4 space-y-1">
                                 <p>Demo: admin/admin</p>
-                                <p className="text-gray-400 text-[10px] mt-2">v19.0.17 (Stable)</p>
+                                <p className="text-gray-400 text-[10px] mt-2">v19.0.18 (Stable)</p>
                             </div>
                         </form>
                     </div>
@@ -1379,7 +1409,7 @@
                 <div className="w-64 bg-slate-800 text-white min-h-screen flex flex-col">
                     <div className="p-6 border-b border-slate-700">
                         <h1 className="text-xl font-bold">NSXpertise</h1>
-                        <p className="text-xs text-slate-400 mt-1">v19.0.17</p>
+                        <p className="text-xs text-slate-400 mt-1">v19.0.18</p>
                     </div>
                     <nav className="flex-1 p-4 space-y-1">
                         {menuItems.map(item => (
@@ -7475,7 +7505,11 @@
                     if (!stream) return;
 
                     let localChunks = [];
-                    let options = { mimeType: 'video/webm' };
+                    // v19.0.18: Optimized Settings for 5-Hour Exams (480p, 300kbps)
+                    let options = {
+                        mimeType: 'video/webm;codecs=vp8',
+                        videoBitsPerSecond: 300000 // 300kbps (Low but clear enough for proctoring)
+                    };
                     if (!MediaRecorder.isTypeSupported(options.mimeType)) options = { mimeType: 'video/mp4' };
                     if (!MediaRecorder.isTypeSupported(options.mimeType)) options = {}; // Fallback to default
 
@@ -8223,7 +8257,7 @@
                                 "Cloud Batch IDs": cloudBatches.map(b => b.id).join(", "),
                                 "Cloud Student's BatchID": cloudStudent ? cloudStudent.batchId : "N/A",
                                 "Browser Online": navigator.onLine,
-                                "App Version": "v19.0.17"
+                                "App Version": "v19.0.18"
                             };
                             console.table(diag);
                             const msg = "--- STUDENT DIAGNOSTICS (v19.0.13) ---\n\n" +
