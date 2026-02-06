@@ -1368,7 +1368,7 @@
                                     <div className={`w-2 h-2 rounded-full ${navigator.onLine ? 'bg-green-500' : 'bg-red-500'}`}></div>
                                     {navigator.onLine ? "Cloud Connected" : "Offline Mode"}
                                 </span>
-                                <span>v26 (Stable)</span>
+                                <span>v27 (Stable)</span>
                             </div>
                             {error && <p className="text-red-500 text-sm text-center bg-red-50 p-2 rounded">{error}</p>}
                             <div className="flex gap-2">
@@ -1392,7 +1392,7 @@
                             </div>
                             <div className="text-center text-xs text-gray-400 mt-4 space-y-1">
                                 <p>Demo: admin/admin</p>
-                                <p className="text-gray-400 text-[10px] mt-2">v26 (Stable)</p>
+                                <p className="text-gray-400 text-[10px] mt-2">v27 (Stable)</p>
                             </div>
                         </form>
                     </div>
@@ -7630,10 +7630,49 @@
                         return;
                     }
 
-                    navigator.mediaDevices.getUserMedia({ video: true, audio: true }).then(stream => {
+                    navigator.mediaDevices.getUserMedia({ video: true, audio: true }).then(rawStream => {
+                        // v26: Add Timestamp Overlay for Theory Mode
+                        const canvas = document.createElement('canvas');
+                        canvas.width = 1280;
+                        canvas.height = 720;
+                        const ctx = canvas.getContext('2d');
+
+                        // Hidden Source Video
+                        const srcVid = document.createElement('video');
+                        srcVid.srcObject = rawStream;
+                        srcVid.muted = true;
+                        srcVid.play();
+
+                        const draw = () => {
+                            if (srcVid.readyState === 4) {
+                                ctx.drawImage(srcVid, 0, 0, canvas.width, canvas.height);
+
+                                // Draw Timestamp
+                                const now = new Date();
+                                const timeStr = now.toLocaleString('en-US', {
+                                    weekday: 'short', year: 'numeric', month: 'short', day: 'numeric',
+                                    hour: '2-digit', minute: '2-digit', second: '2-digit'
+                                });
+
+                                ctx.font = "bold 24px monospace";
+                                ctx.fillStyle = "white";
+                                ctx.strokeStyle = "black";
+                                ctx.lineWidth = 3;
+                                ctx.strokeText(timeStr, 20, 40);
+                                ctx.fillText(timeStr, 20, 40);
+                            }
+                            compositeReqRef.current = requestAnimationFrame(draw);
+                        };
+                        draw();
+
+                        // Create Canvas Stream
+                        const finalStream = canvas.captureStream(30);
+                        // Add Audio Tracks from Mic
+                        rawStream.getAudioTracks().forEach(t => finalStream.addTrack(t));
+
                         const video = videoRef.current;
-                        if (video) video.srcObject = stream;
-                        setMediaStream(stream); // Set state
+                        if (video) video.srcObject = finalStream;
+                        setMediaStream(finalStream); // Set processed stream
                     }).catch(e => {
                         console.error("Camera Error", e);
                         alert("Camera/Audio Access Denied! Please allow access to proceed.");
@@ -7942,6 +7981,20 @@
                                         ctx.drawImage(camVid, canvas.width - camW - margin, canvas.height - camH - margin, camW, camH);
                                         ctx.strokeRect(canvas.width - camW - margin, canvas.height - camH - margin, camW, camH);
                                     }
+
+                                    // 3. Draw Date/Time Timestamp
+                                    const now = new Date();
+                                    const timeStr = now.toLocaleString('en-US', {
+                                        weekday: 'short', year: 'numeric', month: 'short', day: 'numeric',
+                                        hour: '2-digit', minute: '2-digit', second: '2-digit'
+                                    });
+
+                                    ctx.font = "bold 24px monospace";
+                                    ctx.fillStyle = "white";
+                                    ctx.strokeStyle = "black";
+                                    ctx.lineWidth = 3;
+                                    ctx.strokeText(timeStr, 20, 40);
+                                    ctx.fillText(timeStr, 20, 40);
                                 }
                                 compositeReqRef.current = requestAnimationFrame(drawComposite);
                             };
@@ -8404,7 +8457,7 @@
                                 "Cloud Batch IDs": cloudBatches.map(b => b.id).join(", "),
                                 "Cloud Student's BatchID": cloudStudent ? cloudStudent.batchId : "N/A",
                                 "Browser Online": navigator.onLine,
-                                "App Version": "v26.0.0"
+                                "App Version": "v27.0.0"
                             };
                             console.table(diag);
                             const msg = "--- STUDENT DIAGNOSTICS (v19.0.13) ---\n\n" +
