@@ -1363,7 +1363,7 @@
                                     <div className={`w-2 h-2 rounded-full ${navigator.onLine ? 'bg-green-500' : 'bg-red-500'}`}></div>
                                     {navigator.onLine ? "Cloud Connected" : "Offline Mode"}
                                 </span>
-                                <span>v19.0.15 (Stable)</span>
+                                <span>v19.0.19 (Stable)</span>
                             </div>
                             {error && <p className="text-red-500 text-sm text-center bg-red-50 p-2 rounded">{error}</p>}
                             <div className="flex gap-2">
@@ -1374,8 +1374,9 @@
                                     if (confirm("Force Upload Local Data to Cloud? (Use this if other devices are missing data)")) {
                                         await window.Utils.uploadToCloud();
                                     }
-                                }} className="px-4 py-3 bg-gray-200 text-gray-700 rounded-xl hover:bg-gray-300 transition-colors" title="Force Upload to Cloud">
-                                    <Icons.Upload className="w-5 h-5" />
+                                    if (confirm('Clear cache for v19.0.19?')) { localStorage.clear(); location.reload(true); }
+                                }} className="px-4 py-3 bg-gray-200 text-gray-700 rounded-xl hover:bg-gray-300 transition-colors" title="Force Sync & Clear Cache">
+                                    <Icons.RefreshCw className="w-5 h-5" />
                                 </button>
                                 <button type="button" onClick={async () => {
                                     await window.Utils.downloadFromCloud();
@@ -1386,7 +1387,7 @@
                             </div>
                             <div className="text-center text-xs text-gray-400 mt-4 space-y-1">
                                 <p>Demo: admin/admin</p>
-                                <p className="text-gray-400 text-[10px] mt-2">v19.0.18 (Stable)</p>
+                                <p className="text-gray-400 text-[10px] mt-2">v19.0.19 (Stable)</p>
                             </div>
                         </form>
                     </div>
@@ -1409,7 +1410,24 @@
                 <div className="w-64 bg-slate-800 text-white min-h-screen flex flex-col">
                     <div className="p-6 border-b border-slate-700">
                         <h1 className="text-xl font-bold">NSXpertise</h1>
-                        <p className="text-xs text-slate-400 mt-1">v19.0.18</p>
+                        <p className="text-xs text-slate-400 mt-1">v19.0.19</p>
+                        <div className="flex flex-col gap-1 mt-3">
+                            <button
+                                onClick={() => { if (confirm('Clear cache for v19.0.19?')) { localStorage.clear(); location.reload(true); } }}
+                                className="text-[9px] bg-slate-700 hover:bg-red-600 px-2 py-1 rounded transition-colors text-slate-300 font-bold"
+                            >
+                                FORCE UPDATE / CLEAR CACHE
+                            </button>
+                            <button
+                                onClick={() => {
+                                    const logs = window.__syncLogs || [];
+                                    alert("--- SYNC LOGS (v19.0.19) ---\n\n" + (logs.length ? logs.join('\n') : "No errors logged."));
+                                }}
+                                className="text-[9px] bg-slate-700 hover:bg-indigo-600 px-2 py-1 rounded transition-colors text-slate-300 font-bold"
+                            >
+                                VIEW SYNC LOGS
+                            </button>
+                        </div>
                     </div>
                     <nav className="flex-1 p-4 space-y-1">
                         {menuItems.map(item => (
@@ -7501,73 +7519,69 @@
                 }
 
                 const startSegment = () => {
-                    const stream = mediaStream; // Use state stream
+                    const stream = mediaStream;
                     if (!stream) return;
 
                     let localChunks = [];
-                    // v19.0.18: Optimized Settings for 5-Hour Exams (480p, 300kbps)
+                    // v19.0.19: High Compatibility & Reliability Profile
                     let options = {
                         mimeType: 'video/webm;codecs=vp8',
-                        videoBitsPerSecond: 300000 // 300kbps (Low but clear enough for proctoring)
+                        videoBitsPerSecond: 300000
                     };
                     if (!MediaRecorder.isTypeSupported(options.mimeType)) options = { mimeType: 'video/mp4' };
-                    if (!MediaRecorder.isTypeSupported(options.mimeType)) options = {}; // Fallback to default
+                    if (!MediaRecorder.isTypeSupported(options.mimeType)) options = {};
 
                     const recorder = new MediaRecorder(stream, options);
                     recorder.ondataavailable = e => { if (e.data.size > 0) localChunks.push(e.data); };
 
                     recorder.onstop = async () => {
-                        if (localChunks.length === 0) return;
-                        const blob = new Blob(localChunks, { type: 'video/webm' });
+                        if (localChunks.length === 0) return console.warn("Empty Recording Segment skipped.");
+                        const blob = new Blob(localChunks, { type: options.mimeType || 'video/webm' });
                         const currentSeq = segmentSequenceRef.current;
+                        const currentSession = recordingSessionRef.current;
                         const videoKey = `vid_${user.id}_${Date.now()}_part${currentSeq}`;
 
-                        console.log(`Segment ${currentSeq} Finalized. Size: ${blob.size}`);
-
-                        // 1. SAVE METADATA FIRST
-                        const evidenceEntry = {
-                            img: null,
-                            time: new Date().toISOString(),
-                            type: 'VIDEO_INDEXED_DB',
-                            key: videoKey,
-                            sessionId: recordingSessionRef.current,
-                            sequence: currentSeq,
-                            isSegment: true,
-                            status: 'pending'
-                        };
-
-                        await window.Utils.saveResponse({
-                            studentId: user.id,
-                            examType: examMode,
-                            evidence: [evidenceEntry]
-                        });
-
-                        // 2. SAVE VIDEO BLOB (Local Only)
-                        VideoDB.saveVideo(videoKey, blob)
-                            .then(() => {
-                                console.log("Video Blob Saved to DB. Triggering Background Sync...");
-                                // 3. FORCE SYNC (Only after Blob is saved)
-                                window.Utils.uploadToCloud(true, 'responses');
-                            })
-                            .catch(err => {
-                                console.error("Save Failed", err);
-                                alert("VIDEO SAVE ERROR: " + err.message);
+                        try {
+                            await window.VideoDB.saveVideo(videoKey, blob);
+                            const newEvidence = {
+                                img: null, key: videoKey, time: new Date().toISOString(),
+                                type: 'VIDEO_INDEXED_DB', storage: 'indexeddb',
+                                sessionId: currentSession, sequence: currentSeq, isSegment: true
+                            };
+                            await window.Utils.saveResponse({
+                                studentId: user.id, examType: examMode, evidence: [newEvidence]
                             });
+                            // Trigger background sync immediately for this segment
+                            window.Utils.uploadToCloud(true, 'responses');
 
-                        // 4. PREPARE NEXT SEGMENT (REMOVED IN v19.0.17 for continuous recording)
-                        // segmentSequenceRef.current++; 
-                        // startSegment();
+                            // AUTO-RESTART for infinite continuous recording
+                            if (examMode && !isLocked && (webcamActive || examMode === 'VivaLive' || examMode === 'VivaWait')) {
+                                segmentSequenceRef.current++;
+                                setTimeout(startSegment, 200);
+                            }
+                        } catch (err) { console.error("Segment Save Error", err); }
                     };
 
-                    recorder.start(1000);
+                    recorder.start(1000); // Pulse data every 1s
                     mediaRecorderRef.current = recorder;
                     setIsRecording(true);
                 };
 
-                // Start Recording
+                // Entry Point for Recording
                 if (!mediaRecorderRef.current || mediaRecorderRef.current.state === 'inactive') {
-                    startSegment();
-                    // AUTO-SPLITTING INTERVAL REMOVED IN v19.0.17
+                    // Check if we have an active stream before starting
+                    if (mediaStream) {
+                        startSegment();
+
+                        // v19.0.19: 60-Second Reliability Splits (Security against data loss)
+                        if (window.studentRecordingInterval) clearInterval(window.studentRecordingInterval);
+                        window.studentRecordingInterval = setInterval(() => {
+                            if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+                                console.log("Cycling video segment for cloud sync (1 min)...");
+                                mediaRecorderRef.current.stop();
+                            }
+                        }, 60000);
+                    }
                 }
 
                 return () => {
@@ -8257,7 +8271,7 @@
                                 "Cloud Batch IDs": cloudBatches.map(b => b.id).join(", "),
                                 "Cloud Student's BatchID": cloudStudent ? cloudStudent.batchId : "N/A",
                                 "Browser Online": navigator.onLine,
-                                "App Version": "v19.0.18"
+                                "App Version": "v19.0.19"
                             };
                             console.table(diag);
                             const msg = "--- STUDENT DIAGNOSTICS (v19.0.13) ---\n\n" +
