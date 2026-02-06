@@ -1368,7 +1368,7 @@
                                     <div className={`w-2 h-2 rounded-full ${navigator.onLine ? 'bg-green-500' : 'bg-red-500'}`}></div>
                                     {navigator.onLine ? "Cloud Connected" : "Offline Mode"}
                                 </span>
-                                <span>v25 (Stable)</span>
+                                <span>v26 (Stable)</span>
                             </div>
                             {error && <p className="text-red-500 text-sm text-center bg-red-50 p-2 rounded">{error}</p>}
                             <div className="flex gap-2">
@@ -1392,7 +1392,7 @@
                             </div>
                             <div className="text-center text-xs text-gray-400 mt-4 space-y-1">
                                 <p>Demo: admin/admin</p>
-                                <p className="text-gray-400 text-[10px] mt-2">v25 (Stable)</p>
+                                <p className="text-gray-400 text-[10px] mt-2">v26 (Stable)</p>
                             </div>
                         </form>
                     </div>
@@ -7563,6 +7563,12 @@
                         const fullBlob = new Blob(videoChunksRef.current, { type: options.mimeType || 'video/webm' });
                         const fullKey = `vid_full_${user.id}_${Date.now()}`;
 
+                        if (fullBlob.size < 10000) { // < 10KB is likely a junk/cleanup fragment
+                            console.log("Video too small (" + fullBlob.size + " bytes). Discarding.");
+                            videoChunksRef.current = [];
+                            return;
+                        }
+
                         try {
                             // Save ONE Single File
                             await window.VideoDB.saveVideo(fullKey, fullBlob);
@@ -7579,11 +7585,13 @@
 
                             // Trigger Upload
                             window.Utils.uploadToCloud(true, 'responses');
-                            alert("Exam Video Saved Successfully!");
+                            // Alert removed here - Success is handled by submitExam
+                            // alert("Exam Video Saved Successfully!");
 
                         } catch (err) {
                             console.error("Final Save Error", err);
-                            alert("Error saving final video: " + err.message);
+                            // Only alert on ACTUAL errors if it was a real video
+                            // alert("Error saving final video: " + err.message);
                         }
 
                         // Clear RAM
@@ -8396,7 +8404,7 @@
                                 "Cloud Batch IDs": cloudBatches.map(b => b.id).join(", "),
                                 "Cloud Student's BatchID": cloudStudent ? cloudStudent.batchId : "N/A",
                                 "Browser Online": navigator.onLine,
-                                "App Version": "v19.0.19"
+                                "App Version": "v26.0.0"
                             };
                             console.table(diag);
                             const msg = "--- STUDENT DIAGNOSTICS (v19.0.13) ---\n\n" +
