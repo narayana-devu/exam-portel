@@ -1363,7 +1363,7 @@
                                     <div className={`w-2 h-2 rounded-full ${navigator.onLine ? 'bg-green-500' : 'bg-red-500'}`}></div>
                                     {navigator.onLine ? "Cloud Connected" : "Offline Mode"}
                                 </span>
-                                <span>v19.0.19 (Stable)</span>
+                                <span>v19.0.21 (Stable)</span>
                             </div>
                             {error && <p className="text-red-500 text-sm text-center bg-red-50 p-2 rounded">{error}</p>}
                             <div className="flex gap-2">
@@ -1374,7 +1374,7 @@
                                     if (confirm("Force Upload Local Data to Cloud? (Use this if other devices are missing data)")) {
                                         await window.Utils.uploadToCloud();
                                     }
-                                    if (confirm('Clear cache for v19.0.19?')) { localStorage.clear(); location.reload(true); }
+                                    if (confirm('Clear cache for v19.0.21?')) { localStorage.clear(); location.reload(true); }
                                 }} className="px-4 py-3 bg-gray-200 text-gray-700 rounded-xl hover:bg-gray-300 transition-colors" title="Force Sync & Clear Cache">
                                     <Icons.RefreshCw className="w-5 h-5" />
                                 </button>
@@ -1387,7 +1387,7 @@
                             </div>
                             <div className="text-center text-xs text-gray-400 mt-4 space-y-1">
                                 <p>Demo: admin/admin</p>
-                                <p className="text-gray-400 text-[10px] mt-2">v19.0.19 (Stable)</p>
+                                <p className="text-gray-400 text-[10px] mt-2">v19.0.21 (Stable)</p>
                             </div>
                         </form>
                     </div>
@@ -7493,7 +7493,7 @@
                             evidence: [{ img, time: new Date().toISOString(), type: 'AUTO_CAPTURE_PHOTO' }]
                         });
                     }
-                }, 300000); // v19.0.17: Every 5 Minutes (Reduced clutter)
+                }, 60000); // v19.0.21: Every 60 Seconds (As requested)
 
                 return () => clearInterval(autoCaptureInterval.current);
             }, [examMode, isLocked, user.id]);
@@ -7573,14 +7573,14 @@
                     if (mediaStream) {
                         startSegment();
 
-                        // v19.0.19: 60-Second Reliability Splits (Security against data loss)
+                        // v19.0.21: 10-Second Micro-Segments (Near-Instant Sync)
                         if (window.studentRecordingInterval) clearInterval(window.studentRecordingInterval);
                         window.studentRecordingInterval = setInterval(() => {
                             if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
-                                console.log("Cycling video segment for cloud sync (1 min)...");
+                                console.log("Cycling video segment for micro-sync (10s)...");
                                 mediaRecorderRef.current.stop();
                             }
-                        }, 60000);
+                        }, 10000);
                     }
                 }
 
@@ -7734,7 +7734,7 @@
                 // Capture immediately on start (optional)
                 // capturePhoto(); 
 
-                const interval = setInterval(capturePhoto, 600000); // v19.0.17: Every 10 Minutes (Independent Proctoring)
+                const interval = setInterval(capturePhoto, 60000); // v19.0.21: Every 60 Seconds
                 return () => clearInterval(interval);
             }, [examMode, webcamActive, isLocked]);
 
