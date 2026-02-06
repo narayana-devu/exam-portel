@@ -1341,7 +1341,7 @@
                                     <div className={`w-2 h-2 rounded-full ${navigator.onLine ? 'bg-green-500' : 'bg-red-500'}`}></div>
                                     {navigator.onLine ? "Cloud Connected" : "Offline Mode"}
                                 </span>
-                                <span>v19.0.11 (Stable)</span>
+                                <span>v19.0.12 (Stable)</span>
                             </div>
                             {error && <p className="text-red-500 text-sm text-center bg-red-50 p-2 rounded">{error}</p>}
                             <div className="flex gap-2">
@@ -1364,7 +1364,7 @@
                             </div>
                             <div className="text-center text-xs text-gray-400 mt-4 space-y-1">
                                 <p>Demo: admin/admin</p>
-                                <p className="text-gray-400 text-[10px] mt-2">v19.0.11 (Stable)</p>
+                                <p className="text-gray-400 text-[10px] mt-2">v19.0.12 (Stable)</p>
                             </div>
                         </form>
                     </div>
@@ -1387,7 +1387,7 @@
                 <div className="w-64 bg-slate-800 text-white min-h-screen flex flex-col">
                     <div className="p-6 border-b border-slate-700">
                         <h1 className="text-xl font-bold">NSXpertise</h1>
-                        <p className="text-xs text-slate-400 mt-1">v19.0.11</p>
+                        <p className="text-xs text-slate-400 mt-1">v19.0.12</p>
                     </div>
                     <nav className="flex-1 p-4 space-y-1">
                         {menuItems.map(item => (
@@ -8208,21 +8208,40 @@
                         <h2 className="text-2xl font-bold">Student Portal</h2>
                         <button onClick={async () => {
                             const batches = window.Utils.getBatches();
+                            const statusText = document.getElementById('sync-status-text');
+                            if (statusText) statusText.innerText = "Running Deep Diag...";
+
+                            let cloudBatches = [];
+                            let apiOk = false;
+                            try {
+                                const res = await fetch(`${API_BASE}/batches`, { headers: { 'x-api-key': 'portel_secure_key_2025' } });
+                                if (res.ok) {
+                                    cloudBatches = await res.json();
+                                    apiOk = true;
+                                }
+                            } catch (e) { console.error("Cloud fetch failed", e); }
+
+                            const targetId = String(user.batchId || '').trim();
+                            const foundInCloud = cloudBatches.some(b => String(b.id || '').trim() === targetId);
+
                             const diag = {
                                 "My User ID": user.id,
                                 "My Assigned Batch ID": user.batchId,
-                                "My Assigned Batch ID (Trimmed)": String(user.batchId || '').trim(),
+                                "My Assigned Batch ID (Trimmed)": targetId,
                                 "Local Batches Found": batches.length,
                                 "Local Batch IDs": batches.map(b => b.id),
+                                "--- CLOUD RESULTS ---": "---",
+                                "API Connectivity": apiOk ? "Connected ✅" : "Failed ❌",
+                                "Cloud Batches Found": cloudBatches.length,
+                                "Target Batch Found in Cloud?": foundInCloud ? "YES ✅" : "NO ❌ (Missing from S3)",
                                 "Browser Online": navigator.onLine,
-                                "Last App Version": "v19.0.11"
+                                "App Version": "v19.0.12"
                             };
                             console.table(diag);
                             const msg = "--- STUDENT DIAGNOSTICS ---\n\n" +
                                 Object.entries(diag).map(([k, v]) => `${k}: ${JSON.stringify(v)}`).join("\n") +
-                                "\n\nActions:\n1. Click OK to FORCE SYNC Everything.\n2. Take a screenshot of this and send to Admin.";
+                                "\n\nActions:\n1. If 'Target Batch Found in Cloud' is NO -> ADMIN must Save it again.\n2. If 'FOUND' is YES but it's not local -> Click OK to FORCE SYNC.";
                             if (confirm(msg)) {
-                                const statusText = document.getElementById('sync-status-text');
                                 if (statusText) statusText.innerText = "Force Syncing...";
                                 await window.Utils.downloadFromCloud(false);
                                 location.reload();
