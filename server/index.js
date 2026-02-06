@@ -252,6 +252,18 @@ class DatabaseAdapter {
             });
         }
     }
+
+    wipe(table, callback) {
+        if (this.type === 's3') {
+            this.s3Write(table, [])
+                .then(() => callback(null))
+                .catch(e => callback(e));
+        } else if (this.type === 'postgres') {
+            this.pool.query(`DELETE FROM ${table}`, (err) => callback(err));
+        } else {
+            this.db.run(`DELETE FROM ${table}`, [], callback);
+        }
+    }
 }
 
 // Initialize Adapter
@@ -262,7 +274,7 @@ dbAdapter.init();
 // Let's protect it with the same auth to avoid leaking bucket name to public.
 app.get('/api/diagnostics', authMiddleware, (req, res) => {
     res.json({
-        version: 'v19.0.14',
+        version: 'v19.0.15',
         storage_type: dbAdapter.type,
         s3_enabled: !!s3,
         bucket_name: process.env.BUCKET_NAME || 'Not Set',
@@ -317,6 +329,15 @@ function createCRUDEndpoints(tableName, routeName) {
         dbAdapter.delete(tableName, id, (err) => {
             if (err) return res.status(500).json({ error: err.message });
             io.emit('data-change', { table: tableName, action: 'delete', id: id });
+            res.json({ success: true });
+        });
+    });
+
+    // WIPE (Clear Table)
+    app.delete(`/api/wipe/${routeName}`, authMiddleware, (req, res) => {
+        dbAdapter.wipe(tableName, (err) => {
+            if (err) return res.status(500).json({ error: err.message });
+            io.emit('data-change', { table: tableName, action: 'wipe' });
             res.json({ success: true });
         });
     });
