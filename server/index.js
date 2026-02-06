@@ -274,7 +274,7 @@ dbAdapter.init();
 // Let's protect it with the same auth to avoid leaking bucket name to public.
 app.get('/api/diagnostics', authMiddleware, (req, res) => {
     res.json({
-        version: 'v19.0.16',
+        version: 'v19.0.17',
         storage_type: dbAdapter.type,
         s3_enabled: !!s3,
         bucket_name: process.env.BUCKET_NAME || 'Not Set',
@@ -405,7 +405,7 @@ TABLES.forEach((table, idx) => createCRUDEndpoints(table, ROUTES[idx]));
 const multer = require('multer');
 const upload = multer({
     storage: multer.memoryStorage(),
-    limits: { fileSize: 50 * 1024 * 1024 } // 50MB limit per chunk
+    limits: { fileSize: 500 * 1024 * 1024 } // 500MB limit for continuous videos (v19.0.17)
 });
 
 app.post('/api/upload-media', authMiddleware, upload.single('file'), async (req, res) => {

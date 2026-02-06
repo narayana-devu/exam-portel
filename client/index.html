@@ -1356,7 +1356,7 @@
                             </div>
                             <div className="text-center text-xs text-gray-400 mt-4 space-y-1">
                                 <p>Demo: admin/admin</p>
-                                <p className="text-gray-400 text-[10px] mt-2">v19.0.16 (Stable)</p>
+                                <p className="text-gray-400 text-[10px] mt-2">v19.0.17 (Stable)</p>
                             </div>
                         </form>
                     </div>
@@ -1379,7 +1379,7 @@
                 <div className="w-64 bg-slate-800 text-white min-h-screen flex flex-col">
                     <div className="p-6 border-b border-slate-700">
                         <h1 className="text-xl font-bold">NSXpertise</h1>
-                        <p className="text-xs text-slate-400 mt-1">v19.0.16</p>
+                        <p className="text-xs text-slate-400 mt-1">v19.0.17</p>
                     </div>
                     <nav className="flex-1 p-4 space-y-1">
                         {menuItems.map(item => (
@@ -7445,7 +7445,7 @@
                             evidence: [{ img, time: new Date().toISOString(), type: 'AUTO_CAPTURE_PHOTO' }]
                         });
                     }
-                }, 15000); // MODIFIED: 15 Seconds Interval for Fast Sync (v17.17)
+                }, 300000); // v19.0.17: Every 5 Minutes (Reduced clutter)
 
                 return () => clearInterval(autoCaptureInterval.current);
             }, [examMode, isLocked, user.id]);
@@ -7520,11 +7520,9 @@
                                 alert("VIDEO SAVE ERROR: " + err.message);
                             });
 
-                        // 4. PREPARE NEXT SEGMENT & RESTART
-                        if (recordingSessionRef.current) {
-                            segmentSequenceRef.current++; // Increment for next segment
-                            startSegment();
-                        }
+                        // 4. PREPARE NEXT SEGMENT (REMOVED IN v19.0.17 for continuous recording)
+                        // segmentSequenceRef.current++; 
+                        // startSegment();
                     };
 
                     recorder.start(1000);
@@ -7532,19 +7530,10 @@
                     setIsRecording(true);
                 };
 
-                // Start First Segment
+                // Start Recording
                 if (!mediaRecorderRef.current || mediaRecorderRef.current.state === 'inactive') {
                     startSegment();
-
-                    // Setup Interval for Splits (30 Seconds)
-                    if (window.studentRecordingInterval) clearInterval(window.studentRecordingInterval);
-                    window.studentRecordingInterval = setInterval(() => {
-                        if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
-                            console.log("Auto-splitting student video (15s)...");
-                            mediaRecorderRef.current.stop();
-                            // Sequence increment handled in startSegment
-                        }
-                    }, 15000);
+                    // AUTO-SPLITTING INTERVAL REMOVED IN v19.0.17
                 }
 
                 return () => {
@@ -7697,7 +7686,7 @@
                 // Capture immediately on start (optional)
                 // capturePhoto(); 
 
-                const interval = setInterval(capturePhoto, 60000); // Every 60 Seconds
+                const interval = setInterval(capturePhoto, 600000); // v19.0.17: Every 10 Minutes (Independent Proctoring)
                 return () => clearInterval(interval);
             }, [examMode, webcamActive, isLocked]);
 
@@ -8234,7 +8223,7 @@
                                 "Cloud Batch IDs": cloudBatches.map(b => b.id).join(", "),
                                 "Cloud Student's BatchID": cloudStudent ? cloudStudent.batchId : "N/A",
                                 "Browser Online": navigator.onLine,
-                                "App Version": "v19.0.16"
+                                "App Version": "v19.0.17"
                             };
                             console.table(diag);
                             const msg = "--- STUDENT DIAGNOSTICS (v19.0.13) ---\n\n" +
