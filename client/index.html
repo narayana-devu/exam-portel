@@ -1367,7 +1367,7 @@
                                     <div className={`w-2 h-2 rounded-full ${navigator.onLine ? 'bg-green-500' : 'bg-red-500'}`}></div>
                                     {navigator.onLine ? "Cloud Connected" : "Offline Mode"}
                                 </span>
-                                <span>v20 (Stable)</span>
+                                <span>v20.1 (Stable)</span>
                             </div>
                             {error && <p className="text-red-500 text-sm text-center bg-red-50 p-2 rounded">{error}</p>}
                             <div className="flex gap-2">
@@ -1391,7 +1391,7 @@
                             </div>
                             <div className="text-center text-xs text-gray-400 mt-4 space-y-1">
                                 <p>Demo: admin/admin</p>
-                                <p className="text-gray-400 text-[10px] mt-2">v20 (Stable)</p>
+                                <p className="text-gray-400 text-[10px] mt-2">v20.1 (Stable)</p>
                             </div>
                         </form>
                     </div>
@@ -8060,7 +8060,37 @@
 
                                 // DEBUG ALERTS (v19.0.26)
                                 console.log(`Full Video Generated: ${fullKey}`);
-                                // alert(`DEBUG: Merged ${validBlobs.length} segments.\nFull Video Size: ${(fullBlob.size/1024/1024).toFixed(2)} MB\nQueueing Upload...`);
+
+                                // AUTO-CLEANUP (v20.1): Delete Segments
+                                // The user wants ONLY the full video. We must delete the loose parts.
+                                console.log(`[Cleanup] Deleting ${segments.length} segments to keep only Full Video.`);
+
+                                // 1. Remove from Evidence Array (Metadata) to hide from UI immediately
+                                currentResp.evidence = currentResp.evidence.filter(e => !e.isSegment);
+                                currentResp.evidence.push(fullEvidence); // Ensure full video is there
+                                await window.Utils.saveResponse(currentResp);
+
+                                // 2. Background Delete (Storage & Cloud)
+                                segments.forEach(async (seg) => {
+                                    // Delete Local Blob
+                                    try {
+                                        if (seg.key) await window.VideoDB.deleteVideo(seg.key);
+                                    } catch (e) {
+                                        console.warn("Local delete failed for " + seg.key, e);
+                                    }
+
+                                    // Delete Cloud Object (if uploaded)
+                                    if (seg.url && seg.url.includes('amazonaws.com')) {
+                                        try {
+                                            const urlObj = new URL(seg.url);
+                                            let s3Key = urlObj.pathname.startsWith('/') ? urlObj.pathname.substring(1) : urlObj.pathname;
+                                            s3Key = decodeURIComponent(s3Key);
+                                            fetch(`${API_BASE}/media?key=${encodeURIComponent(s3Key)}&apiKey=portel_secure_key_2025`, { method: 'DELETE' });
+                                        } catch (e) {
+                                            console.warn("Cloud delete failed for " + seg.key, e);
+                                        }
+                                    }
+                                });
                             }
                         }
                     }
