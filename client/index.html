@@ -867,15 +867,25 @@
                     ];
 
                     let totalDeleted = 0;
-                    const headers = { 'x-api-key': 'portel_secure_key_2025' };
+                    const errors = [];
+                    const API_KEY = 'portel_secure_key_2025';
+                    const headers = { 'x-api-key': API_KEY };
 
                     for (const col of collections) {
                         if (statusBtn) statusBtn.innerText = `Wiping ${col}...`;
                         try {
-                            const res = await fetch(`${API_BASE}/wipe/${col}`, { method: 'DELETE', headers });
-                            if (res.ok) totalDeleted++;
+                            const res = await fetch(`${API_BASE}/wipe/${col}?apiKey=${API_KEY}`, {
+                                method: 'DELETE',
+                                headers
+                            });
+
+                            if (res.ok) {
+                                totalDeleted++;
+                            } else {
+                                errors.push(`${col} (Status ${res.status})`);
+                            }
                         } catch (err) {
-                            console.error(`Failed to wipe collection ${col}:`, err);
+                            errors.push(`${col} (Network Error)`);
                         }
                     }
 
@@ -885,7 +895,8 @@
                         indexedDB.deleteDatabase('VideoStorage');
                     } catch (e) { }
 
-                    alert(`Factory Reset Complete.\n\n- Cloud Data: Wiped (${totalDeleted} collections)\n- Local Data: Cleared\n\nThe app will now reload.`);
+                    const errorSummary = errors.length > 0 ? `\n\n⚠️ FAILURES:\n- ${errors.join('\n- ')}` : "";
+                    alert(`Factory Reset Complete.\n\n- Cloud Data: Wiped (${totalDeleted}/${collections.length} collections)${errorSummary}\n- Local Data: Cleared\n\nThe app will now reload.`);
                     window.location.reload();
 
                 } catch (e) {
@@ -1345,7 +1356,7 @@
                             </div>
                             <div className="text-center text-xs text-gray-400 mt-4 space-y-1">
                                 <p>Demo: admin/admin</p>
-                                <p className="text-gray-400 text-[10px] mt-2">v19.0.15 (Stable)</p>
+                                <p className="text-gray-400 text-[10px] mt-2">v19.0.16 (Stable)</p>
                             </div>
                         </form>
                     </div>
@@ -1368,7 +1379,7 @@
                 <div className="w-64 bg-slate-800 text-white min-h-screen flex flex-col">
                     <div className="p-6 border-b border-slate-700">
                         <h1 className="text-xl font-bold">NSXpertise</h1>
-                        <p className="text-xs text-slate-400 mt-1">v19.0.15</p>
+                        <p className="text-xs text-slate-400 mt-1">v19.0.16</p>
                     </div>
                     <nav className="flex-1 p-4 space-y-1">
                         {menuItems.map(item => (
@@ -8223,7 +8234,7 @@
                                 "Cloud Batch IDs": cloudBatches.map(b => b.id).join(", "),
                                 "Cloud Student's BatchID": cloudStudent ? cloudStudent.batchId : "N/A",
                                 "Browser Online": navigator.onLine,
-                                "App Version": "v19.0.15"
+                                "App Version": "v19.0.16"
                             };
                             console.table(diag);
                             const msg = "--- STUDENT DIAGNOSTICS (v19.0.13) ---\n\n" +
