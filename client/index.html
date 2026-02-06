@@ -411,17 +411,24 @@
                                             await Promise.all(batch.map(async ({ ev, item, localKey }) => {
                                                 try {
                                                     const blob = await window.VideoDB.getVideo(localKey);
-                                                    if (blob) {
-                                                        const isVideo = blob.type.includes('video');
-                                                        const extension = isVideo ? 'webm' : 'jpg';
-                                                        const fileName = `media/${isVideo ? 'videos' : 'photos'}/${Date.now()}_${item.studentId}_${localKey}.${extension}`;
+                                                    if (!blob) {
+                                                        console.warn(`[Sync] File Missing: ${localKey}`);
+                                                        ev._fileMissing = true;
+                                                        return;
+                                                    }
 
-                                                        if (isVideo && blob.size > 1024 * 1024) { // > 1MB use direct S3
+                                                    const isVideo = blob.type.includes('video');
+                                                    const extension = isVideo ? 'webm' : 'jpg';
+                                                    const fileName = `media/${isVideo ? 'videos' : 'photos'}/${Date.now()}_${item.studentId}_${localKey}.${extension}`;
+                                                    let uploadSuccess = false;
+
+                                                    // 1. TRY DIRECT S3 FOR LARGE VIDEOS (>1MB)
+                                                    if (isVideo && blob.size > 1024 * 1024) {
+                                                        try {
                                                             console.log(`[Sync] Requesting Presigned URL for ${fileName} (${(blob.size / 1024 / 1024).toFixed(2)} MB)`);
                                                             const preRes = await fetch(`${API_BASE}/presigned-url?fileName=${encodeURIComponent(fileName)}&contentType=${encodeURIComponent(blob.type)}`, {
                                                                 headers: { 'x-api-key': 'portel_secure_key_2025' }
                                                             });
-
                                                             if (preRes.ok) {
                                                                 const { uploadUrl } = await preRes.json();
                                                                 const s3Res = await fetch(uploadUrl, {
@@ -429,7 +436,6 @@
                                                                     body: blob,
                                                                     headers: { 'Content-Type': blob.type }
                                                                 });
-
                                                                 if (s3Res.ok) {
                                                                     const finalUrl = uploadUrl.split('?')[0];
                                                                     ev.url = finalUrl;
@@ -437,39 +443,43 @@
                                                                     if (ev.type === 'VIDEO_INDEXED_DB') ev.type = 'VIDEO_S3';
                                                                     ev.uploaded = true;
                                                                     ev.storage = 's3';
+                                                                    uploadSuccess = true;
                                                                     console.log(`[Sync] Direct S3 Upload Success: ${finalUrl}`);
                                                                 } else {
-                                                                    console.error("Direct S3 PUT Failed");
+                                                                    console.warn("[Sync] Direct S3 PUT Failed (Likely S3 CORS). Falling back to Server...");
                                                                 }
-                                                            } else {
-                                                                console.error("Presigned URL Request Failed");
                                                             }
+                                                        } catch (e) { console.warn("[Sync] Direct S3 Error. Falling back to Server...", e); }
+                                                    }
+                                                    // 2. FALLBACK TO SERVER UPLOAD (OR SMALL FILES)
+                                                    if (!uploadSuccess) {
+
+                                                        // Standard Upload Fallback
+                                                        // Using already loaded blob
+                                                        if (!blob) return;
+
+                                                        isVideo = blob.type.includes('video');
+                                                        extension = isVideo ? 'webm' : 'jpg';
+                                                        const formData = new FormData();
+                                                        formData.append('file', blob, `${item.studentId}_${localKey}.${extension}`);
+
+                                                        const uploadRes = await fetch(`${API_BASE}/upload-media`, {
+                                                            method: 'POST',
+                                                            headers: { 'x-api-key': 'portel_secure_key_2025' },
+                                                            body: formData
+                                                        });
+
+                                                        if (uploadRes.ok) {
+                                                            const json = await uploadRes.json();
+                                                            ev.url = json.url;
+                                                            ev.img = json.url;
+                                                            if (ev.type === 'VIDEO_INDEXED_DB') ev.type = 'VIDEO_S3';
+                                                            ev.uploaded = true;
+                                                            ev.storage = 's3';
+                                                            console.log(`[Sync] Media Uploaded (via Server Fallback): ${json.url}`);
                                                         } else {
-                                                            // Standard Upload for small files
-                                                            const formData = new FormData();
-                                                            formData.append('file', blob, `${item.studentId}_${localKey}.${extension}`);
-
-                                                            const uploadRes = await fetch(`${API_BASE}/upload-media`, {
-                                                                method: 'POST',
-                                                                headers: { 'x-api-key': 'portel_secure_key_2025' },
-                                                                body: formData
-                                                            });
-
-                                                            if (uploadRes.ok) {
-                                                                const json = await uploadRes.json();
-                                                                ev.url = json.url;
-                                                                ev.img = json.url;
-                                                                if (ev.type === 'VIDEO_INDEXED_DB') ev.type = 'VIDEO_S3';
-                                                                ev.uploaded = true;
-                                                                ev.storage = 's3';
-                                                                console.log(`[Sync] Media Uploaded: ${json.url}`);
-                                                            } else {
-                                                                console.error("Media Upload Failed", uploadRes.statusText);
-                                                            }
+                                                            console.error("Media Upload Failed (Server even failed)", uploadRes.statusText);
                                                         }
-                                                    } else {
-                                                        console.warn(`[Sync] File Missing: ${localKey}`);
-                                                        ev._fileMissing = true;
                                                     }
                                                 } catch (err) {
                                                     console.error("Media Upload Exception", err);
@@ -1363,7 +1373,7 @@
                                     <div className={`w-2 h-2 rounded-full ${navigator.onLine ? 'bg-green-500' : 'bg-red-500'}`}></div>
                                     {navigator.onLine ? "Cloud Connected" : "Offline Mode"}
                                 </span>
-                                <span>v19.0.21 (Stable)</span>
+                                <span>v19.0.22 (Stable)</span>
                             </div>
                             {error && <p className="text-red-500 text-sm text-center bg-red-50 p-2 rounded">{error}</p>}
                             <div className="flex gap-2">
@@ -1374,7 +1384,7 @@
                                     if (confirm("Force Upload Local Data to Cloud? (Use this if other devices are missing data)")) {
                                         await window.Utils.uploadToCloud();
                                     }
-                                    if (confirm('Clear cache for v19.0.21?')) { localStorage.clear(); location.reload(true); }
+                                    if (confirm('Clear cache for v19.0.22?')) { localStorage.clear(); location.reload(true); }
                                 }} className="px-4 py-3 bg-gray-200 text-gray-700 rounded-xl hover:bg-gray-300 transition-colors" title="Force Sync & Clear Cache">
                                     <Icons.RefreshCw className="w-5 h-5" />
                                 </button>
@@ -1387,7 +1397,7 @@
                             </div>
                             <div className="text-center text-xs text-gray-400 mt-4 space-y-1">
                                 <p>Demo: admin/admin</p>
-                                <p className="text-gray-400 text-[10px] mt-2">v19.0.21 (Stable)</p>
+                                <p className="text-gray-400 text-[10px] mt-2">v19.0.22 (Stable)</p>
                             </div>
                         </form>
                     </div>
