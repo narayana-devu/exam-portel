@@ -1341,7 +1341,7 @@
                                     <div className={`w-2 h-2 rounded-full ${navigator.onLine ? 'bg-green-500' : 'bg-red-500'}`}></div>
                                     {navigator.onLine ? "Cloud Connected" : "Offline Mode"}
                                 </span>
-                                <span>v19.0.13 (Stable)</span>
+                                <span>v19.0.14 (Stable)</span>
                             </div>
                             {error && <p className="text-red-500 text-sm text-center bg-red-50 p-2 rounded">{error}</p>}
                             <div className="flex gap-2">
@@ -1364,7 +1364,7 @@
                             </div>
                             <div className="text-center text-xs text-gray-400 mt-4 space-y-1">
                                 <p>Demo: admin/admin</p>
-                                <p className="text-gray-400 text-[10px] mt-2">v19.0.13 (Stable)</p>
+                                <p className="text-gray-400 text-[10px] mt-2">v19.0.14 (Stable)</p>
                             </div>
                         </form>
                     </div>
@@ -1387,7 +1387,7 @@
                 <div className="w-64 bg-slate-800 text-white min-h-screen flex flex-col">
                     <div className="p-6 border-b border-slate-700">
                         <h1 className="text-xl font-bold">NSXpertise</h1>
-                        <p className="text-xs text-slate-400 mt-1">v19.0.13</p>
+                        <p className="text-xs text-slate-400 mt-1">v19.0.14</p>
                     </div>
                     <nav className="flex-1 p-4 space-y-1">
                         {menuItems.map(item => (
@@ -6759,7 +6759,7 @@
                             <button
                                 onClick={async () => {
                                     const btn = document.getElementById('btn-check-cloud');
-                                    if (btn) btn.innerText = "Scanning...";
+                                    if (btn) btn.innerText = "Scanning S3...";
 
                                     // 1. LOCAL DATA CHECK
                                     let localReport = "LOCAL DATA:\n";
@@ -6774,13 +6774,19 @@
                                     localReport += `Responses: ${localResponses.length}\nPhotos: ${localPhotos}, Videos: ${localVideos}\n-------------------\n`;
 
                                     // 2. CLOUD DATA CHECK
-                                    const cols = ['batches', 'students', 'responses', 'assessors', 'synced_chunks'];
-                                    let cloudReport = "CLOUD DATA:\n";
+                                    const routes = ['batches', 'students', 'responses', 'assessors'];
+                                    let cloudReport = "CLOUD DATA (REST/S3):\n";
 
                                     try {
-                                        // Deep Check for Responses
-                                        const snap = await db.collection('responses').get();
-                                        const responses = snap.docs.map(d => d.data());
+                                        const headers = { 'x-api-key': 'portel_secure_key_2025' };
+
+                                        // Fetch all in parallel
+                                        const results = await Promise.all(routes.map(r =>
+                                            fetch(`${API_BASE}/${r}`, { headers }).then(res => res.ok ? res.json() : [])
+                                        ));
+
+                                        const [batches, students, responses, assessors] = results;
+
                                         let cloudPhotos = 0, cloudVideos = 0;
                                         responses.forEach(r => {
                                             if (r.evidence) r.evidence.forEach(e => {
@@ -6790,20 +6796,16 @@
                                         });
 
                                         cloudReport += `Responses: ${responses.length}\nPhotos: ${cloudPhotos}, Videos: ${cloudVideos}\n`;
-
-                                        // Basic Counts for others
-                                        for (const c of cols) {
-                                            if (c === 'responses') continue;
-                                            const s = await db.collection(c).get();
-                                            cloudReport += `${c}: ${s.size}\n`;
-                                        }
+                                        cloudReport += `Batches: ${batches.length}\n`;
+                                        cloudReport += `Students: ${students.length}\n`;
+                                        cloudReport += `Assessors: ${assessors.length}\n`;
 
                                     } catch (e) {
                                         cloudReport += `Error: ${e.message}`;
                                     }
 
                                     if (btn) btn.innerText = "Check Cloud Data";
-                                    alert(localReport + "\n" + cloudReport + "\n(Verify that Cloud Videos count matches your expectations!)");
+                                    alert(localReport + "\n" + cloudReport + "\n(Verify that Cloud counts match your expectations!)");
                                 }}
                                 id="btn-check-cloud"
                                 className="text-xs text-red-600 hover:text-red-800 underline font-medium flex items-center gap-1"
@@ -8240,7 +8242,7 @@
                                 "Cloud Batch IDs": cloudBatches.map(b => b.id).join(", "),
                                 "Cloud Student's BatchID": cloudStudent ? cloudStudent.batchId : "N/A",
                                 "Browser Online": navigator.onLine,
-                                "App Version": "v19.0.13"
+                                "App Version": "v19.0.14"
                             };
                             console.table(diag);
                             const msg = "--- STUDENT DIAGNOSTICS (v19.0.13) ---\n\n" +
