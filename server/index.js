@@ -262,7 +262,7 @@ dbAdapter.init();
 // Let's protect it with the same auth to avoid leaking bucket name to public.
 app.get('/api/diagnostics', authMiddleware, (req, res) => {
     res.json({
-        version: 'v19.0.12',
+        version: 'v19.0.13',
         storage_type: dbAdapter.type,
         s3_enabled: !!s3,
         bucket_name: process.env.BUCKET_NAME || 'Not Set',
@@ -289,8 +289,11 @@ function createCRUDEndpoints(tableName, routeName) {
     app.post(`/api/${routeName}`, (req, res) => {
         const body = req.body;
 
-        // v19.0.11: Support both single object and array sync
+        // v19.0.13: STRICT VALIDATION: Reject if no ID
         if (Array.isArray(body)) {
+            if (body.some(item => !item || !item.id)) {
+                return res.status(400).json({ error: "Invalid Data: One or more items missing ID" });
+            }
             dbAdapter.sync(tableName, body, (err) => {
                 if (err) return res.status(500).json({ error: err.message });
                 io.emit('data-change', { table: tableName, action: 'sync' });
@@ -298,6 +301,7 @@ function createCRUDEndpoints(tableName, routeName) {
             });
         } else {
             const id = body.id;
+            if (!id) return res.status(400).json({ error: "Invalid Data: Missing ID" });
             const dataStr = JSON.stringify(body);
             dbAdapter.upsert(tableName, id, dataStr, (err) => {
                 if (err) return res.status(500).json({ error: err.message });
