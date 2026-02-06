@@ -8212,13 +8212,19 @@
                             if (statusText) statusText.innerText = "Running Deep Diag...";
 
                             let cloudBatches = [];
+                            let cloudStudent = null;
                             let apiOk = false;
                             try {
-                                const res = await fetch(`${API_BASE}/batches`, { headers: { 'x-api-key': 'portel_secure_key_2025' } });
-                                if (res.ok) {
-                                    cloudBatches = await res.json();
-                                    apiOk = true;
+                                const [bRes, sRes] = await Promise.all([
+                                    fetch(`${API_BASE}/batches`, { headers: { 'x-api-key': 'portel_secure_key_2025' } }),
+                                    fetch(`${API_BASE}/students`, { headers: { 'x-api-key': 'portel_secure_key_2025' } })
+                                ]);
+                                if (bRes.ok) cloudBatches = await bRes.json();
+                                if (sRes.ok) {
+                                    const allS = await sRes.json();
+                                    cloudStudent = allS.find(s => s.id === user.id);
                                 }
+                                apiOk = true;
                             } catch (e) { console.error("Cloud fetch failed", e); }
 
                             const targetId = String(user.batchId || '').trim();
@@ -8226,21 +8232,20 @@
 
                             const diag = {
                                 "My User ID": user.id,
-                                "My Assigned Batch ID": user.batchId,
-                                "My Assigned Batch ID (Trimmed)": targetId,
-                                "Local Batches Found": batches.length,
-                                "Local Batch IDs": batches.map(b => b.id),
-                                "--- CLOUD RESULTS ---": "---",
+                                "Record Found in Cloud?": cloudStudent ? "YES ✅" : "NO ❌",
+                                "Target Batch ID": targetId,
+                                "Found in Cloud Batches?": foundInCloud ? "YES ✅" : "NO ❌",
                                 "API Connectivity": apiOk ? "Connected ✅" : "Failed ❌",
-                                "Cloud Batches Found": cloudBatches.length,
-                                "Target Batch Found in Cloud?": foundInCloud ? "YES ✅" : "NO ❌ (Missing from S3)",
+                                "--- CLOUD INVENTORY ---": "---",
+                                "Cloud Batch IDs": cloudBatches.map(b => b.id).join(", "),
+                                "Cloud Student's BatchID": cloudStudent ? cloudStudent.batchId : "N/A",
                                 "Browser Online": navigator.onLine,
-                                "App Version": "v19.0.12"
+                                "App Version": "v19.0.13"
                             };
                             console.table(diag);
-                            const msg = "--- STUDENT DIAGNOSTICS ---\n\n" +
+                            const msg = "--- STUDENT DIAGNOSTICS (v19.0.13) ---\n\n" +
                                 Object.entries(diag).map(([k, v]) => `${k}: ${JSON.stringify(v)}`).join("\n") +
-                                "\n\nActions:\n1. If 'Target Batch Found in Cloud' is NO -> ADMIN must Save it again.\n2. If 'FOUND' is YES but it's not local -> Click OK to FORCE SYNC.";
+                                "\n\nActions:\n1. If Target Batch Found is NO -> Admin must Save it.\n2. If Cloud Student ID is different -> Mismatch!";
                             if (confirm(msg)) {
                                 if (statusText) statusText.innerText = "Force Syncing...";
                                 await window.Utils.downloadFromCloud(false);
