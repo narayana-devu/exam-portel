@@ -4625,15 +4625,15 @@
                                                     </td>
                                                     <td className="p-3 border-r text-center">
                                                         {batch.theoryPaperId ? (
-                                                            <div className="flex items-center justify-center gap-1">
-                                                                <span className="bg-cyan-700 text-white px-2 py-1 rounded text-xs">{getQPName(batch.theoryPaperId)}</span>
+                                                            <div className="flex items-center justify-center gap-2">
+                                                                <span className="bg-cyan-700 text-white px-2 py-1 rounded text-xs truncate max-w-[120px]" title={getQPName(batch.theoryPaperId)}>{getQPName(batch.theoryPaperId)}</span>
                                                                 <button onClick={() => {
                                                                     const qp = questionPapers.find(q => q.id === batch.theoryPaperId);
                                                                     setSelectedBatch(batch); setAssignmentType('Theory'); setSelectedAssignQP(batch.theoryPaperId);
                                                                     setAssignSSC(qp ? qp.sscId : ''); setAssignQPDef(qp ? qp.qpId : '');
                                                                     setShowAssignModal(true);
-                                                                }} className="text-gray-500 hover:text-blue-600">
-                                                                    <Icons.Edit3 className="w-3 h-3" />
+                                                                }} className="bg-yellow-100 text-yellow-700 p-1.5 rounded hover:bg-yellow-200 transition-colors shadow-sm border border-yellow-200" title="Edit Theory QP">
+                                                                    <Icons.Edit3 className="w-3.5 h-3.5" />
                                                                 </button>
                                                             </div>
                                                         ) : (
@@ -4641,7 +4641,7 @@
                                                                 setSelectedBatch(batch); setAssignmentType('Theory'); setSelectedAssignQP('');
                                                                 setAssignSSC(''); setAssignQPDef('');
                                                                 setShowAssignModal(true);
-                                                            }} className="text-blue-600 underline text-xs">Assign</button>
+                                                            }} className="text-blue-600 underline text-xs font-bold hover:text-blue-800">Assign</button>
                                                         )}
                                                     </td>
                                                     <td className="p-3 border-r text-center">
