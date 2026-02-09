@@ -7980,8 +7980,8 @@
                     return;
                 }
 
-                const pid = mode === 'Theory' ? batch.theoryPaperId : batch.practicalPaperId;
-                console.log(`Starting ${mode}: Batch=${batch.name}, AssignedID=${pid}, AvailableQPs=${window.Utils.getQuestionPapers().length}`);
+                const pid = startMode === 'Theory' ? batch.theoryPaperId : batch.practicalPaperId;
+                console.log(`Starting ${startMode}: Batch=${batch.name}, AssignedID=${pid}, AvailableQPs=${window.Utils.getQuestionPapers().length}`);
 
                 let qp = window.Utils.getQuestionPapers().find(q => String(q.id) === String(pid));
 
@@ -8000,9 +8000,9 @@
                 if (qp) {
                     setQuestions(qp.questions);
                     setTimeLeft(qp.totalTime * 60);
-                    setExamMode(mode);
+                    setExamMode(startMode);
 
-                    if (mode === 'Practical') {
+                    if (startMode === 'Practical') {
                         // COMPOSITE RECORDING: Screen + Webcam
                         try {
                             const screenStream = await navigator.mediaDevices.getDisplayMedia({ video: { cursor: "always" }, audio: true });
