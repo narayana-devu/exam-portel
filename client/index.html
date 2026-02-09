@@ -7301,6 +7301,12 @@
             const [proctoringModel, setProctoringModel] = useState(null);
             const [proctoringLogs, setProctoringLogs] = useState([]);
             const [lastWarning, setLastWarning] = useState(null); // State for Visual Alert
+
+            // v26: Student Verification State
+            const [verificationStep, setVerificationStep] = useState(null); // null, 'SELFIE', 'ID_CARD'
+            const [verificationEvidence, setVerificationEvidence] = useState([]);
+            const [pendingExamMode, setPendingExamMode] = useState(null);
+
             // State for Visual Alert
             const detectionInterval = useRef(null);
             const autoCaptureInterval = useRef(null);
@@ -7817,6 +7823,15 @@
             }, [examMode, timeLeft, isSubmitting]);
 
             const startExam = async (mode) => {
+                // v26: Intercept for Verification
+                if (mode !== 'VERIFIED_START') {
+                    setPendingExamMode(mode);
+                    setVerificationStep('SELFIE');
+                    return;
+                }
+
+                const startMode = pendingExamMode || mode; // Fallback
+
                 let batch = window.Utils.getBatches().find(b => String(b.id || '').trim() === String(user.batchId || '').trim());
 
                 // AUTO-HEAL: If batch not found locally, try one-time sync before erroring
@@ -8556,10 +8571,100 @@
                                 </div>
                             </button>
                         </div>
+
+
+                        {/* v26: Verification Modal */}
+                        {
+                            verificationStep && (
+                                <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4">
+                                    <div className="bg-white rounded-xl overflow-hidden max-w-2xl w-full flex flex-col max-h-[90vh]">
+                                        <div className="p-4 border-b bg-gray-50 flex justify-between items-center">
+                                            <h3 className="font-bold text-lg">
+                                                {verificationStep === 'SELFIE' ? "Step 1: Student Photo" : "Step 2: Student + ID Card"}
+                                            </h3>
+                                            <button onClick={() => { setVerificationStep(null); setPendingExamMode(null); }} className="text-gray-500 hover:text-red-500">
+                                                <Icons.XCircle className="w-6 h-6" />
+                                            </button>
+                                        </div>
+
+                                        <div className="flex-1 bg-black relative aspect-video">
+                                            <VideoPreview
+                                                onCapture={(img) => {
+                                                    const type = verificationStep === 'SELFIE' ? 'VERIFICATION_SELFIE' : 'VERIFICATION_ID';
+                                                    const newEvidence = [...verificationEvidence, {
+                                                        img, type, time: new Date().toISOString(),
+                                                        studentId: user.id, batchId: user.batchId
+                                                    }];
+                                                    setVerificationEvidence(newEvidence);
+
+                                                    if (verificationStep === 'SELFIE') {
+                                                        setVerificationStep('ID_CARD');
+                                                    } else {
+                                                        // FINISHED
+                                                        // Save Verification Evidence
+                                                        window.Utils.saveResponse({
+                                                            studentId: user.id, examType: 'VERIFICATION',
+                                                            evidence: newEvidence
+                                                        }).then(() => {
+                                                            console.log("Verification Saved");
+                                                        });
+
+                                                        setVerificationStep(null);
+                                                        startExam('VERIFIED_START');
+                                                    }
+                                                }}
+                                                instructions={verificationStep === 'SELFIE' ?
+                                                    "Align your face clearly in the frame." :
+                                                    "Hold your Aadhar/ID Card next to your face."}
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+                            )
+                        }
                     </div>
                 );
-            }
+            };
 
+            // v26: Helper Component for Verification
+            const VideoPreview = ({ onCapture, instructions }) => {
+                const vRef = useRef(null);
+                const [stream, setStream] = useState(null);
+
+                useEffect(() => {
+                    navigator.mediaDevices.getUserMedia({ video: true, audio: false })
+                        .then(s => {
+                            setStream(s);
+                            if (vRef.current) vRef.current.srcObject = s;
+                        })
+                        .catch(e => alert("Camera Access Required: " + e.message));
+                    return () => {
+                        if (stream) stream.getTracks().forEach(t => t.stop());
+                    };
+                }, []);
+
+                const capture = () => {
+                    if (!vRef.current) return;
+                    const canvas = document.createElement('canvas');
+                    canvas.width = 640; canvas.height = 480;
+                    canvas.getContext('2d').drawImage(vRef.current, 0, 0, canvas.width, canvas.height);
+                    onCapture(canvas.toDataURL('image/jpeg', 0.8));
+                };
+
+                return (
+                    <div className="relative w-full h-full flex flex-col">
+                        <video ref={vRef} autoPlay muted playsInline className="w-full h-full object-cover" />
+                        <div className="absolute top-0 left-0 w-full p-4 bg-gradient-to-b from-black/50 to-transparent text-white text-center">
+                            {instructions}
+                        </div>
+                        <div className="absolute bottom-6 left-0 w-full flex justify-center">
+                            <button onClick={capture} className="bg-white text-black px-8 py-3 rounded-full font-bold shadow-lg hover:bg-gray-100 flex items-center gap-2">
+                                <Icons.Camera className="w-5 h-5" /> Capture & Continue
+                            </button>
+                        </div>
+                    </div>
+                );
+            };
             // VIEW 2: SELECT BATCH (Common for both flows)
             if (view === 'batches') {
                 return (
