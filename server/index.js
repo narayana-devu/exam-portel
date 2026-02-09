@@ -125,7 +125,7 @@ class DatabaseAdapter {
         this.type = this.useS3 ? 's3' : (process.env.DATABASE_URL ? 'postgres' : 'sqlite');
 
         console.log("========================================");
-        console.log("V17.8 DEPLOYMENT ACTIVE - CLOUD_FORCE_BACKUP");
+        console.log("V30 DEPLOYMENT ACTIVE - CLOUD_FORCE_BACKUP");
         console.log(`DATABASE ADAPTER: ${this.type.toUpperCase()}`);
         console.log("========================================");
 
@@ -274,7 +274,7 @@ dbAdapter.init();
 // Let's protect it with the same auth to avoid leaking bucket name to public.
 app.get('/api/diagnostics', authMiddleware, (req, res) => {
     res.json({
-        version: 'v28',
+        version: 'v30',
         storage_type: dbAdapter.type,
         s3_enabled: !!s3,
         bucket_name: process.env.BUCKET_NAME || 'Not Set',
