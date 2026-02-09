@@ -6227,22 +6227,20 @@
                                 console.error("Failed to save video to DB", err);
                             }
                         };
-                        recorder.start();
+                        recorder.start(1000); // 1s chunks to keep `ondataavailable` firing
                         mediaRecorderRef.current = recorder;
                     };
 
                     startSegment();
                     setIsRecording(true);
 
-                    // Auto-split every 10 minutes (600,000 ms)
-                    window.recordingInterval = setInterval(() => {
-                        if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
-                            console.log("Auto-splitting video segment...");
-                            mediaRecorderRef.current.stop();
-                            segmentSequenceRef.current += 1; // Increment Sequence
-                            setTimeout(startSegment, 200);
-                        }
-                    }, 600000);
+                    startSegment();
+                    setIsRecording(true);
+
+                    // v30.1 FIX: User requested "Full Video". Disabled Auto-Splitting.
+                    // Recording will continue until manually stopped or max size reached.
+                    console.log("Recording started (Single Session Mode)");
+                    if (window.recordingInterval) clearInterval(window.recordingInterval); // Safety clear
                 }
             };
 
