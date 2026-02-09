@@ -1368,7 +1368,7 @@
                                     <div className={`w-2 h-2 rounded-full ${navigator.onLine ? 'bg-green-500' : 'bg-red-500'}`}></div>
                                     {navigator.onLine ? "Cloud Connected" : "Offline Mode"}
                                 </span>
-                                <span>v28 (Stable)</span>
+                                <span>v30 (Stable)</span>
                             </div>
                             {error && <p className="text-red-500 text-sm text-center bg-red-50 p-2 rounded">{error}</p>}
                             <div className="flex gap-2">
@@ -1379,7 +1379,7 @@
                                     if (confirm("Force Upload Local Data to Cloud? (Use this if other devices are missing data)")) {
                                         await window.Utils.uploadToCloud();
                                     }
-                                    if (confirm('Clear cache for v19.0.22?')) { localStorage.clear(); location.reload(true); }
+                                    if (confirm('Clear cache for v30?')) { localStorage.clear(); location.reload(true); }
                                 }} className="px-4 py-3 bg-gray-200 text-gray-700 rounded-xl hover:bg-gray-300 transition-colors" title="Force Sync & Clear Cache">
                                     <Icons.RefreshCw className="w-5 h-5" />
                                 </button>
@@ -1392,7 +1392,7 @@
                             </div>
                             <div className="text-center text-xs text-gray-400 mt-4 space-y-1">
                                 <p>Demo: admin/admin</p>
-                                <p className="text-gray-400 text-[10px] mt-2">v28 (Stable)</p>
+                                <p className="text-gray-400 text-[10px] mt-2">v30 (Stable)</p>
                             </div>
                         </form>
                     </div>
@@ -1415,10 +1415,10 @@
                 <div className="w-64 bg-slate-800 text-white min-h-screen flex flex-col">
                     <div className="p-6 border-b border-slate-700">
                         <h1 className="text-xl font-bold">NSXpertise</h1>
-                        <p className="text-xs text-slate-400 mt-1">v19.0.19</p>
+                        <p className="text-xs text-slate-400 mt-1">v30.0.0</p>
                         <div className="flex flex-col gap-1 mt-3">
                             <button
-                                onClick={() => { if (confirm('Clear cache for v19.0.19?')) { localStorage.clear(); location.reload(true); } }}
+                                onClick={() => { if (confirm('Clear cache for v30?')) { localStorage.clear(); location.reload(true); } }}
                                 className="text-[9px] bg-slate-700 hover:bg-red-600 px-2 py-1 rounded transition-colors text-slate-300 font-bold"
                             >
                                 FORCE UPDATE / CLEAR CACHE
@@ -1426,7 +1426,7 @@
                             <button
                                 onClick={() => {
                                     const logs = window.__syncLogs || [];
-                                    alert("--- SYNC LOGS (v19.0.19) ---\n\n" + (logs.length ? logs.join('\n') : "No errors logged."));
+                                    alert("--- SYNC LOGS (v30) ---\n\n" + (logs.length ? logs.join('\n') : "No errors logged."));
                                 }}
                                 className="text-[9px] bg-slate-700 hover:bg-indigo-600 px-2 py-1 rounded transition-colors text-slate-300 font-bold"
                             >
@@ -8477,10 +8477,10 @@
                                 "Cloud Batch IDs": cloudBatches.map(b => b.id).join(", "),
                                 "Cloud Student's BatchID": cloudStudent ? cloudStudent.batchId : "N/A",
                                 "Browser Online": navigator.onLine,
-                                "App Version": "v28.0.0"
+                                "App Version": "v30.0.0"
                             };
                             console.table(diag);
-                            const msg = "--- STUDENT DIAGNOSTICS (v19.0.13) ---\n\n" +
+                            const msg = "--- STUDENT DIAGNOSTICS (v30.0.0) ---\n\n" +
                                 Object.entries(diag).map(([k, v]) => `${k}: ${JSON.stringify(v)}`).join("\n") +
                                 "\n\nActions:\n1. If Target Batch Found is NO -> Admin must Save it.\n2. If Cloud Student ID is different -> Mismatch!";
                             if (confirm(msg)) {
