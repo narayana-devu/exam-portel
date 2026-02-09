@@ -7987,11 +7987,14 @@
 
                 // AUTO-HEAL 2: QP Missing? Try Syncing.
                 if (!qp) {
+                    console.warn(`[Auto-Heal] QP ${pid} not found locally. Keys:`, window.Utils.getQuestionPapers().map(q => q.id));
                     const btn = document.getElementById('sync-status-text');
                     if (btn) btn.innerText = "Fetching Exam Paper...";
                     try {
-                        await window.Utils.downloadFromCloud(true);
+                        const syncResult = await window.Utils.downloadFromCloud(true);
+                        console.log(`[Auto-Heal] Sync Result: ${syncResult}`);
                         qp = window.Utils.getQuestionPapers().find(q => String(q.id) === String(pid));
+                        console.log(`[Auto-Heal] Post-Sync Search for ${pid}:`, qp ? "FOUND" : "NOT FOUND");
                     } catch (e) {
                         console.error("Auto-heal QP sync failed", e);
                     }
