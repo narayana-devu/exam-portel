@@ -1409,7 +1409,7 @@
                                     <div className={`w-2 h-2 rounded-full ${navigator.onLine ? 'bg-green-500' : 'bg-red-500'}`}></div>
                                     {navigator.onLine ? "Cloud Connected" : "Offline Mode"}
                                 </span>
-                                <span>v30.5 (Stable)</span>
+                                <span>v30.6 (Stable)</span>
                             </div>
                             {error && <p className="text-red-500 text-sm text-center bg-red-50 p-2 rounded">{error}</p>}
                             <div className="flex gap-2">
@@ -1433,7 +1433,7 @@
                             </div>
                             <div className="text-center text-xs text-gray-400 mt-4 space-y-1">
                                 <p>Demo: admin/admin</p>
-                                <p className="text-gray-400 text-[10px] mt-2">v30.5 (Stable + Theory Edit)</p>
+                                <p className="text-gray-400 text-[10px] mt-2">v30.6 (Stable + Theory Edit)</p>
                             </div>
                         </form>
                     </div>
@@ -6007,7 +6007,8 @@
             const [evidenceFilter, setEvidenceFilter] = useState('ALL');
             const [facingMode, setFacingMode] = useState('environment');
             const [showGallery, setShowGallery] = useState(false); // Default hidden as per user request
-            const [verificationInfo, setVerificationInfo] = useState(null); // v30.5: Father Name & Aadhar
+            const [verificationInfo, setVerificationInfo] = useState(null); // v30.6: Father Name & Aadhar
+            const [selectedEvidence, setSelectedEvidence] = useState([]); // v30.7: Bulk Delete State
 
             // Camera State
             const [isCamActive, setIsCamActive] = useState(false);
@@ -6072,7 +6073,7 @@
                     evList = [...targetResp.evidence];
                 }
 
-                // v30.5 FIX: Always include VERIFICATION evidence (Selfie/ID) if it exists
+                // v30.6 FIX: Always include VERIFICATION evidence (Selfie/ID) if it exists
                 const verifResp = allStudentResponses.find(r => r.examType === 'VERIFICATION');
                 if (verifResp) {
                     if (verifResp.answers) setVerificationInfo(verifResp.answers); // Load Father/Aadhar
@@ -6348,26 +6349,7 @@
                 // alert("Evidence Deleted Successfully. (Synced)");
             };
 
-            // v30.6: Auto-Start Recording on Mount (NPTEL Style)
-            useEffect(() => {
-                if (showCamera && !isCamActive && !isRecording) {
-                    const autoStart = async () => {
-                        await startCam();
-                        // Wait for cam to be active, then start recording
-                        setTimeout(() => {
-                            if (mediaStreamRef.current) toggleRecording();
-                        }, 1000);
-                    };
-                    autoStart();
-                }
-                // Cleanup on unmount
-                return () => {
-                    if (window.recordingInterval) clearInterval(window.recordingInterval);
-                    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
-                        mediaRecorderRef.current.stop();
-                    }
-                };
-            }, [showCamera]); // trigger when camera becomes visible (Exam Start)
+
 
             // Helper to download all evidence
             const downloadAllEvidence = async () => {
@@ -6401,7 +6383,7 @@
                         </div>
                     </div>
 
-                    {/* v30.5: Verification Details Display */}
+                    {/* v30.6: Verification Details Display */}
                     {!captureOnly && verificationInfo && (
                         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6 flex flex-wrap gap-8 items-center shadow-sm">
                             <div>
@@ -7419,7 +7401,7 @@
             const [verificationStep, setVerificationStep] = useState(null); // null, 'SELFIE', 'ID_CARD'
             const [verificationEvidence, setVerificationEvidence] = useState([]);
             const [pendingExamMode, setPendingExamMode] = useState(null);
-            const [verificationDetails, setVerificationDetails] = useState({ fatherName: '', aadharNumber: '' }); // v30.5: New Details State
+            const [verificationDetails, setVerificationDetails] = useState({ fatherName: '', aadharNumber: '' }); // v30.6: New Details State
 
             // State for Visual Alert
             const detectionInterval = useRef(null);
@@ -7941,7 +7923,7 @@
                 if (mode !== 'VERIFIED_START') {
                     console.log("[Verification] Intercepting Exam Start:", mode);
                     setPendingExamMode(mode);
-                    setVerificationStep('SELFIE'); // v30.5: Reordered: Photo First
+                    setVerificationStep('SELFIE'); // v30.6: Reordered: Photo First
                     return;
                 }
                 console.log("[Verification] Starting Verified Exam");
@@ -8076,691 +8058,682 @@
                     }
                 }
 
-                if (qp) {
-                    setQuestions(qp.questions);
-                    setTimeLeft(qp.totalTime * 60);
-                    setExamMode(startMode);
 
-                    if (startMode === 'Practical') {
-                        // COMPOSITE RECORDING: Screen + Webcam
-                        try {
-                            const screenStream = await navigator.mediaDevices.getDisplayMedia({ video: { cursor: "always" }, audio: true });
-                            const camStream = await navigator.mediaDevices.getUserMedia({ video: { width: 320, height: 240, facingMode: "user" }, audio: true });
+                // v30.7: Explicit Recording Start
+                console.log("Starting Exam Camera & Recording...");
+                await startCam();
+                // Permission gap
+                setTimeout(() => {
+                    if (!isRecording) toggleRecording();
+                }, 2000);
 
-                            // Hidden Video Elements for Source
-                            const screenVid = document.createElement('video');
-                            screenVid.srcObject = screenStream;
-                            screenVid.muted = true;
-                            screenVid.play();
-
-                            const camVid = document.createElement('video');
-                            camVid.srcObject = camStream;
-                            camVid.muted = true;
-                            camVid.play();
-
-                            // Canvas for Compositing
-                            const canvas = document.createElement('canvas');
-                            canvas.width = 1280; // Standard HD
-                            canvas.height = 720;
-                            const ctx = canvas.getContext('2d');
-
-                            // Animation Loop
-                            const drawComposite = () => {
-                                if (!screenVid.paused && !screenVid.ended) {
-                                    // 1. Draw Screen (Background)
-                                    ctx.drawImage(screenVid, 0, 0, canvas.width, canvas.height);
-
-                                    // 2. Draw Webcam (Bottom Right Overlay)
-                                    if (!camVid.paused && !camVid.ended) {
-                                        const camW = 240; // 20% width approx
-                                        const camH = 180;
-                                        const margin = 20;
-                                        ctx.strokeStyle = "red";
-                                        ctx.lineWidth = 2;
-                                        ctx.drawImage(camVid, canvas.width - camW - margin, canvas.height - camH - margin, camW, camH);
-                                        ctx.strokeRect(canvas.width - camW - margin, canvas.height - camH - margin, camW, camH);
-                                    }
-
-                                    // 3. Draw Date/Time Timestamp
-                                    const now = new Date();
-                                    const timeStr = now.toLocaleString('en-US', {
-                                        weekday: 'short', year: 'numeric', month: 'short', day: 'numeric',
-                                        hour: '2-digit', minute: '2-digit', second: '2-digit'
-                                    });
-
-                                    ctx.font = "bold 24px monospace";
-                                    ctx.fillStyle = "white";
-                                    ctx.strokeStyle = "black";
-                                    ctx.lineWidth = 3;
-                                    ctx.strokeText(timeStr, 20, 40);
-                                    ctx.fillText(timeStr, 20, 40);
-                                }
-                                compositeReqRef.current = requestAnimationFrame(drawComposite);
-                            };
-
-                            // Wait for video load
-                            screenVid.onloadedmetadata = () => {
-                                drawComposite();
-                            };
-
-                            // Merge Audio Tracks (Sys Audio + Mic)
-                            const audioTracks = [...screenStream.getAudioTracks(), ...camStream.getAudioTracks()];
-                            const compositeStream = canvas.captureStream(30); // 30 FPS
-                            if (audioTracks.length > 0) {
-                                audioTracks.forEach(t => compositeStream.addTrack(t));
-                            }
-
-                            setMediaStream(compositeStream);
-                            setWebcamActive(true);
-                            setStreamActive(true);
-
-                            // Handle Stop (Stop both source streams)
-                            compositeStream.getVideoTracks()[0].onended = () => {
-                                screenStream.getTracks().forEach(t => t.stop());
-                                camStream.getTracks().forEach(t => t.stop());
-                                if (compositeReqRef.current) cancelAnimationFrame(compositeReqRef.current);
-                            };
-
-                        } catch (err) {
-                            console.error("Composite Setup Failed", err);
-                            alert("Error: You MUST allow BOTH Screen Share and Camera permissions for Practical Exams.\nPlease reload and try again.");
-                            setExamMode(null);
-                        }
-                    } else {
-                        setWebcamActive(true);
-                        // stream useEffect will handle getUserMedia for Theory (Webcam)
-                    }
-                } else {
-                    alert(`Exam Error: The Question Paper (ID: ${pid}) assigned to this batch was not found.\nPlease contact Admin to Assign QP and Sync.`);
-                }
+            } else {
+                alert("Unavailable: Question Paper not loaded for this batch.");
+        }
             };
+        // Canvas for Compositing
+        const canvas = document.createElement('canvas');
+        canvas.width = 1280; // Standard HD
+        canvas.height = 720;
+        const ctx = canvas.getContext('2d');
 
+        // Animation Loop
+        const drawComposite = () => {
+            if (!screenVid.paused && !screenVid.ended) {
+                // 1. Draw Screen (Background)
+                ctx.drawImage(screenVid, 0, 0, canvas.width, canvas.height);
 
-
-            const endExam = () => {
-                // STOP MEDIA
-                if (mediaStream) {
-                    mediaStream.getTracks().forEach(track => track.stop());
-                }
-                if (compositeReqRef.current) {
-                    cancelAnimationFrame(compositeReqRef.current);
-                    compositeReqRef.current = null;
-                }
-                // RESET STATE
-                setMediaStream(null);
-                setWebcamActive(false);
-                setStreamActive(false);
-                setExamMode(null);
-                setIsSubmitting(false);
-            };
-
-            const submitExam = async () => {
-                if (isSubmitting) return;
-                setIsSubmitting(true);
-
-                // Capture final image (Safe Mode)
-                let finalPhoto = null;
-                try {
-                    const v = videoRef.current;
-                    if (v && v.readyState === 4) { // HAVE_ENOUGH_DATA
-                        const c = document.createElement('canvas'); c.width = 300; c.height = 200;
-                        c.getContext('2d').drawImage(v, 0, 0, 300, 200);
-                        finalPhoto = { img: c.toDataURL(), time: new Date().toISOString(), type: 'SUBMISSION' };
-                    }
-                } catch (e) {
-                    console.error("Final Capture Failed", e);
+                // 2. Draw Webcam (Bottom Right Overlay)
+                if (!camVid.paused && !camVid.ended) {
+                    const camW = 240; // 20% width approx
+                    const camH = 180;
+                    const margin = 20;
+                    ctx.strokeStyle = "red";
+                    ctx.lineWidth = 2;
+                    ctx.drawImage(camVid, canvas.width - camW - margin, canvas.height - camH - margin, camW, camH);
+                    ctx.strokeRect(canvas.width - camW - margin, canvas.height - camH - margin, camW, camH);
                 }
 
-                // STOP RECORDING EXPLICITLY & WAIT
-                if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
-                    // DEBUG v22: Visible Alerts for Tracing
-                    alert("DEBUG 1/4: Stopping Recorder... Please wait.");
-                    console.log("Stopping Recorder for Submission...");
-
-                    // CRITICAL FIX: Preserve original onstop to ensure last segment is saved
-                    const originalOnStop = mediaRecorderRef.current.onstop;
-                    const stopPromise = new Promise(resolve => {
-                        mediaRecorderRef.current.onstop = async (e) => {
-                            console.log("Final Segment Saving...");
-                            if (originalOnStop) await originalOnStop(e);
-                            resolve();
-                        };
-                    });
-
-                    mediaRecorderRef.current.stop();
-                    setIsRecording(false);
-                    await stopPromise;
-
-                    // v25: No more waiting for chunk writes, as we write at onstop
-                    // Safety Buffer
-                    await new Promise(r => setTimeout(r, 1000));
-                }
-
-                // v25: REMOVED MERGE LOGIC (Video is already saved in onstop)
-                /*
-                try {
-                   // ... merge logic removed ...
-                }
-                */
-
-
-                // v25: MERGE LOGIC REMOVED (Video saved at onstop)
-                /*
-                // NEW: Full Video Merge (Stitch segments for User Convenience)
-                try {
-                    console.log("Generating Full Video from Segments...");
-                    alert("DEBUG 2/4: Starting Merge Check...");
-    
-                    const currentResp = window.Utils.getResponses().find(r => r.studentId === user.id && r.examType === examMode);
-                    if (currentResp && currentResp.evidence) {
-                        // Filter and Sort Segments by Time (v23: Support Chunks)
-                        const segments = currentResp.evidence
-                            .filter(e => (e.isSegment || e.type === 'VIDEO_INDEXED_DB' || e.type === 'VIDEO_CHUNK') && e.key)
-                            .sort((a, b) => new Date(a.time) - new Date(b.time));
-    
-                        // alert(`DEBUG 3/4: Found ${segments.length} segments.`);
-                        console.log(`[v23 Debug] Found ${segments.length} chunks/segments to merge.`);
-    
-                        if (segments.length > 0) {
-                            const blobPromises = segments.map(s => window.VideoDB.getVideo(s.key));
-                            const blobs = await Promise.all(blobPromises);
-                            const validBlobs = blobs.filter(b => b);
-    
-                            if (validBlobs.length > 0) {
-                                const fullBlob = new Blob(validBlobs, { type: 'video/webm' });
-                                const fullKey = `vid_full_${user.id}_${Date.now()}`;
-                                await window.VideoDB.saveVideo(fullKey, fullBlob);
-    
-                                // Add Full Video to Evidence
-                                const fullEvidence = {
-                                    img: fullKey, key: fullKey, time: new Date().toISOString(),
-                                    type: 'VIDEO_FULL_MERGED', storage: 'indexeddb',
-                                    isFullVideo: true
-                                };
-                                currentResp.evidence.push(fullEvidence);
-                                await window.Utils.saveResponse(currentResp);
-    
-                                // DEBUG ALERTS (v23)
-                                console.log(`Full Video Generated: ${fullKey}`);
-                                alert(`DEBUG 4/4: Merge Success! Size: ${(fullBlob.size / 1024 / 1024).toFixed(2)} MB`);
-    
-                                // AUTO-CLEANUP (v23): Delete Chunks & Segments
-                                // The user wants ONLY the full video. We must delete the loose parts.
-                                console.log(`[Cleanup] Deleting ${segments.length} segments to keep only Full Video.`);
-    
-                                // 1. Remove from Evidence Array (Metadata) to hide from UI immediately
-                                currentResp.evidence = currentResp.evidence.filter(e => !e.isSegment);
-                                currentResp.evidence.push(fullEvidence); // Ensure full video is there
-                                await window.Utils.saveResponse(currentResp);
-    
-                                // 2. Background Delete (Storage & Cloud)
-                                segments.forEach(async (seg) => {
-                                    // Delete Local Blob
-                                    try {
-                                        if (seg.key) await window.VideoDB.deleteVideo(seg.key);
-                                    } catch (e) {
-                                        console.warn("Local delete failed for " + seg.key, e);
-                                    }
-    
-                                    // Delete Cloud Object (if uploaded)
-                                    if (seg.url && seg.url.includes('amazonaws.com')) {
-                                        try {
-                                            const urlObj = new URL(seg.url);
-                                            let s3Key = urlObj.pathname.startsWith('/') ? urlObj.pathname.substring(1) : urlObj.pathname;
-                                            s3Key = decodeURIComponent(s3Key);
-                                            fetch(`${API_BASE}/media?key=${encodeURIComponent(s3Key)}&apiKey=portel_secure_key_2025`, { method: 'DELETE' });
-                                        } catch (e) {
-                                            console.warn("Cloud delete failed for " + seg.key, e);
-                                        }
-                                    }
-                                });
-                            }
-                        }
-                    }
-                } catch (mergeErr) {
-                    console.error("Full Video Merge Failed", mergeErr);
-                    alert("DEBUG ERROR: Merge crashed! " + mergeErr.message);
-                }
-                */
-                if (window.studentRecordingInterval) clearInterval(window.studentRecordingInterval);
-
-                // RE-FETCH EVIDENCE (Includes the just-saved video)
-                // We need to re-fetch because saveResponse updates LocalStorage
-                const updatedRespForUpload = window.Utils.getResponses().find(r => r.studentId === user.id && r.examType === examMode);
-                const finalEvidence = updatedRespForUpload?.evidence || []; // Use updated evidence list
-
-                // Add Final Photo
-                if (finalPhoto) finalEvidence.push(finalPhoto);
-
-                // Calculate Auto-Grades (Initial System Grading)
-                const autoGrades = {};
-                questions.forEach((q, idx) => {
-                    if (q.questionType !== 'CODING' && q.questionType !== 'PRACTICAL' && q.questionType !== 'VIVA') {
-                        // Exact String Match (Case-Insensitive Trimmed)
-                        const studentAns = String(answers[idx] || '').trim().toLowerCase();
-                        const correctAns = String(q.correctAnswer || '').trim().toLowerCase();
-                        if (studentAns && studentAns === correctAns) {
-                            autoGrades[idx] = q.totalMarks;
-                        } else {
-                            autoGrades[idx] = 0;
-                        }
-                    } else {
-                        // For Coding/Practical, leave as 0 or undefined for Manual Grading
-                        autoGrades[idx] = 0;
-                    }
+                // 3. Draw Date/Time Timestamp
+                const now = new Date();
+                const timeStr = now.toLocaleString('en-US', {
+                    weekday: 'short', year: 'numeric', month: 'short', day: 'numeric',
+                    hour: '2-digit', minute: '2-digit', second: '2-digit'
                 });
 
-                const respObj = {
-                    studentId: user.id,
-                    examType: examMode,
-                    answers,
-                    assessorMarks: autoGrades, // Pre-fill with system grades
-                    evidence: finalEvidence
-                };
+                ctx.font = "bold 24px monospace";
+                ctx.fillStyle = "white";
+                ctx.strokeStyle = "black";
+                ctx.lineWidth = 3;
+                ctx.strokeText(timeStr, 20, 40);
+                ctx.fillText(timeStr, 20, 40);
+            }
+            compositeReqRef.current = requestAnimationFrame(drawComposite);
+        };
 
-                // AUTO-UPLOAD: Attempt to sync immediately (Scoped to Current Student)
-                try {
-                    const statusBtn = document.getElementById('sync-status-text');
-                    if (statusBtn) statusBtn.innerText = "Uploading Answer...";
+        // Wait for video load
+        screenVid.onloadedmetadata = () => {
+            drawComposite();
+        };
 
-                    await window.Utils.saveResponse(respObj);
+        // Merge Audio Tracks (Sys Audio + Mic)
+        const audioTracks = [...screenStream.getAudioTracks(), ...camStream.getAudioTracks()];
+        const compositeStream = canvas.captureStream(30); // 30 FPS
+        if (audioTracks.length > 0) {
+            audioTracks.forEach(t => compositeStream.addTrack(t));
+        }
 
-                    // Wait for local video save (give it a moment to finish async IndexedDB writes)
-                    await new Promise(r => setTimeout(r, 1000));
+        setMediaStream(compositeStream);
+        setWebcamActive(true);
+        setStreamActive(true);
 
-                    // Trigger Visible Sync (Only Responses & Only This Student)
-                    // Robust Check: String convert and Force Full Sync (Visible Errors) to ensure evidence is safely in cloud
-                    // Pass 'false' for silent to enable alerts if something goes wrong
-                    const filterByStudent = (item) => String(item.studentId || '').trim() === String(user.id || '').trim();
-                    await window.Utils.uploadToCloud(false, 'responses', filterByStudent);
+        // Handle Stop (Stop both source streams)
+        compositeStream.getVideoTracks()[0].onended = () => {
+            screenStream.getTracks().forEach(t => t.stop());
+            camStream.getTracks().forEach(t => t.stop());
+            if (compositeReqRef.current) cancelAnimationFrame(compositeReqRef.current);
+        };
 
-                    // SUMMARY POPUP (User Request)
-                    const totalPhotos = finalEvidence.filter(e => e.type && (e.type.includes('PHOTO') || e.type.includes('MANUAL'))).length;
-
-                    // Improved Video Calculation: Count segments * 30s + any remaining manual clips
-                    // Since we use 30s fixed segments now, count filtering by 'VIDEO' or 'SEGMENT'
-                    const videoSegments = finalEvidence.filter(e => e.type && (e.type.includes('VIDEO') || e.isSegment)).length;
-                    const totalVideoSec = videoSegments * 30;
-
-                    alert(`Exam Submitted Successfully!\n\nSummary:\n- Video Uploaded: ~${totalVideoSec} Seconds\n- Photos Uploaded: ${totalPhotos}`);
-
-                    endExam();
-
-                } catch (e) {
-                    console.error("Submit Sync Failed", e);
-                    alert("Submitted to LOCAL STORAGE. Cloud Sync Failed (" + e.message + "). The system will retry automatically when online.");
-                    endExam();
-                }
+                        } catch (err) {
+            console.error("Composite Setup Failed", err);
+            alert("Error: You MUST allow BOTH Screen Share and Camera permissions for Practical Exams.\nPlease reload and try again.");
+            setExamMode(null);
+        }
+                    } else {
+            setWebcamActive(true);
+            // stream useEffect will handle getUserMedia for Theory (Webcam)
+        }
+                } else {
+            alert(`Exam Error: The Question Paper (ID: ${pid}) assigned to this batch was not found.\nPlease contact Admin to Assign QP and Sync.`);
+        }
             };
 
 
-            if (examMode) {
-                if (isLocked) return (
-                    <div className="flex h-screen fixed inset-0 z-50 bg-red-50 flex-col items-center justify-center text-center p-8 box-border">
-                        <Icons.Lock className="w-24 h-24 text-red-600 mb-6" />
-                        <h1 className="text-4xl font-bold text-red-700 mb-4">Exam Locked</h1>
-                        <p className="text-xl text-gray-700 mb-8">You have exceeded the maximum number of warnings (5/5).<br />Please contact your Assessor to unlock your exam.</p>
-                        <div className="bg-white p-6 rounded shadow max-w-md w-full text-left">
-                            <h3 className="font-bold mb-2">Violation Log:</h3>
-                            <ul className="text-sm text-red-600 list-disc pl-5 max-h-48 overflow-y-auto">
-                                {proctoringLogs.map((l, i) => <li key={i}>{l}</li>)}
-                            </ul>
-                        </div>
-                    </div>
-                );
 
-                if (examMode === 'VivaWait') return (
-                    <div className="flex h-screen fixed inset-0 z-50 bg-gray-900 flex-col items-center justify-center text-center p-8 box-border text-white animate-fade-in">
-                        <div className="w-32 h-32 bg-gray-800 rounded-full flex items-center justify-center mb-8 border-4 border-indigo-500 shadow-[0_0_20px_rgba(99,102,241,0.5)] animate-pulse">
-                            <Icons.Video className="w-16 h-16 text-indigo-400" />
-                        </div>
-                        <h1 className="text-4xl font-bold mb-4 tracking-tight">Waiting for Host</h1>
-                        <p className="text-xl text-gray-400 mb-8 max-w-md">Please wait here. The assessor will admit you to the Viva session shortly.</p>
-                        <div className="bg-gray-800 p-2 rounded text-xs px-4 mb-4 font-mono text-gray-500">
-                            Room: {`${user.batchId}_${user.id}`}
-                        </div>
-                        <div className="flex gap-2 justify-center mb-12">
-                            <div className="w-3 h-3 bg-white rounded-full animate-bounce delay-0"></div>
-                            <div className="w-3 h-3 bg-white rounded-full animate-bounce delay-100"></div>
-                            <div className="w-3 h-3 bg-white rounded-full animate-bounce delay-200"></div>
-                        </div>
-                        <div className="flex gap-4">
-                            <button onClick={() => setExamMode('VivaLive')} className="px-6 py-2 bg-indigo-600 rounded-lg text-white hover:bg-indigo-700 transition-colors text-sm font-bold">
-                                Join Now (Force)
-                            </button>
-                            <button onClick={endExam} className="px-6 py-2 border border-gray-600 rounded-lg text-gray-400 hover:text-white hover:border-gray-400 transition-colors text-sm">
-                                Leave Waiting Room
-                            </button>
-                        </div>
-                    </div>
-                );
+        const endExam = () => {
+            // STOP MEDIA
+            if (mediaStream) {
+                mediaStream.getTracks().forEach(track => track.stop());
+            }
+            if (compositeReqRef.current) {
+                cancelAnimationFrame(compositeReqRef.current);
+                compositeReqRef.current = null;
+            }
+            // RESET STATE
+            setMediaStream(null);
+            setWebcamActive(false);
+            setStreamActive(false);
+            setExamMode(null);
+            setIsSubmitting(false);
+        };
 
-                if (examMode === 'VivaLive') return (
-                    <div className="flex h-screen fixed inset-0 z-50 bg-black flex-col animate-fade-in">
-                        <div className="flex-1 relative">
-                            {/* Assessor Feed (Center) */}
-                            {
-                                remoteStream ? (
-                                    <video
-                                        id="remote-assessor-video"
-                                        ref={ref => { if (ref && remoteStream) ref.srcObject = remoteStream }}
-                                        autoPlay
-                                        className="absolute inset-0 w-full h-full object-contain bg-black"
-                                    />
-                                ) : (
-                                    <div className="absolute inset-0 flex items-center justify-center">
-                                        <div className="text-center text-gray-500">
-                                            <div className="w-24 h-24 mx-auto mb-4 rounded-full bg-gray-800 flex items-center justify-center animate-pulse">
-                                                <Icons.Video className="w-12 h-12 text-gray-600" />
-                                            </div>
-                                            <h2 className="text-2xl font-bold text-gray-400">Connecting to Assessor...</h2>
-                                            <p className="text-sm">Please wait for the video stream.</p>
-                                        </div>
-                                    </div>
-                                )
-                            }
+        const submitExam = async () => {
+            if (isSubmitting) return;
+            setIsSubmitting(true);
 
-                            {/* Student Self-View (Bottom Right) */}
-                            <div className="absolute bottom-6 right-6 w-48 h-36 bg-gray-900 rounded-lg border-2 border-gray-700 shadow-xl overflow-hidden">
-                                <video id="student-cam-viva" autoPlay muted className="w-full h-full object-cover transform scale-x-[-1]" />
-                            </div>
-
-                            {/* Controls */}
-                            <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2 flex gap-6 bg-gray-900/80 backdrop-blur-md px-8 py-3 rounded-full border border-gray-700">
-                                <div className="p-3 rounded-full bg-gray-700 text-white"><Icons.Microphone className="w-6 h-6" /></div>
-                                <div className="p-3 rounded-full bg-gray-700 text-white"><Icons.Video className="w-6 h-6" /></div>
-                                <button onClick={endExam} className="p-3 rounded-full bg-red-600 text-white hover:bg-red-700"><Icons.PhoneMissed className="w-6 h-6" /></button>
-                            </div>
-                        </div >
-                    </div >
-                );
-
-                return (
-                    <div className="flex h-screen fixed inset-0 z-50 bg-white">
-                        <div className="w-3/4 p-8 overflow-y-auto">
-                            <div className="flex justify-between mb-4">
-                                <h2 className="font-bold text-xl">Exam: {examMode}</h2>
-                                <div className="flex items-center gap-4">
-                                    <div className={`px-4 py-1 rounded font-bold ${warnings > 2 ? 'bg-red-100 text-red-700' : (warnings > 0 ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700')}`}>
-                                        Warnings: {warnings}/5
-                                    </div>
-                                    <div className="font-mono text-xl">{Math.floor(timeLeft / 60)}:{(timeLeft % 60).toString().padStart(2, '0')}</div>
-                                </div>
-                            </div>
-                            {lastWarning && (
-                                <div className="bg-red-600 text-white p-4 rounded shadow-lg mb-6 text-center font-bold text-lg animate-pulse flex items-center justify-center">
-                                    <Icons.TriangleAlert className="inline w-8 h-8 mr-3" />
-                                    <span>WARNING: {lastWarning}</span>
-                                </div>
-                            )}
-                            {questions[currentQ] && (
-                                <div>
-                                    <h3 className="text-lg font-medium mb-4">Q{currentQ + 1}: {questions[currentQ].question}</h3>
-                                    {questions[currentQ].questionType === 'CODING' ? (
-                                        <div className="h-[500px] mb-4">
-                                            <CodeRunner
-                                                code={answers[currentQ] || ''}
-                                                onChange={val => setAnswers({ ...answers, [currentQ]: val })}
-                                            />
-                                        </div>
-                                    ) : (questions[currentQ].questionType === 'PRACTICAL' || questions[currentQ].questionType === 'VIVA') ? (
-                                        <PracticalQuestionRunner
-                                            question={questions[currentQ]}
-                                            answer={answers[currentQ] || {}}
-                                            onAnswer={val => setAnswers({ ...answers, [currentQ]: val })}
-                                        />
-                                    ) : (
-                                        <div className="space-y-2">
-                                            {questions[currentQ].options.map(o => (
-                                                <button key={o} onClick={() => setAnswers({ ...answers, [currentQ]: o })}
-                                                    className={`w-full text-left p-3 border rounded ${answers[currentQ] === o ? 'bg-indigo-100 border-indigo-500' : ''}`}>{o}</button>
-                                            ))}
-                                        </div>
-                                    )}
-                                </div>
-                            )}
-                            <div className="mt-6 flex justify-between">
-                                <button disabled={currentQ === 0} onClick={() => setCurrentQ(c => c - 1)} className="px-4 py-2 border rounded">Prev</button>
-                                {currentQ < questions.length - 1 ?
-                                    <button onClick={() => setCurrentQ(c => c + 1)} className="px-4 py-2 bg-indigo-600 text-white rounded">Next</button> :
-                                    <button onClick={submitExam} disabled={isSubmitting} className={`px-4 py-2 text-white rounded flex items-center gap-2 ${isSubmitting ? 'bg-gray-400 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700'}`}>
-                                        {isSubmitting && <Icons.Loader className="w-4 h-4 animate-spin" />}
-                                        {isSubmitting ? 'Submitting...' : 'Submit Exam'}
-                                    </button>
-                                }
-                            </div>
-                        </div>
-                        <div className="w-1/4 bg-gray-100 p-4 border-l">
-                            <div className="relative">
-                                <div className="relative bg-black rounded mb-2 h-48 flex items-center justify-center overflow-hidden">
-                                    <video ref={videoRef} id="student-cam" autoPlay muted playsInline className={`w-full h-full object-cover transform ${examMode === 'Practical' ? '' : 'scale-x-[-1]'} ${streamActive ? 'block' : 'hidden'}`}></video>
-                                    {!streamActive && (
-                                        <div className="absolute inset-0 flex flex-col items-center justify-center z-20">
-                                            <p className="text-white text-xs mb-2">Camera Off</p>
-                                            <button onClick={startCameraManual} className="bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-full font-bold shadow text-sm">
-                                                Start Camera
-                                            </button>
-                                        </div>
-                                    )}
-                                    {isRecording && (
-                                        <div className="absolute top-2 right-2 flex items-center gap-1 bg-red-600/90 text-white text-[10px] px-2 py-1 rounded-full animate-pulse shadow-lg z-10">
-                                            <div className="w-2 h-2 bg-white rounded-full"></div> REC
-                                        </div>
-                                    )}
-                                </div>
-                                <div className="grid grid-cols-4 gap-2">
-                                    {questions.map((_, i) => <div key={i} onClick={() => setCurrentQ(i)} className={`h-8 flex items-center justify-center cursor-pointer rounded ${answers[i] ? 'bg-green-200' : 'bg-white'}`}>{i + 1}</div>)}
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                );
+            // Capture final image (Safe Mode)
+            let finalPhoto = null;
+            try {
+                const v = videoRef.current;
+                if (v && v.readyState === 4) { // HAVE_ENOUGH_DATA
+                    const c = document.createElement('canvas'); c.width = 300; c.height = 200;
+                    c.getContext('2d').drawImage(v, 0, 0, 300, 200);
+                    finalPhoto = { img: c.toDataURL(), time: new Date().toISOString(), type: 'SUBMISSION' };
+                }
+            } catch (e) {
+                console.error("Final Capture Failed", e);
             }
 
-            return (
-                <div className="p-8">
-                    <div className="flex justify-between items-center mb-6">
-                        <h2 className="text-2xl font-bold">Student Portal</h2>
-                        <button onClick={async () => {
-                            const batches = window.Utils.getBatches();
-                            const statusText = document.getElementById('sync-status-text');
-                            if (statusText) statusText.innerText = "Running Deep Diag...";
+            // STOP RECORDING EXPLICITLY & WAIT
+            if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+                // DEBUG v22: Visible Alerts for Tracing
+                alert("DEBUG 1/4: Stopping Recorder... Please wait.");
+                console.log("Stopping Recorder for Submission...");
 
-                            let cloudBatches = [];
-                            let cloudStudent = null;
-                            let apiOk = false;
-                            try {
-                                const [bRes, sRes] = await Promise.all([
-                                    fetch(`${API_BASE}/batches`, { headers: { 'x-api-key': 'portel_secure_key_2025' } }),
-                                    fetch(`${API_BASE}/students`, { headers: { 'x-api-key': 'portel_secure_key_2025' } })
-                                ]);
-                                if (bRes.ok) cloudBatches = await bRes.json();
-                                if (sRes.ok) {
-                                    const allS = await sRes.json();
-                                    cloudStudent = allS.find(s => s.id === user.id);
-                                }
-                                apiOk = true;
-                            } catch (e) { console.error("Cloud fetch failed", e); }
+                // CRITICAL FIX: Preserve original onstop to ensure last segment is saved
+                const originalOnStop = mediaRecorderRef.current.onstop;
+                const stopPromise = new Promise(resolve => {
+                    mediaRecorderRef.current.onstop = async (e) => {
+                        console.log("Final Segment Saving...");
+                        if (originalOnStop) await originalOnStop(e);
+                        resolve();
+                    };
+                });
 
-                            const targetId = String(user.batchId || '').trim();
-                            const foundInCloud = cloudBatches.some(b => String(b.id || '').trim() === targetId);
+                mediaRecorderRef.current.stop();
+                setIsRecording(false);
+                await stopPromise;
 
-                            const diag = {
-                                "My User ID": user.id,
-                                "Record Found in Cloud?": cloudStudent ? "YES ✅" : "NO ❌",
-                                "Target Batch ID": targetId,
-                                "Found in Cloud Batches?": foundInCloud ? "YES ✅" : "NO ❌",
-                                "API Connectivity": apiOk ? "Connected ✅" : "Failed ❌",
-                                "--- CLOUD INVENTORY ---": "---",
-                                "Cloud Batch IDs": cloudBatches.map(b => b.id).join(", "),
-                                "Cloud Student's BatchID": cloudStudent ? cloudStudent.batchId : "N/A",
-                                "Browser Online": navigator.onLine,
-                                "App Version": "v30.0.0"
+                // v25: No more waiting for chunk writes, as we write at onstop
+                // Safety Buffer
+                await new Promise(r => setTimeout(r, 1000));
+            }
+
+            // v25: REMOVED MERGE LOGIC (Video is already saved in onstop)
+            /*
+            try {
+               // ... merge logic removed ...
+            }
+            */
+
+
+            // v25: MERGE LOGIC REMOVED (Video saved at onstop)
+            /*
+            // NEW: Full Video Merge (Stitch segments for User Convenience)
+            try {
+                console.log("Generating Full Video from Segments...");
+                alert("DEBUG 2/4: Starting Merge Check...");
+ 
+                const currentResp = window.Utils.getResponses().find(r => r.studentId === user.id && r.examType === examMode);
+                if (currentResp && currentResp.evidence) {
+                    // Filter and Sort Segments by Time (v23: Support Chunks)
+                    const segments = currentResp.evidence
+                        .filter(e => (e.isSegment || e.type === 'VIDEO_INDEXED_DB' || e.type === 'VIDEO_CHUNK') && e.key)
+                        .sort((a, b) => new Date(a.time) - new Date(b.time));
+ 
+                    // alert(`DEBUG 3/4: Found ${segments.length} segments.`);
+                    console.log(`[v23 Debug] Found ${segments.length} chunks/segments to merge.`);
+ 
+                    if (segments.length > 0) {
+                        const blobPromises = segments.map(s => window.VideoDB.getVideo(s.key));
+                        const blobs = await Promise.all(blobPromises);
+                        const validBlobs = blobs.filter(b => b);
+ 
+                        if (validBlobs.length > 0) {
+                            const fullBlob = new Blob(validBlobs, { type: 'video/webm' });
+                            const fullKey = `vid_full_${user.id}_${Date.now()}`;
+                            await window.VideoDB.saveVideo(fullKey, fullBlob);
+ 
+                            // Add Full Video to Evidence
+                            const fullEvidence = {
+                                img: fullKey, key: fullKey, time: new Date().toISOString(),
+                                type: 'VIDEO_FULL_MERGED', storage: 'indexeddb',
+                                isFullVideo: true
                             };
-                            console.table(diag);
-                            const msg = "--- STUDENT DIAGNOSTICS (v30.0.0) ---\n\n" +
-                                Object.entries(diag).map(([k, v]) => `${k}: ${JSON.stringify(v)}`).join("\n") +
-                                "\n\nActions:\n1. If Target Batch Found is NO -> Admin must Save it.\n2. If Cloud Student ID is different -> Mismatch!";
-                            if (confirm(msg)) {
-                                if (statusText) statusText.innerText = "Force Syncing...";
-                                await window.Utils.downloadFromCloud(false);
-                                location.reload();
-                            }
-                        }} className="bg-gray-200 hover:bg-gray-300 text-gray-700 px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2">
-                            <Icons.TriangleAlert className="w-4 h-4 text-orange-500" /> Troubleshoot
-                        </button>
-                    </div>
-                    <div className="grid gap-6 md:grid-cols-2">
-                        <div onClick={() => startExam('Theory')} className="bg-white p-8 rounded shadow cursor-pointer hover:shadow-lg border-l-4 border-indigo-600">
-                            <h3 className="text-xl font-bold text-indigo-900">Theory Exam</h3>
-                            <p className="text-gray-500">Multiple choice questions</p>
-                            <button className="mt-4 bg-indigo-600 text-white px-4 py-2 rounded">Start</button>
-                        </div>
-                        <div onClick={() => startExam('Practical')} className="bg-white p-8 rounded shadow cursor-pointer hover:shadow-lg border-l-4 border-purple-600">
-                            <h3 className="text-xl font-bold text-purple-900">Practical Exam</h3>
-                            <p className="text-gray-500">Coding challenges</p>
-                            <button className="mt-4 bg-purple-600 text-white px-4 py-2 rounded">Start</button>
-                        </div>
-
-                        <div onClick={() => setExamMode('VivaWait')} className="bg-white p-8 rounded shadow cursor-pointer hover:shadow-lg border-l-4 border-green-500">
-                            <h3 className="text-xl font-bold text-green-700">Live Viva</h3>
-                            <p className="text-gray-500">Join the live video assessment</p>
-                            <button className="mt-4 bg-green-600 text-white px-4 py-2 rounded flex items-center gap-2"><Icons.Video className="w-4 h-4" /> Join Session</button>
-                        </div>
-                    </div>
-
-                    {/* v26: Verification Modal */}
-                    {
-
-
-                        verificationStep && (
-                            <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4">
-                                <div className="bg-white rounded-xl overflow-hidden max-w-2xl w-full flex flex-col max-h-[90vh]">
-                                    <div className="p-4 border-b bg-gray-50 flex justify-between items-center">
-                                        <h3 className="font-bold text-lg">
-                                            {verificationStep === 'SELFIE' ? "Step 1: Student Photo" :
-                                                verificationStep === 'ID_CARD' ? "Step 2: ID Verification" :
-                                                    verificationStep === 'DETAILS' ? "Step 3: Candidate Details" :
-                                                        "Step 4: Exam Instructions"}
-                                        </h3>
-                                        <button onClick={() => { setVerificationStep(null); setPendingExamMode(null); }} className="text-gray-500 hover:text-red-500">
-                                            <Icons.XCircle className="w-6 h-6" />
-                                        </button>
-                                    </div>
-
-                                    {/* CAMERA STEPS */}
-                                    {(verificationStep === 'SELFIE' || verificationStep === 'ID_CARD') && (
-                                        <div className="flex-1 bg-black relative aspect-video">
-                                            <VideoPreview
-                                                onCapture={(img) => {
-                                                    const type = verificationStep === 'SELFIE' ? 'VERIFICATION_SELFIE' : 'VERIFICATION_ID';
-                                                    const newEvidence = [...verificationEvidence, {
-                                                        img, type, time: new Date().toISOString(),
-                                                        studentId: user.id, batchId: user.batchId
-                                                    }];
-                                                    setVerificationEvidence(newEvidence);
-
-                                                    if (verificationStep === 'SELFIE') {
-                                                        setVerificationStep('ID_CARD');
-                                                    } else {
-                                                        setVerificationStep('DETAILS');
-                                                    }
-                                                }}
-                                                instructions={verificationStep === 'SELFIE' ?
-                                                    "Align your face clearly in the frame." :
-                                                    "Hold your Aadhar/ID Card next to your face."}
-                                            />
-                                        </div>
-                                    )}
-
-                                    {/* DETAILS STEP */}
-                                    {verificationStep === 'DETAILS' && (
-                                        <div className="p-8 space-y-6 overflow-y-auto">
-                                            <div>
-                                                <label className="block text-sm font-bold text-gray-700 mb-2">Father's Name</label>
-                                                <input
-                                                    type="text"
-                                                    className="w-full border border-gray-300 p-3 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
-                                                    value={verificationDetails.fatherName}
-                                                    onChange={e => setVerificationDetails({ ...verificationDetails, fatherName: e.target.value })}
-                                                    placeholder="Enter Father's Name"
-                                                />
-                                            </div>
-                                            <div>
-                                                <label className="block text-sm font-bold text-gray-700 mb-2">Aadhar Number</label>
-                                                <input
-                                                    type="text"
-                                                    className="w-full border border-gray-300 p-3 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
-                                                    value={verificationDetails.aadharNumber}
-                                                    onChange={e => setVerificationDetails({ ...verificationDetails, aadharNumber: e.target.value })}
-                                                    placeholder="Enter 12-digit Aadhar Number"
-                                                    maxLength={12}
-                                                />
-                                            </div>
-                                            <button
-                                                onClick={() => {
-                                                    if (!verificationDetails.fatherName.trim() || !verificationDetails.aadharNumber.trim()) {
-                                                        alert("Please fill all required fields."); return;
-                                                    }
-                                                    if (verificationDetails.aadharNumber.length < 12) {
-                                                        alert("Please enter a valid 12-digit Aadhar Number."); return;
-                                                    }
-                                                    setVerificationStep('INSTRUCTIONS');
-                                                }}
-                                                className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-3 rounded-lg font-bold shadow-lg transition-transform hover:scale-105"
-                                            >
-                                                Next: Instructions &rarr;
-                                            </button>
-                                        </div>
-                                    )}
-
-                                    {/* INSTRUCTIONS STEP */}
-                                    {verificationStep === 'INSTRUCTIONS' && (
-                                        <div className="p-8 space-y-6 overflow-y-auto bg-gray-50 flex-1">
-                                            <div className="text-center mb-6">
-                                                <div className="bg-indigo-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
-                                                    <Icons.FileText className="w-8 h-8 text-indigo-600" />
-                                                </div>
-                                                <h3 className="text-2xl font-bold text-gray-800">Exam Instructions</h3>
-                                                <p className="text-gray-500">Please read carefully before starting.</p>
-                                            </div>
-
-                                            <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm space-y-3 text-sm text-gray-700">
-                                                <p className="flex gap-3"><Icons.CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0" /> Ensure you are in a quiet, well-lit room.</p>
-                                                <p className="flex gap-3"><Icons.CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0" /> Continuous face visibility is required.</p>
-                                                <p className="flex gap-3"><Icons.AlertTriangle className="w-5 h-5 text-orange-500 flex-shrink-0" /> Do not switch tabs or minimize the browser.</p>
-                                                <p className="flex gap-3"><Icons.AlertTriangle className="w-5 h-5 text-orange-500 flex-shrink-0" /> Copy/Paste and Right-Click are disabled.</p>
-                                                <p className="flex gap-3"><Icons.Shield className="w-5 h-5 text-red-500 flex-shrink-0" /> Multiple people or mobile phones detected will be flagged.</p>
-                                            </div>
-
-                                            <button
-                                                onClick={() => {
-                                                    // FINISHED - Save Metadata & Evidence
-                                                    window.Utils.saveResponse({
-                                                        studentId: user.id, examType: 'VERIFICATION',
-                                                        evidence: verificationEvidence,
-                                                        answers: verificationDetails // v30.5: Save Father/Aadhar
-                                                    }).then(() => {
-                                                        console.log("Verification Saved with Details");
-                                                    });
-
-                                                    setVerificationStep(null);
-                                                    startExam('VERIFIED_START');
-                                                }}
-                                                className="w-full bg-green-600 hover:bg-green-700 text-white py-4 rounded-xl font-bold text-lg shadow-xl transition-all hover:scale-105 flex items-center justify-center gap-2"
-                                            >
-                                                Start Exam <Icons.ArrowRight className="w-5 h-5" />
-                                            </button>
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-                        )
+                            currentResp.evidence.push(fullEvidence);
+                            await window.Utils.saveResponse(currentResp);
+ 
+                            // DEBUG ALERTS (v23)
+                            console.log(`Full Video Generated: ${fullKey}`);
+                            alert(`DEBUG 4/4: Merge Success! Size: ${(fullBlob.size / 1024 / 1024).toFixed(2)} MB`);
+ 
+                            // AUTO-CLEANUP (v23): Delete Chunks & Segments
+                            // The user wants ONLY the full video. We must delete the loose parts.
+                            console.log(`[Cleanup] Deleting ${segments.length} segments to keep only Full Video.`);
+ 
+                            // 1. Remove from Evidence Array (Metadata) to hide from UI immediately
+                            currentResp.evidence = currentResp.evidence.filter(e => !e.isSegment);
+                            currentResp.evidence.push(fullEvidence); // Ensure full video is there
+                            await window.Utils.saveResponse(currentResp);
+ 
+                            // 2. Background Delete (Storage & Cloud)
+                            segments.forEach(async (seg) => {
+                                // Delete Local Blob
+                                try {
+                                    if (seg.key) await window.VideoDB.deleteVideo(seg.key);
+                                } catch (e) {
+                                    console.warn("Local delete failed for " + seg.key, e);
+                                }
+ 
+                                // Delete Cloud Object (if uploaded)
+                                if (seg.url && seg.url.includes('amazonaws.com')) {
+                                    try {
+                                        const urlObj = new URL(seg.url);
+                                        let s3Key = urlObj.pathname.startsWith('/') ? urlObj.pathname.substring(1) : urlObj.pathname;
+                                        s3Key = decodeURIComponent(s3Key);
+                                        fetch(`${API_BASE}/media?key=${encodeURIComponent(s3Key)}&apiKey=portel_secure_key_2025`, { method: 'DELETE' });
+                                    } catch (e) {
+                                        console.warn("Cloud delete failed for " + seg.key, e);
+                                    }
+                                }
+                            });
+                        }
                     }
+                }
+            } catch (mergeErr) {
+                console.error("Full Video Merge Failed", mergeErr);
+                alert("DEBUG ERROR: Merge crashed! " + mergeErr.message);
+            }
+            */
+            if (window.studentRecordingInterval) clearInterval(window.studentRecordingInterval);
 
+            // RE-FETCH EVIDENCE (Includes the just-saved video)
+            // We need to re-fetch because saveResponse updates LocalStorage
+            const updatedRespForUpload = window.Utils.getResponses().find(r => r.studentId === user.id && r.examType === examMode);
+            const finalEvidence = updatedRespForUpload?.evidence || []; // Use updated evidence list
+
+            // Add Final Photo
+            if (finalPhoto) finalEvidence.push(finalPhoto);
+
+            // Calculate Auto-Grades (Initial System Grading)
+            const autoGrades = {};
+            questions.forEach((q, idx) => {
+                if (q.questionType !== 'CODING' && q.questionType !== 'PRACTICAL' && q.questionType !== 'VIVA') {
+                    // Exact String Match (Case-Insensitive Trimmed)
+                    const studentAns = String(answers[idx] || '').trim().toLowerCase();
+                    const correctAns = String(q.correctAnswer || '').trim().toLowerCase();
+                    if (studentAns && studentAns === correctAns) {
+                        autoGrades[idx] = q.totalMarks;
+                    } else {
+                        autoGrades[idx] = 0;
+                    }
+                } else {
+                    // For Coding/Practical, leave as 0 or undefined for Manual Grading
+                    autoGrades[idx] = 0;
+                }
+            });
+
+            const respObj = {
+                studentId: user.id,
+                examType: examMode,
+                answers,
+                assessorMarks: autoGrades, // Pre-fill with system grades
+                evidence: finalEvidence
+            };
+
+            // AUTO-UPLOAD: Attempt to sync immediately (Scoped to Current Student)
+            try {
+                const statusBtn = document.getElementById('sync-status-text');
+                if (statusBtn) statusBtn.innerText = "Uploading Answer...";
+
+                await window.Utils.saveResponse(respObj);
+
+                // Wait for local video save (give it a moment to finish async IndexedDB writes)
+                await new Promise(r => setTimeout(r, 1000));
+
+                // Trigger Visible Sync (Only Responses & Only This Student)
+                // Robust Check: String convert and Force Full Sync (Visible Errors) to ensure evidence is safely in cloud
+                // Pass 'false' for silent to enable alerts if something goes wrong
+                const filterByStudent = (item) => String(item.studentId || '').trim() === String(user.id || '').trim();
+                await window.Utils.uploadToCloud(false, 'responses', filterByStudent);
+
+                // SUMMARY POPUP (User Request)
+                const totalPhotos = finalEvidence.filter(e => e.type && (e.type.includes('PHOTO') || e.type.includes('MANUAL'))).length;
+
+                // Improved Video Calculation: Count segments * 30s + any remaining manual clips
+                // Since we use 30s fixed segments now, count filtering by 'VIDEO' or 'SEGMENT'
+                const videoSegments = finalEvidence.filter(e => e.type && (e.type.includes('VIDEO') || e.isSegment)).length;
+                const totalVideoSec = videoSegments * 30;
+
+                alert(`Exam Submitted Successfully!\n\nSummary:\n- Video Uploaded: ~${totalVideoSec} Seconds\n- Photos Uploaded: ${totalPhotos}`);
+
+                endExam();
+
+            } catch (e) {
+                console.error("Submit Sync Failed", e);
+                alert("Submitted to LOCAL STORAGE. Cloud Sync Failed (" + e.message + "). The system will retry automatically when online.");
+                endExam();
+            }
+        };
+
+
+        if (examMode) {
+            if (isLocked) return (
+                <div className="flex h-screen fixed inset-0 z-50 bg-red-50 flex-col items-center justify-center text-center p-8 box-border">
+                    <Icons.Lock className="w-24 h-24 text-red-600 mb-6" />
+                    <h1 className="text-4xl font-bold text-red-700 mb-4">Exam Locked</h1>
+                    <p className="text-xl text-gray-700 mb-8">You have exceeded the maximum number of warnings (5/5).<br />Please contact your Assessor to unlock your exam.</p>
+                    <div className="bg-white p-6 rounded shadow max-w-md w-full text-left">
+                        <h3 className="font-bold mb-2">Violation Log:</h3>
+                        <ul className="text-sm text-red-600 list-disc pl-5 max-h-48 overflow-y-auto">
+                            {proctoringLogs.map((l, i) => <li key={i}>{l}</li>)}
+                        </ul>
+                    </div>
                 </div>
             );
+
+            if (examMode === 'VivaWait') return (
+                <div className="flex h-screen fixed inset-0 z-50 bg-gray-900 flex-col items-center justify-center text-center p-8 box-border text-white animate-fade-in">
+                    <div className="w-32 h-32 bg-gray-800 rounded-full flex items-center justify-center mb-8 border-4 border-indigo-500 shadow-[0_0_20px_rgba(99,102,241,0.5)] animate-pulse">
+                        <Icons.Video className="w-16 h-16 text-indigo-400" />
+                    </div>
+                    <h1 className="text-4xl font-bold mb-4 tracking-tight">Waiting for Host</h1>
+                    <p className="text-xl text-gray-400 mb-8 max-w-md">Please wait here. The assessor will admit you to the Viva session shortly.</p>
+                    <div className="bg-gray-800 p-2 rounded text-xs px-4 mb-4 font-mono text-gray-500">
+                        Room: {`${user.batchId}_${user.id}`}
+                    </div>
+                    <div className="flex gap-2 justify-center mb-12">
+                        <div className="w-3 h-3 bg-white rounded-full animate-bounce delay-0"></div>
+                        <div className="w-3 h-3 bg-white rounded-full animate-bounce delay-100"></div>
+                        <div className="w-3 h-3 bg-white rounded-full animate-bounce delay-200"></div>
+                    </div>
+                    <div className="flex gap-4">
+                        <button onClick={() => setExamMode('VivaLive')} className="px-6 py-2 bg-indigo-600 rounded-lg text-white hover:bg-indigo-700 transition-colors text-sm font-bold">
+                            Join Now (Force)
+                        </button>
+                        <button onClick={endExam} className="px-6 py-2 border border-gray-600 rounded-lg text-gray-400 hover:text-white hover:border-gray-400 transition-colors text-sm">
+                            Leave Waiting Room
+                        </button>
+                    </div>
+                </div>
+            );
+
+            if (examMode === 'VivaLive') return (
+                <div className="flex h-screen fixed inset-0 z-50 bg-black flex-col animate-fade-in">
+                    <div className="flex-1 relative">
+                        {/* Assessor Feed (Center) */}
+                        {
+                            remoteStream ? (
+                                <video
+                                    id="remote-assessor-video"
+                                    ref={ref => { if (ref && remoteStream) ref.srcObject = remoteStream }}
+                                    autoPlay
+                                    className="absolute inset-0 w-full h-full object-contain bg-black"
+                                />
+                            ) : (
+                                <div className="absolute inset-0 flex items-center justify-center">
+                                    <div className="text-center text-gray-500">
+                                        <div className="w-24 h-24 mx-auto mb-4 rounded-full bg-gray-800 flex items-center justify-center animate-pulse">
+                                            <Icons.Video className="w-12 h-12 text-gray-600" />
+                                        </div>
+                                        <h2 className="text-2xl font-bold text-gray-400">Connecting to Assessor...</h2>
+                                        <p className="text-sm">Please wait for the video stream.</p>
+                                    </div>
+                                </div>
+                            )
+                        }
+
+                        {/* Student Self-View (Bottom Right) */}
+                        <div className="absolute bottom-6 right-6 w-48 h-36 bg-gray-900 rounded-lg border-2 border-gray-700 shadow-xl overflow-hidden">
+                            <video id="student-cam-viva" autoPlay muted className="w-full h-full object-cover transform scale-x-[-1]" />
+                        </div>
+
+                        {/* Controls */}
+                        <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2 flex gap-6 bg-gray-900/80 backdrop-blur-md px-8 py-3 rounded-full border border-gray-700">
+                            <div className="p-3 rounded-full bg-gray-700 text-white"><Icons.Microphone className="w-6 h-6" /></div>
+                            <div className="p-3 rounded-full bg-gray-700 text-white"><Icons.Video className="w-6 h-6" /></div>
+                            <button onClick={endExam} className="p-3 rounded-full bg-red-600 text-white hover:bg-red-700"><Icons.PhoneMissed className="w-6 h-6" /></button>
+                        </div>
+                    </div >
+                </div >
+            );
+
+            return (
+                <div className="flex h-screen fixed inset-0 z-50 bg-white">
+                    <div className="w-3/4 p-8 overflow-y-auto">
+                        <div className="flex justify-between mb-4">
+                            <h2 className="font-bold text-xl">Exam: {examMode}</h2>
+                            <div className="flex items-center gap-4">
+                                <div className={`px-4 py-1 rounded font-bold ${warnings > 2 ? 'bg-red-100 text-red-700' : (warnings > 0 ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700')}`}>
+                                    Warnings: {warnings}/5
+                                </div>
+                                <div className="font-mono text-xl">{Math.floor(timeLeft / 60)}:{(timeLeft % 60).toString().padStart(2, '0')}</div>
+                            </div>
+                        </div>
+                        {lastWarning && (
+                            <div className="bg-red-600 text-white p-4 rounded shadow-lg mb-6 text-center font-bold text-lg animate-pulse flex items-center justify-center">
+                                <Icons.TriangleAlert className="inline w-8 h-8 mr-3" />
+                                <span>WARNING: {lastWarning}</span>
+                            </div>
+                        )}
+                        {questions[currentQ] && (
+                            <div>
+                                <h3 className="text-lg font-medium mb-4">Q{currentQ + 1}: {questions[currentQ].question}</h3>
+                                {questions[currentQ].questionType === 'CODING' ? (
+                                    <div className="h-[500px] mb-4">
+                                        <CodeRunner
+                                            code={answers[currentQ] || ''}
+                                            onChange={val => setAnswers({ ...answers, [currentQ]: val })}
+                                        />
+                                    </div>
+                                ) : (questions[currentQ].questionType === 'PRACTICAL' || questions[currentQ].questionType === 'VIVA') ? (
+                                    <PracticalQuestionRunner
+                                        question={questions[currentQ]}
+                                        answer={answers[currentQ] || {}}
+                                        onAnswer={val => setAnswers({ ...answers, [currentQ]: val })}
+                                    />
+                                ) : (
+                                    <div className="space-y-2">
+                                        {questions[currentQ].options.map(o => (
+                                            <button key={o} onClick={() => setAnswers({ ...answers, [currentQ]: o })}
+                                                className={`w-full text-left p-3 border rounded ${answers[currentQ] === o ? 'bg-indigo-100 border-indigo-500' : ''}`}>{o}</button>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                        <div className="mt-6 flex justify-between">
+                            <button disabled={currentQ === 0} onClick={() => setCurrentQ(c => c - 1)} className="px-4 py-2 border rounded">Prev</button>
+                            {currentQ < questions.length - 1 ?
+                                <button onClick={() => setCurrentQ(c => c + 1)} className="px-4 py-2 bg-indigo-600 text-white rounded">Next</button> :
+                                <button onClick={submitExam} disabled={isSubmitting} className={`px-4 py-2 text-white rounded flex items-center gap-2 ${isSubmitting ? 'bg-gray-400 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700'}`}>
+                                    {isSubmitting && <Icons.Loader className="w-4 h-4 animate-spin" />}
+                                    {isSubmitting ? 'Submitting...' : 'Submit Exam'}
+                                </button>
+                            }
+                        </div>
+                    </div>
+                    <div className="w-1/4 bg-gray-100 p-4 border-l">
+                        <div className="relative">
+                            <div className="relative bg-black rounded mb-2 h-48 flex items-center justify-center overflow-hidden">
+                                <video ref={videoRef} id="student-cam" autoPlay muted playsInline className={`w-full h-full object-cover transform ${examMode === 'Practical' ? '' : 'scale-x-[-1]'} ${streamActive ? 'block' : 'hidden'}`}></video>
+                                {!streamActive && (
+                                    <div className="absolute inset-0 flex flex-col items-center justify-center z-20">
+                                        <p className="text-white text-xs mb-2">Camera Off</p>
+                                        <button onClick={startCameraManual} className="bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-full font-bold shadow text-sm">
+                                            Start Camera
+                                        </button>
+                                    </div>
+                                )}
+                                {isRecording && (
+                                    <div className="absolute top-2 right-2 flex items-center gap-1 bg-red-600/90 text-white text-[10px] px-2 py-1 rounded-full animate-pulse shadow-lg z-10">
+                                        <div className="w-2 h-2 bg-white rounded-full"></div> REC
+                                    </div>
+                                )}
+                            </div>
+                            <div className="grid grid-cols-4 gap-2">
+                                {questions.map((_, i) => <div key={i} onClick={() => setCurrentQ(i)} className={`h-8 flex items-center justify-center cursor-pointer rounded ${answers[i] ? 'bg-green-200' : 'bg-white'}`}>{i + 1}</div>)}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            );
+        }
+
+        return (
+            <div className="p-8">
+                <div className="flex justify-between items-center mb-6">
+                    <h2 className="text-2xl font-bold">Student Portal</h2>
+                    <button onClick={async () => {
+                        const batches = window.Utils.getBatches();
+                        const statusText = document.getElementById('sync-status-text');
+                        if (statusText) statusText.innerText = "Running Deep Diag...";
+
+                        let cloudBatches = [];
+                        let cloudStudent = null;
+                        let apiOk = false;
+                        try {
+                            const [bRes, sRes] = await Promise.all([
+                                fetch(`${API_BASE}/batches`, { headers: { 'x-api-key': 'portel_secure_key_2025' } }),
+                                fetch(`${API_BASE}/students`, { headers: { 'x-api-key': 'portel_secure_key_2025' } })
+                            ]);
+                            if (bRes.ok) cloudBatches = await bRes.json();
+                            if (sRes.ok) {
+                                const allS = await sRes.json();
+                                cloudStudent = allS.find(s => s.id === user.id);
+                            }
+                            apiOk = true;
+                        } catch (e) { console.error("Cloud fetch failed", e); }
+
+                        const targetId = String(user.batchId || '').trim();
+                        const foundInCloud = cloudBatches.some(b => String(b.id || '').trim() === targetId);
+
+                        const diag = {
+                            "My User ID": user.id,
+                            "Record Found in Cloud?": cloudStudent ? "YES ✅" : "NO ❌",
+                            "Target Batch ID": targetId,
+                            "Found in Cloud Batches?": foundInCloud ? "YES ✅" : "NO ❌",
+                            "API Connectivity": apiOk ? "Connected ✅" : "Failed ❌",
+                            "--- CLOUD INVENTORY ---": "---",
+                            "Cloud Batch IDs": cloudBatches.map(b => b.id).join(", "),
+                            "Cloud Student's BatchID": cloudStudent ? cloudStudent.batchId : "N/A",
+                            "Browser Online": navigator.onLine,
+                            "App Version": "v30.0.0"
+                        };
+                        console.table(diag);
+                        const msg = "--- STUDENT DIAGNOSTICS (v30.0.0) ---\n\n" +
+                            Object.entries(diag).map(([k, v]) => `${k}: ${JSON.stringify(v)}`).join("\n") +
+                            "\n\nActions:\n1. If Target Batch Found is NO -> Admin must Save it.\n2. If Cloud Student ID is different -> Mismatch!";
+                        if (confirm(msg)) {
+                            if (statusText) statusText.innerText = "Force Syncing...";
+                            await window.Utils.downloadFromCloud(false);
+                            location.reload();
+                        }
+                    }} className="bg-gray-200 hover:bg-gray-300 text-gray-700 px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2">
+                        <Icons.TriangleAlert className="w-4 h-4 text-orange-500" /> Troubleshoot
+                    </button>
+                </div>
+                <div className="grid gap-6 md:grid-cols-2">
+                    <div onClick={() => startExam('Theory')} className="bg-white p-8 rounded shadow cursor-pointer hover:shadow-lg border-l-4 border-indigo-600">
+                        <h3 className="text-xl font-bold text-indigo-900">Theory Exam</h3>
+                        <p className="text-gray-500">Multiple choice questions</p>
+                        <button className="mt-4 bg-indigo-600 text-white px-4 py-2 rounded">Start</button>
+                    </div>
+                    <div onClick={() => startExam('Practical')} className="bg-white p-8 rounded shadow cursor-pointer hover:shadow-lg border-l-4 border-purple-600">
+                        <h3 className="text-xl font-bold text-purple-900">Practical Exam</h3>
+                        <p className="text-gray-500">Coding challenges</p>
+                        <button className="mt-4 bg-purple-600 text-white px-4 py-2 rounded">Start</button>
+                    </div>
+
+                    <div onClick={() => setExamMode('VivaWait')} className="bg-white p-8 rounded shadow cursor-pointer hover:shadow-lg border-l-4 border-green-500">
+                        <h3 className="text-xl font-bold text-green-700">Live Viva</h3>
+                        <p className="text-gray-500">Join the live video assessment</p>
+                        <button className="mt-4 bg-green-600 text-white px-4 py-2 rounded flex items-center gap-2"><Icons.Video className="w-4 h-4" /> Join Session</button>
+                    </div>
+                </div>
+
+                {/* v26: Verification Modal */}
+                {
+
+
+                    verificationStep && (
+                        <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4">
+                            <div className="bg-white rounded-xl overflow-hidden max-w-2xl w-full flex flex-col max-h-[90vh]">
+                                <div className="p-4 border-b bg-gray-50 flex justify-between items-center">
+                                    <h3 className="font-bold text-lg">
+                                        {verificationStep === 'SELFIE' ? "Step 1: Student Photo" :
+                                            verificationStep === 'ID_CARD' ? "Step 2: ID Verification" :
+                                                verificationStep === 'DETAILS' ? "Step 3: Candidate Details" :
+                                                    "Step 4: Exam Instructions"}
+                                    </h3>
+                                    <button onClick={() => { setVerificationStep(null); setPendingExamMode(null); }} className="text-gray-500 hover:text-red-500">
+                                        <Icons.XCircle className="w-6 h-6" />
+                                    </button>
+                                </div>
+
+                                {/* CAMERA STEPS */}
+                                {(verificationStep === 'SELFIE' || verificationStep === 'ID_CARD') && (
+                                    <div className="flex-1 bg-black relative aspect-video">
+                                        <VideoPreview
+                                            onCapture={(img) => {
+                                                const type = verificationStep === 'SELFIE' ? 'VERIFICATION_SELFIE' : 'VERIFICATION_ID';
+                                                const newEvidence = [...verificationEvidence, {
+                                                    img, type, time: new Date().toISOString(),
+                                                    studentId: user.id, batchId: user.batchId
+                                                }];
+                                                setVerificationEvidence(newEvidence);
+
+                                                if (verificationStep === 'SELFIE') {
+                                                    setVerificationStep('ID_CARD');
+                                                } else {
+                                                    setVerificationStep('DETAILS');
+                                                }
+                                            }}
+                                            instructions={verificationStep === 'SELFIE' ?
+                                                "Align your face clearly in the frame." :
+                                                "Hold your Aadhar/ID Card next to your face."}
+                                        />
+                                    </div>
+                                )}
+
+                                {/* DETAILS STEP */}
+                                {verificationStep === 'DETAILS' && (
+                                    <div className="p-8 space-y-6 overflow-y-auto">
+                                        <div>
+                                            <label className="block text-sm font-bold text-gray-700 mb-2">Father's Name</label>
+                                            <input
+                                                type="text"
+                                                className="w-full border border-gray-300 p-3 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
+                                                value={verificationDetails.fatherName}
+                                                onChange={e => setVerificationDetails({ ...verificationDetails, fatherName: e.target.value })}
+                                                placeholder="Enter Father's Name"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-bold text-gray-700 mb-2">Aadhar Number</label>
+                                            <input
+                                                type="text"
+                                                className="w-full border border-gray-300 p-3 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
+                                                value={verificationDetails.aadharNumber}
+                                                onChange={e => setVerificationDetails({ ...verificationDetails, aadharNumber: e.target.value })}
+                                                placeholder="Enter 12-digit Aadhar Number"
+                                                maxLength={12}
+                                            />
+                                        </div>
+                                        <button
+                                            onClick={() => {
+                                                if (!verificationDetails.fatherName.trim() || !verificationDetails.aadharNumber.trim()) {
+                                                    alert("Please fill all required fields."); return;
+                                                }
+                                                if (verificationDetails.aadharNumber.length < 12) {
+                                                    alert("Please enter a valid 12-digit Aadhar Number."); return;
+                                                }
+                                                setVerificationStep('INSTRUCTIONS');
+                                            }}
+                                            className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-3 rounded-lg font-bold shadow-lg transition-transform hover:scale-105"
+                                        >
+                                            Next: Instructions &rarr;
+                                        </button>
+                                    </div>
+                                )}
+
+                                {/* INSTRUCTIONS STEP */}
+                                {verificationStep === 'INSTRUCTIONS' && (
+                                    <div className="p-8 space-y-6 overflow-y-auto bg-gray-50 flex-1">
+                                        <div className="text-center mb-6">
+                                            <div className="bg-indigo-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
+                                                <Icons.FileText className="w-8 h-8 text-indigo-600" />
+                                            </div>
+                                            <h3 className="text-2xl font-bold text-gray-800">Exam Instructions</h3>
+                                            <p className="text-gray-500">Please read carefully before starting.</p>
+                                        </div>
+
+                                        <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm space-y-3 text-sm text-gray-700">
+                                            <p className="flex gap-3"><Icons.CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0" /> Ensure you are in a quiet, well-lit room.</p>
+                                            <p className="flex gap-3"><Icons.CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0" /> Continuous face visibility is required.</p>
+                                            <p className="flex gap-3"><Icons.AlertTriangle className="w-5 h-5 text-orange-500 flex-shrink-0" /> Do not switch tabs or minimize the browser.</p>
+                                            <p className="flex gap-3"><Icons.AlertTriangle className="w-5 h-5 text-orange-500 flex-shrink-0" /> Copy/Paste and Right-Click are disabled.</p>
+                                            <p className="flex gap-3"><Icons.Shield className="w-5 h-5 text-red-500 flex-shrink-0" /> Multiple people or mobile phones detected will be flagged.</p>
+                                        </div>
+
+                                        <button
+                                            onClick={() => {
+                                                // FINISHED - Save Metadata & Evidence
+                                                window.Utils.saveResponse({
+                                                    studentId: user.id, examType: 'VERIFICATION',
+                                                    evidence: verificationEvidence,
+                                                    answers: verificationDetails // v30.6: Save Father/Aadhar
+                                                }).then(() => {
+                                                    console.log("Verification Saved with Details");
+                                                });
+
+                                                setVerificationStep(null);
+                                                startExam('VERIFIED_START');
+                                            }}
+                                            className="w-full bg-green-600 hover:bg-green-700 text-white py-4 rounded-xl font-bold text-lg shadow-xl transition-all hover:scale-105 flex items-center justify-center gap-2"
+                                        >
+                                            Start Exam <Icons.ArrowRight className="w-5 h-5" />
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )
+                }
+
+            </div>
+        );
         };
 
         // ASSESSOR PORTAL
