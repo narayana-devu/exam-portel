@@ -6241,13 +6241,31 @@
                     startSegment();
                     setIsRecording(true);
 
+
+                    // v30.6: NPTEL-Style Auto-Recording (2-Minute Chunks)
+                    const CHUNK_DURATION_MS = 2 * 60 * 1000; // 2 Minutes
+
+                    // Start the first segment immediately
                     startSegment();
                     setIsRecording(true);
 
-                    // v30.5 FIX: User requested "Full Video". Disabled Auto-Splitting.
-                    // Recording will continue until manually stopped or max size reached.
-                    console.log("Recording started (Single Session Mode)");
-                    if (window.recordingInterval) clearInterval(window.recordingInterval); // Safety clear
+                    // Set up interval to restart recording every 2 minutes (Safe Chunking)
+                    window.recordingInterval = setInterval(() => {
+                        if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+                            console.log("[Auto-Record] Saving 2-min chunk...");
+                            mediaRecorderRef.current.stop();
+                            // stop() triggers 'onstop' which saves the file.
+                            // onstop also logic to *not* restart if we wanted to stop.
+                            // BUT here we want to CONTINUOUSLY record.
+                            // Pro-tip: `startSegment` creates a NEW recorder. 
+                            // We just need to trigger the next start AFTER this stop.
+                            // Actually, `onstop` logic above is purely for SAVING.
+                            // We should start the NEXT segment immediately.
+                            setTimeout(startSegment, 100); // Slight buffer
+                        }
+                    }, CHUNK_DURATION_MS);
+
+                    console.log("Recording started (NPTEL Auto-Mode: 2-min chunks)");
                 }
             };
 
@@ -6329,6 +6347,27 @@
                 setEvidence([]); // Clear UI
                 // alert("Evidence Deleted Successfully. (Synced)");
             };
+
+            // v30.6: Auto-Start Recording on Mount (NPTEL Style)
+            useEffect(() => {
+                if (showCamera && !isCamActive && !isRecording) {
+                    const autoStart = async () => {
+                        await startCam();
+                        // Wait for cam to be active, then start recording
+                        setTimeout(() => {
+                            if (mediaStreamRef.current) toggleRecording();
+                        }, 1000);
+                    };
+                    autoStart();
+                }
+                // Cleanup on unmount
+                return () => {
+                    if (window.recordingInterval) clearInterval(window.recordingInterval);
+                    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+                        mediaRecorderRef.current.stop();
+                    }
+                };
+            }, [showCamera]); // trigger when camera becomes visible (Exam Start)
 
             // Helper to download all evidence
             const downloadAllEvidence = async () => {
