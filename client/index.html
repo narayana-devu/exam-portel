@@ -349,8 +349,8 @@
                         'assessors': 'se_assessors'
                     };
 
-                    // SYNC LOCK SAFETY: Reset lock after 30s if it hangs
-                    setTimeout(() => { if (window.Utils._syncLock) { console.warn("[Sync] Lock timeout - forcing release"); window.Utils._syncLock = false; } }, 30000);
+                    // SYNC LOCK SAFETY: Reset lock after 5 mins if it hangs (supports large video uploads)
+                    setTimeout(() => { if (window.Utils._syncLock) { console.warn("[Sync] Lock timeout - forcing release"); window.Utils._syncLock = false; } }, 300000);
 
                     let success = 0;
                     let skipped = 0;
@@ -552,7 +552,9 @@
                         }
                     }
 
-                    return failCount === 0 && success > 0;
+                    const isOk = failCount === 0 && success > 0;
+                    if (isOk && statusBtn && !silent) statusBtn.innerText = "Sync Complete";
+                    return isOk;
                 } catch (globalErr) {
                     console.error("Global Sync Error", globalErr);
                     return false;
