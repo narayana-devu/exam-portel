@@ -1406,7 +1406,7 @@
                                     <div className={`w-2 h-2 rounded-full ${navigator.onLine ? 'bg-green-500' : 'bg-red-500'}`}></div>
                                     {navigator.onLine ? "Cloud Connected" : "Offline Mode"}
                                 </span>
-                                <span>v30.2 (Stable)</span>
+                                <span>v30.3 (Stable)</span>
                             </div>
                             {error && <p className="text-red-500 text-sm text-center bg-red-50 p-2 rounded">{error}</p>}
                             <div className="flex gap-2">
@@ -1430,7 +1430,7 @@
                             </div>
                             <div className="text-center text-xs text-gray-400 mt-4 space-y-1">
                                 <p>Demo: admin/admin</p>
-                                <p className="text-gray-400 text-[10px] mt-2">v30.2 (Stable + Theory Edit)</p>
+                                <p className="text-gray-400 text-[10px] mt-2">v30.3 (Stable + Theory Edit)</p>
                             </div>
                         </form>
                     </div>
@@ -6004,7 +6004,7 @@
             const [evidenceFilter, setEvidenceFilter] = useState('ALL');
             const [facingMode, setFacingMode] = useState('environment');
             const [showGallery, setShowGallery] = useState(false); // Default hidden as per user request
-            const [verificationInfo, setVerificationInfo] = useState(null); // v30.2: Father Name & Aadhar
+            const [verificationInfo, setVerificationInfo] = useState(null); // v30.3: Father Name & Aadhar
 
             // Camera State
             const [isCamActive, setIsCamActive] = useState(false);
@@ -6069,7 +6069,7 @@
                     evList = [...targetResp.evidence];
                 }
 
-                // v30.2 FIX: Always include VERIFICATION evidence (Selfie/ID) if it exists
+                // v30.3 FIX: Always include VERIFICATION evidence (Selfie/ID) if it exists
                 const verifResp = allStudentResponses.find(r => r.examType === 'VERIFICATION');
                 if (verifResp) {
                     if (verifResp.answers) setVerificationInfo(verifResp.answers); // Load Father/Aadhar
@@ -6241,7 +6241,7 @@
                     startSegment();
                     setIsRecording(true);
 
-                    // v30.2 FIX: User requested "Full Video". Disabled Auto-Splitting.
+                    // v30.3 FIX: User requested "Full Video". Disabled Auto-Splitting.
                     // Recording will continue until manually stopped or max size reached.
                     console.log("Recording started (Single Session Mode)");
                     if (window.recordingInterval) clearInterval(window.recordingInterval); // Safety clear
@@ -6359,7 +6359,7 @@
                         </div>
                     </div>
 
-                    {/* v30.2: Verification Details Display */}
+                    {/* v30.3: Verification Details Display */}
                     {!captureOnly && verificationInfo && (
                         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6 flex flex-wrap gap-8 items-center shadow-sm">
                             <div>
@@ -7377,7 +7377,7 @@
             const [verificationStep, setVerificationStep] = useState(null); // null, 'SELFIE', 'ID_CARD'
             const [verificationEvidence, setVerificationEvidence] = useState([]);
             const [pendingExamMode, setPendingExamMode] = useState(null);
-            const [verificationDetails, setVerificationDetails] = useState({ fatherName: '', aadharNumber: '' }); // v30.2: New Details State
+            const [verificationDetails, setVerificationDetails] = useState({ fatherName: '', aadharNumber: '' }); // v30.3: New Details State
 
             // State for Visual Alert
             const detectionInterval = useRef(null);
@@ -7899,7 +7899,7 @@
                 if (mode !== 'VERIFIED_START') {
                     console.log("[Verification] Intercepting Exam Start:", mode);
                     setPendingExamMode(mode);
-                    setVerificationStep('SELFIE'); // v30.2: Reordered: Photo First
+                    setVerificationStep('SELFIE'); // v30.3: Reordered: Photo First
                     return;
                 }
                 console.log("[Verification] Starting Verified Exam");
@@ -8687,9 +8687,9 @@
                                             <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm space-y-3 text-sm text-gray-700">
                                                 <p className="flex gap-3"><Icons.CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0" /> Ensure you are in a quiet, well-lit room.</p>
                                                 <p className="flex gap-3"><Icons.CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0" /> Continuous face visibility is required.</p>
-                                                <p className="flex gap-3"><Icons.TriangleAlert className="w-5 h-5 text-orange-500 flex-shrink-0" /> Do not switch tabs or minimize the browser.</p>
-                                                <p className="flex gap-3"><Icons.TriangleAlert className="w-5 h-5 text-orange-500 flex-shrink-0" /> Copy/Paste and Right-Click are disabled.</p>
-                                                <p className="flex gap-3"><Icons.ShieldAlert className="w-5 h-5 text-red-500 flex-shrink-0" /> Multiple people or mobile phones detected will be flagged.</p>
+                                                <p className="flex gap-3"><Icons.AlertTriangle className="w-5 h-5 text-orange-500 flex-shrink-0" /> Do not switch tabs or minimize the browser.</p>
+                                                <p className="flex gap-3"><Icons.AlertTriangle className="w-5 h-5 text-orange-500 flex-shrink-0" /> Copy/Paste and Right-Click are disabled.</p>
+                                                <p className="flex gap-3"><Icons.Shield className="w-5 h-5 text-red-500 flex-shrink-0" /> Multiple people or mobile phones detected will be flagged.</p>
                                             </div>
 
                                             <button
@@ -8698,7 +8698,7 @@
                                                     window.Utils.saveResponse({
                                                         studentId: user.id, examType: 'VERIFICATION',
                                                         evidence: verificationEvidence,
-                                                        answers: verificationDetails // v30.2: Save Father/Aadhar
+                                                        answers: verificationDetails // v30.3: Save Father/Aadhar
                                                     }).then(() => {
                                                         console.log("Verification Saved with Details");
                                                     });
