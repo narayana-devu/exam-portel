@@ -8674,10 +8674,10 @@
                                 "Cloud Batch IDs": cloudBatches.map(b => b.id).join(", "),
                                 "Cloud Student's BatchID": cloudStudent ? cloudStudent.batchId : "N/A",
                                 "Browser Online": navigator.onLine,
-                                "App Version": "v30.0.0"
+                                "App Version": "v33.0.0"
                             };
                             console.table(diag);
-                            const msg = "--- STUDENT DIAGNOSTICS (v30.0.0) ---\n\n" +
+                            const msg = "--- STUDENT DIAGNOSTICS (v33.0.0) ---\n\n" +
                                 Object.entries(diag).map(([k, v]) => `${k}: ${JSON.stringify(v)}`).join("\n") +
                                 "\n\nActions:\n1. If Target Batch Found is NO -> Admin must Save it.\n2. If Cloud Student ID is different -> Mismatch!";
                             if (confirm(msg)) {
