@@ -18,7 +18,7 @@ app.use(express.urlencoded({ limit: '200mb', extended: true }));
 app.use(express.static('uploads'));
 
 // Ensure uploads directory exists (Fallback)
-const uploadsDir = path.join(__dirname, 'uploads');
+const uploadsDir = path.join(__dirname, '../uploads');
 if (!fs.existsSync(uploadsDir)) {
     fs.mkdirSync(uploadsDir);
 }
@@ -561,11 +561,11 @@ app.get('/api/media-stream', (req, res) => {
 // Removed duplicate health check from bottom
 
 // Serve Client Static Files
-app.use(express.static(path.join(__dirname, '../client')));
+app.use(express.static(path.join(__dirname, '../../client')));
 
 // Catch-all to serve index.html for client-side routing
 app.get('*', (req, res) => {
-    res.sendFile(path.join(__dirname, '../client/index.html'));
+    res.sendFile(path.join(__dirname, '../../client/index.html'));
 });
 
 // Use httpServer.listen instead of app.listen
