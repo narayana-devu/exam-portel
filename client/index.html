@@ -1409,7 +1409,7 @@
                                     <div className={`w-2 h-2 rounded-full ${navigator.onLine ? 'bg-green-500' : 'bg-red-500'}`}></div>
                                     {navigator.onLine ? "Cloud Connected" : "Offline Mode"}
                                 </span>
-                                <span>v30.6 (Stable)</span>
+                                <span>v30.7 (Stable)</span>
                             </div>
                             {error && <p className="text-red-500 text-sm text-center bg-red-50 p-2 rounded">{error}</p>}
                             <div className="flex gap-2">
@@ -1433,7 +1433,7 @@
                             </div>
                             <div className="text-center text-xs text-gray-400 mt-4 space-y-1">
                                 <p>Demo: admin/admin</p>
-                                <p className="text-gray-400 text-[10px] mt-2">v30.6 (Stable + Theory Edit)</p>
+                                <p className="text-gray-400 text-[10px] mt-2">v30.7 (Stable + Theory Edit)</p>
                             </div>
                         </form>
                     </div>
@@ -6007,7 +6007,7 @@
             const [evidenceFilter, setEvidenceFilter] = useState('ALL');
             const [facingMode, setFacingMode] = useState('environment');
             const [showGallery, setShowGallery] = useState(false); // Default hidden as per user request
-            const [verificationInfo, setVerificationInfo] = useState(null); // v30.6: Father Name & Aadhar
+            const [verificationInfo, setVerificationInfo] = useState(null); // v30.7: Father Name & Aadhar
             const [selectedEvidence, setSelectedEvidence] = useState([]); // v30.7: Bulk Delete State
 
             // Camera State
@@ -6073,7 +6073,7 @@
                     evList = [...targetResp.evidence];
                 }
 
-                // v30.6 FIX: Always include VERIFICATION evidence (Selfie/ID) if it exists
+                // v30.7 FIX: Always include VERIFICATION evidence (Selfie/ID) if it exists
                 const verifResp = allStudentResponses.find(r => r.examType === 'VERIFICATION');
                 if (verifResp) {
                     if (verifResp.answers) setVerificationInfo(verifResp.answers); // Load Father/Aadhar
@@ -6243,7 +6243,7 @@
                     setIsRecording(true);
 
 
-                    // v30.6: NPTEL-Style Auto-Recording (2-Minute Chunks)
+                    // v30.7: NPTEL-Style Auto-Recording (2-Minute Chunks)
                     const CHUNK_DURATION_MS = 2 * 60 * 1000; // 2 Minutes
 
                     // Start the first segment immediately
@@ -6418,7 +6418,7 @@
                     </div>
                 </div>
 
-                {/* v30.6: Verification Details Display */}
+                {/* v30.7: Verification Details Display */}
                 {!captureOnly && verificationInfo && (
                     <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6 flex flex-wrap gap-8 items-center shadow-sm">
                         <div>
@@ -6737,8 +6737,6 @@
                 }
             </div >
         );
-        };
-
         const CalendarTab = () => {
             const [date, setDate] = useState(new Date());
             const [events, setEvents] = useState([]);
@@ -7496,7 +7494,7 @@
             const [verificationStep, setVerificationStep] = useState(null); // null, 'SELFIE', 'ID_CARD'
             const [verificationEvidence, setVerificationEvidence] = useState([]);
             const [pendingExamMode, setPendingExamMode] = useState(null);
-            const [verificationDetails, setVerificationDetails] = useState({ fatherName: '', aadharNumber: '' }); // v30.6: New Details State
+            const [verificationDetails, setVerificationDetails] = useState({ fatherName: '', aadharNumber: '' }); // v30.7: New Details State
 
             // State for Visual Alert
             const detectionInterval = useRef(null);
@@ -8018,7 +8016,7 @@
                 if (mode !== 'VERIFIED_START') {
                     console.log("[Verification] Intercepting Exam Start:", mode);
                     setPendingExamMode(mode);
-                    setVerificationStep('SELFIE'); // v30.6: Reordered: Photo First
+                    setVerificationStep('SELFIE'); // v30.7: Reordered: Photo First
                     return;
                 }
                 console.log("[Verification] Starting Verified Exam");
@@ -8240,7 +8238,7 @@
             } else {
                 alert("Unavailable: Question Paper not loaded for this batch.");
         }
-            };
+        };
 
 
 
@@ -8807,7 +8805,7 @@
                                                 window.Utils.saveResponse({
                                                     studentId: user.id, examType: 'VERIFICATION',
                                                     evidence: verificationEvidence,
-                                                    answers: verificationDetails // v30.6: Save Father/Aadhar
+                                                    answers: verificationDetails // v30.7: Save Father/Aadhar
                                                 }).then(() => {
                                                     console.log("Verification Saved with Details");
                                                 });
