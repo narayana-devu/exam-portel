@@ -403,9 +403,9 @@
                                     // This drastically improves speed over sequential awaiting
                                     if (mediaQueue.length > 0) {
                                         if (statusBtn && !silent) statusBtn.innerText = `Uploading ${mediaQueue.length} Media Files...`;
-                                        console.log(`[Sync] Starting Parallel Upload for ${mediaQueue.length} files (Batch Size: 3)`);
+                                        console.log(`[Sync] Starting Parallel Upload for ${mediaQueue.length} files (Batch Size: 5)`);
 
-                                        const BATCH_SIZE = 3;
+                                        const BATCH_SIZE = 5;
                                         for (let i = 0; i < mediaQueue.length; i += BATCH_SIZE) {
                                             const batch = mediaQueue.slice(i, i + BATCH_SIZE);
 
