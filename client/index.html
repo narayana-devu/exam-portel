@@ -8160,6 +8160,12 @@
 
                 if (qp) {
                     // v30.7: Explicit Recording Start logic for BOTH modes
+                    setQuestions(qp.questions || []);
+                    setTimeLeft((qp.duration || 60) * 60);
+                    setExamMode(startMode);
+                    setPendingExamMode(null); // Clear pending mode after start
+                    setVerificationStep(null); // Ensure modal is closed
+                    setWebcamActive(true); // Ensure webcam state is active for proctoring loops
 
                     if (startMode === 'Practical') {
                         // COMPOSITE RECORDING: Screen + Webcam
