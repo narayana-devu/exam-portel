@@ -6004,6 +6004,7 @@
             const [evidenceFilter, setEvidenceFilter] = useState('ALL');
             const [facingMode, setFacingMode] = useState('environment');
             const [showGallery, setShowGallery] = useState(false); // Default hidden as per user request
+            const [verificationInfo, setVerificationInfo] = useState(null); // v30.1: Father Name & Aadhar
 
             // Camera State
             const [isCamActive, setIsCamActive] = useState(false);
@@ -6070,10 +6071,13 @@
 
                 // v30.1 FIX: Always include VERIFICATION evidence (Selfie/ID) if it exists
                 const verifResp = allStudentResponses.find(r => r.examType === 'VERIFICATION');
-                if (verifResp && verifResp.evidence) {
-                    console.log("Found Verification Evidence:", verifResp.evidence.length);
-                    // Prepend verification evidence so it appears first
-                    evList = [...verifResp.evidence, ...evList];
+                if (verifResp) {
+                    if (verifResp.answers) setVerificationInfo(verifResp.answers); // Load Father/Aadhar
+                    if (verifResp.evidence) {
+                        console.log("Found Verification Evidence:", verifResp.evidence.length);
+                        // Prepend verification evidence so it appears first
+                        evList = [...verifResp.evidence, ...evList];
+                    }
                 }
 
                 // RESOLVE INDEXEDDB IMAGES
@@ -7351,6 +7355,7 @@
             const [verificationStep, setVerificationStep] = useState(null); // null, 'SELFIE', 'ID_CARD'
             const [verificationEvidence, setVerificationEvidence] = useState([]);
             const [pendingExamMode, setPendingExamMode] = useState(null);
+            const [verificationDetails, setVerificationDetails] = useState({ fatherName: '', aadharNumber: '' }); // v30.1: New Details State
 
             // State for Visual Alert
             const detectionInterval = useRef(null);
@@ -7872,7 +7877,7 @@
                 if (mode !== 'VERIFIED_START') {
                     console.log("[Verification] Intercepting Exam Start:", mode);
                     setPendingExamMode(mode);
-                    setVerificationStep('SELFIE');
+                    setVerificationStep('DETAILS'); // v30.1: Start with Details Input
                     return;
                 }
                 console.log("[Verification] Starting Verified Exam");
@@ -8563,49 +8568,91 @@
 
                     {/* v26: Verification Modal */}
                     {
-                        verificationStep && (
+                        {
+                            verificationStep && (
                             <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4">
                                 <div className="bg-white rounded-xl overflow-hidden max-w-2xl w-full flex flex-col max-h-[90vh]">
                                     <div className="p-4 border-b bg-gray-50 flex justify-between items-center">
                                         <h3 className="font-bold text-lg">
-                                            {verificationStep === 'SELFIE' ? "Step 1: Student Photo" : "Step 2: Student + ID Card"}
+                                            {verificationStep === 'DETAILS' ? "Step 1: Identity Verification" :
+                                                verificationStep === 'SELFIE' ? "Step 2: Student Photo" : "Step 3: Student + ID Card"}
                                         </h3>
                                         <button onClick={() => { setVerificationStep(null); setPendingExamMode(null); }} className="text-gray-500 hover:text-red-500">
                                             <Icons.XCircle className="w-6 h-6" />
                                         </button>
                                     </div>
 
-                                    <div className="flex-1 bg-black relative aspect-video">
-                                        <VideoPreview
-                                            onCapture={(img) => {
-                                                const type = verificationStep === 'SELFIE' ? 'VERIFICATION_SELFIE' : 'VERIFICATION_ID';
-                                                const newEvidence = [...verificationEvidence, {
-                                                    img, type, time: new Date().toISOString(),
-                                                    studentId: user.id, batchId: user.batchId
-                                                }];
-                                                setVerificationEvidence(newEvidence);
+                                    {verificationStep === 'DETAILS' ? (
+                                        <div className="p-8 space-y-6">
+                                            <div>
+                                                <label className="block text-sm font-bold text-gray-700 mb-2">Father's Name</label>
+                                                <input
+                                                    type="text"
+                                                    className="w-full border border-gray-300 p-3 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
+                                                    value={verificationDetails.fatherName}
+                                                    onChange={e => setVerificationDetails({ ...verificationDetails, fatherName: e.target.value })}
+                                                    placeholder="Enter Father's Name"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-sm font-bold text-gray-700 mb-2">Aadhar Number</label>
+                                                <input
+                                                    type="text"
+                                                    className="w-full border border-gray-300 p-3 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
+                                                    value={verificationDetails.aadharNumber}
+                                                    onChange={e => setVerificationDetails({ ...verificationDetails, aadharNumber: e.target.value })}
+                                                    placeholder="Enter 12-digit Aadhar Number"
+                                                    maxLength={12}
+                                                />
+                                            </div>
+                                            <button
+                                                onClick={() => {
+                                                    if (!verificationDetails.fatherName.trim() || !verificationDetails.aadharNumber.trim()) {
+                                                        alert("Please fill all required fields."); return;
+                                                    }
+                                                    if (verificationDetails.aadharNumber.length < 12) {
+                                                        alert("Please enter a valid 12-digit Aadhar Number."); return;
+                                                    }
+                                                    setVerificationStep('SELFIE');
+                                                }}
+                                                className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-3 rounded-lg font-bold shadow-lg transition-transform hover:scale-105"
+                                            >
+                                                Next: Photo Verification &rarr;
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        <div className="flex-1 bg-black relative aspect-video">
+                                            <VideoPreview
+                                                onCapture={(img) => {
+                                                    const type = verificationStep === 'SELFIE' ? 'VERIFICATION_SELFIE' : 'VERIFICATION_ID';
+                                                    const newEvidence = [...verificationEvidence, {
+                                                        img, type, time: new Date().toISOString(),
+                                                        studentId: user.id, batchId: user.batchId
+                                                    }];
+                                                    setVerificationEvidence(newEvidence);
 
-                                                if (verificationStep === 'SELFIE') {
-                                                    setVerificationStep('ID_CARD');
-                                                } else {
-                                                    // FINISHED
-                                                    // Save Verification Evidence
-                                                    window.Utils.saveResponse({
-                                                        studentId: user.id, examType: 'VERIFICATION',
-                                                        evidence: newEvidence
-                                                    }).then(() => {
-                                                        console.log("Verification Saved");
-                                                    });
+                                                    if (verificationStep === 'SELFIE') {
+                                                        setVerificationStep('ID_CARD');
+                                                    } else {
+                                                        // FINISHED - Save Metadata too
+                                                        window.Utils.saveResponse({
+                                                            studentId: user.id, examType: 'VERIFICATION',
+                                                            evidence: newEvidence,
+                                                            answers: verificationDetails // v30.1: Save Father/Aadhar
+                                                        }).then(() => {
+                                                            console.log("Verification Saved with Details");
+                                                        });
 
-                                                    setVerificationStep(null);
-                                                    startExam('VERIFIED_START');
-                                                }
-                                            }}
-                                            instructions={verificationStep === 'SELFIE' ?
-                                                "Align your face clearly in the frame." :
-                                                "Hold your Aadhar/ID Card next to your face."}
-                                        />
-                                    </div>
+                                                        setVerificationStep(null);
+                                                        startExam('VERIFIED_START');
+                                                    }
+                                                }}
+                                                instructions={verificationStep === 'SELFIE' ?
+                                                    "Align your face clearly in the frame." :
+                                                    "Hold your Aadhar/ID Card next to your face."}
+                                            />
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         )
