@@ -82,7 +82,7 @@
             alert(report);
             return false;
         };
-        console.log("V30.4 DEPLOYMENT ACTIVE - DIAGNOSTIC MODE - CLEANUP 2 (VERBOSE ERROR ON)");
+        console.log("V33.0.0 DEPLOYMENT ACTIVE - DIAGNOSTIC MODE - CLEANUP 2 (VERBOSE ERROR ON)");
 
         // DATA LAYER
         const DB_KEYS = {
@@ -1417,7 +1417,7 @@
                                     <div className={`w-2 h-2 rounded-full ${navigator.onLine ? 'bg-green-500' : 'bg-red-500'}`}></div>
                                     {navigator.onLine ? "Cloud Connected" : "Offline Mode"}
                                 </span>
-                                <span>v30.7 (Stable)</span>
+                                <span>v33.0.0 (Stable)</span>
                             </div>
                             {error && <p className="text-red-500 text-sm text-center bg-red-50 p-2 rounded">{error}</p>}
                             <div className="flex gap-2">
@@ -1428,7 +1428,7 @@
                                     if (confirm("Force Upload Local Data to Cloud? (Use this if other devices are missing data)")) {
                                         await window.Utils.uploadToCloud();
                                     }
-                                    if (confirm('Clear cache for v30?')) { localStorage.clear(); location.reload(true); }
+                                    if (confirm('Clear cache for v33?')) { localStorage.clear(); location.reload(true); }
                                 }} className="px-4 py-3 bg-gray-200 text-gray-700 rounded-xl hover:bg-gray-300 transition-colors" title="Force Sync & Clear Cache">
                                     <Icons.RefreshCw className="w-5 h-5" />
                                 </button>
@@ -1441,7 +1441,7 @@
                             </div>
                             <div className="text-center text-xs text-gray-400 mt-4 space-y-1">
                                 <p>Demo: admin/admin</p>
-                                <p className="text-gray-400 text-[10px] mt-2">v30.7 (Stable + Theory Edit)</p>
+                                <p className="text-gray-400 text-[10px] mt-2">v33.0.0 (Stable + Theory Edit)</p>
                             </div>
                         </form>
                     </div>
@@ -1464,7 +1464,7 @@
                 <div className="w-64 bg-slate-800 text-white min-h-screen flex flex-col">
                     <div className="p-6 border-b border-slate-700">
                         <h1 className="text-xl font-bold">NSXpertise</h1>
-                        <p className="text-xs text-slate-400 mt-1">v30.0.0</p>
+                        <p className="text-xs text-slate-400 mt-1">v33.0.0</p>
                         <div className="flex flex-col gap-1 mt-3">
                             <button
                                 onClick={() => { if (confirm('Clear cache for v30?')) { localStorage.clear(); location.reload(true); } }}
@@ -1475,7 +1475,7 @@
                             <button
                                 onClick={() => {
                                     const logs = window.__syncLogs || [];
-                                    alert("--- SYNC LOGS (v30) ---\n\n" + (logs.length ? logs.join('\n') : "No errors logged."));
+                                    alert("--- SYNC LOGS (v33) ---\n\n" + (logs.length ? logs.join('\n') : "No errors logged."));
                                 }}
                                 className="text-[9px] bg-slate-700 hover:bg-indigo-600 px-2 py-1 rounded transition-colors text-slate-300 font-bold"
                             >
