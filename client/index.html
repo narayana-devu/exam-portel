@@ -6359,6 +6359,28 @@
                         </div>
                     </div>
 
+                    {/* v30.1: Verification Details Display */}
+                    {!captureOnly && verificationInfo && (
+                        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6 flex flex-wrap gap-8 items-center shadow-sm">
+                            <div>
+                                <h4 className="text-xs font-bold text-blue-500 uppercase tracking-wider">Candidate Name</h4>
+                                <p className="text-lg font-bold text-gray-800">{student.name}</p>
+                            </div>
+                            <div>
+                                <h4 className="text-xs font-bold text-blue-500 uppercase tracking-wider">Father's Name</h4>
+                                <p className="text-lg font-bold text-gray-800">{verificationInfo.fatherName || 'N/A'}</p>
+                            </div>
+                            <div>
+                                <h4 className="text-xs font-bold text-blue-500 uppercase tracking-wider">Aadhar Number</h4>
+                                <p className="text-lg font-bold text-gray-800 font-mono tracking-wide">{verificationInfo.aadharNumber || 'N/A'}</p>
+                            </div>
+                            <div>
+                                <h4 className="text-xs font-bold text-blue-500 uppercase tracking-wider">Status</h4>
+                                <p className="text-lg font-bold text-green-600 flex items-center gap-1"><Icons.CheckCircle className="w-5 h-5" /> Verified</p>
+                            </div>
+                        </div>
+                    )}
+
                     {/* Assessor Camera Section - ALWAYS VISIBLE */}
                     {showCamera && (
                         <div className="bg-slate-900 p-4 rounded shadow mb-6 text-white text-center">
@@ -7877,7 +7899,7 @@
                 if (mode !== 'VERIFIED_START') {
                     console.log("[Verification] Intercepting Exam Start:", mode);
                     setPendingExamMode(mode);
-                    setVerificationStep('DETAILS'); // v30.1: Start with Details Input
+                    setVerificationStep('SELFIE'); // v30.1: Reordered: Photo First
                     return;
                 }
                 console.log("[Verification] Starting Verified Exam");
@@ -8568,22 +8590,51 @@
 
                     {/* v26: Verification Modal */}
                     {
+
                         {
                             verificationStep && (
                             <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4">
                                 <div className="bg-white rounded-xl overflow-hidden max-w-2xl w-full flex flex-col max-h-[90vh]">
                                     <div className="p-4 border-b bg-gray-50 flex justify-between items-center">
                                         <h3 className="font-bold text-lg">
-                                            {verificationStep === 'DETAILS' ? "Step 1: Identity Verification" :
-                                                verificationStep === 'SELFIE' ? "Step 2: Student Photo" : "Step 3: Student + ID Card"}
+                                            {verificationStep === 'SELFIE' ? "Step 1: Student Photo" :
+                                                verificationStep === 'ID_CARD' ? "Step 2: ID Verification" :
+                                                    verificationStep === 'DETAILS' ? "Step 3: Candidate Details" :
+                                                        "Step 4: Exam Instructions"}
                                         </h3>
                                         <button onClick={() => { setVerificationStep(null); setPendingExamMode(null); }} className="text-gray-500 hover:text-red-500">
                                             <Icons.XCircle className="w-6 h-6" />
                                         </button>
                                     </div>
 
-                                    {verificationStep === 'DETAILS' ? (
-                                        <div className="p-8 space-y-6">
+                                    {/* CAMERA STEPS */}
+                                    {(verificationStep === 'SELFIE' || verificationStep === 'ID_CARD') && (
+                                        <div className="flex-1 bg-black relative aspect-video">
+                                            <VideoPreview
+                                                onCapture={(img) => {
+                                                    const type = verificationStep === 'SELFIE' ? 'VERIFICATION_SELFIE' : 'VERIFICATION_ID';
+                                                    const newEvidence = [...verificationEvidence, {
+                                                        img, type, time: new Date().toISOString(),
+                                                        studentId: user.id, batchId: user.batchId
+                                                    }];
+                                                    setVerificationEvidence(newEvidence);
+
+                                                    if (verificationStep === 'SELFIE') {
+                                                        setVerificationStep('ID_CARD');
+                                                    } else {
+                                                        setVerificationStep('DETAILS');
+                                                    }
+                                                }}
+                                                instructions={verificationStep === 'SELFIE' ?
+                                                    "Align your face clearly in the frame." :
+                                                    "Hold your Aadhar/ID Card next to your face."}
+                                            />
+                                        </div>
+                                    )}
+
+                                    {/* DETAILS STEP */}
+                                    {verificationStep === 'DETAILS' && (
+                                        <div className="p-8 space-y-6 overflow-y-auto">
                                             <div>
                                                 <label className="block text-sm font-bold text-gray-700 mb-2">Father's Name</label>
                                                 <input
@@ -8613,49 +8664,58 @@
                                                     if (verificationDetails.aadharNumber.length < 12) {
                                                         alert("Please enter a valid 12-digit Aadhar Number."); return;
                                                     }
-                                                    setVerificationStep('SELFIE');
+                                                    setVerificationStep('INSTRUCTIONS');
                                                 }}
                                                 className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-3 rounded-lg font-bold shadow-lg transition-transform hover:scale-105"
                                             >
-                                                Next: Photo Verification &rarr;
+                                                Next: Instructions &rarr;
                                             </button>
                                         </div>
-                                    ) : (
-                                        <div className="flex-1 bg-black relative aspect-video">
-                                            <VideoPreview
-                                                onCapture={(img) => {
-                                                    const type = verificationStep === 'SELFIE' ? 'VERIFICATION_SELFIE' : 'VERIFICATION_ID';
-                                                    const newEvidence = [...verificationEvidence, {
-                                                        img, type, time: new Date().toISOString(),
-                                                        studentId: user.id, batchId: user.batchId
-                                                    }];
-                                                    setVerificationEvidence(newEvidence);
+                                    )}
 
-                                                    if (verificationStep === 'SELFIE') {
-                                                        setVerificationStep('ID_CARD');
-                                                    } else {
-                                                        // FINISHED - Save Metadata too
-                                                        window.Utils.saveResponse({
-                                                            studentId: user.id, examType: 'VERIFICATION',
-                                                            evidence: newEvidence,
-                                                            answers: verificationDetails // v30.1: Save Father/Aadhar
-                                                        }).then(() => {
-                                                            console.log("Verification Saved with Details");
-                                                        });
+                                    {/* INSTRUCTIONS STEP */}
+                                    {verificationStep === 'INSTRUCTIONS' && (
+                                        <div className="p-8 space-y-6 overflow-y-auto bg-gray-50 flex-1">
+                                            <div className="text-center mb-6">
+                                                <div className="bg-indigo-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
+                                                    <Icons.FileText className="w-8 h-8 text-indigo-600" />
+                                                </div>
+                                                <h3 className="text-2xl font-bold text-gray-800">Exam Instructions</h3>
+                                                <p className="text-gray-500">Please read carefully before starting.</p>
+                                            </div>
 
-                                                        setVerificationStep(null);
-                                                        startExam('VERIFIED_START');
-                                                    }
+                                            <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm space-y-3 text-sm text-gray-700">
+                                                <p className="flex gap-3"><Icons.CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0" /> Ensure you are in a quiet, well-lit room.</p>
+                                                <p className="flex gap-3"><Icons.CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0" /> Continuous face visibility is required.</p>
+                                                <p className="flex gap-3"><Icons.TriangleAlert className="w-5 h-5 text-orange-500 flex-shrink-0" /> Do not switch tabs or minimize the browser.</p>
+                                                <p className="flex gap-3"><Icons.TriangleAlert className="w-5 h-5 text-orange-500 flex-shrink-0" /> Copy/Paste and Right-Click are disabled.</p>
+                                                <p className="flex gap-3"><Icons.ShieldAlert className="w-5 h-5 text-red-500 flex-shrink-0" /> Multiple people or mobile phones detected will be flagged.</p>
+                                            </div>
+
+                                            <button
+                                                onClick={() => {
+                                                    // FINISHED - Save Metadata & Evidence
+                                                    window.Utils.saveResponse({
+                                                        studentId: user.id, examType: 'VERIFICATION',
+                                                        evidence: verificationEvidence,
+                                                        answers: verificationDetails // v30.1: Save Father/Aadhar
+                                                    }).then(() => {
+                                                        console.log("Verification Saved with Details");
+                                                    });
+
+                                                    setVerificationStep(null);
+                                                    startExam('VERIFIED_START');
                                                 }}
-                                                instructions={verificationStep === 'SELFIE' ?
-                                                    "Align your face clearly in the frame." :
-                                                    "Hold your Aadhar/ID Card next to your face."}
-                                            />
+                                                className="w-full bg-green-600 hover:bg-green-700 text-white py-4 rounded-xl font-bold text-lg shadow-xl transition-all hover:scale-105 flex items-center justify-center gap-2"
+                                            >
+                                                Start Exam <Icons.ArrowRight className="w-5 h-5" />
+                                            </button>
                                         </div>
                                     )}
                                 </div>
                             </div>
                         )
+                    }
                     }
                 </div>
             );
