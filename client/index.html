@@ -6186,6 +6186,45 @@
                 setEvidence(prev => [...prev, newEvidence]);
             };
 
+            const startSegment = () => {
+                let localChunks = [];
+                const recorder = new MediaRecorder(mediaStreamRef.current);
+                recorder.ondataavailable = e => { if (e.data.size > 0) localChunks.push(e.data); };
+                recorder.onstop = async () => {
+                    const blob = new Blob(localChunks, { type: 'video/webm' });
+                    const key = `vid_${student.id}_${Date.now()}`;
+                    const currentSeq = segmentSequenceRef.current;
+
+                    try {
+                        await window.VideoDB.saveVideo(key, blob);
+                        const newEvidence = {
+                            img: null, key: key, time: new Date().toISOString(),
+                            type: 'VIDEO_INDEXED_DB', storage: 'indexeddb',
+                            sessionId: recordingSessionRef.current,
+                            sequence: currentSeq,
+                            isSegment: true
+                        };
+
+                        const partialResponse = {
+                            studentId: student.id, batchId: batch.id, examType: examType,
+                            evidence: [newEvidence], status: 'draft'
+                        };
+                        window.Utils.saveResponse(partialResponse);
+                        setEvidence(prev => [...prev, newEvidence]);
+
+                        // Signal Part Upload
+                        const btn = document.getElementById('sync-status-text');
+                        if (btn) btn.innerText = `Uploading Part ${currentSeq}...`;
+                        window.Utils.uploadToCloud(true);
+
+                    } catch (err) {
+                        console.error("Failed to save video", err);
+                    }
+                };
+                recorder.start(1000);
+                mediaRecorderRef.current = recorder;
+            };
+
             const toggleRecording = () => {
                 if (isRecording) {
                     // STOP MANUAL
@@ -6201,82 +6240,10 @@
                     recordingSessionRef.current = `session_${Date.now()}`;
                     segmentSequenceRef.current = 1;
 
-                    const startSegment = () => {
-                        let localChunks = [];
-                        const recorder = new MediaRecorder(mediaStreamRef.current);
-                        recorder.ondataavailable = e => { if (e.data.size > 0) localChunks.push(e.data); };
-                        recorder.onstop = async () => {
-                            const blob = new Blob(localChunks, { type: 'video/webm' });
-                            const key = `vid_${student.id}_${Date.now()}`;
-                            const currentSeq = segmentSequenceRef.current; // Capture current seq
-
-                            try {
-                                await VideoDB.saveVideo(key, blob);
-                                const newEvidence = {
-                                    img: null,
-                                    key: key,
-                                    time: new Date().toISOString(),
-                                    type: 'VIDEO_INDEXED_DB',
-                                    storage: 'indexeddb',
-                                    // METADATA FOR GROUPING
-                                    sessionId: recordingSessionRef.current,
-                                    sequence: currentSeq,
-                                    isSegment: true
-                                };
-
-                                const partialResponse = {
-                                    studentId: student.id,
-                                    batchId: batch.id,
-                                    examType: examType,
-                                    evidence: [newEvidence],
-                                    status: 'draft'
-                                };
-                                window.Utils.saveResponse(partialResponse);
-                                setEvidence(prev => [...prev, newEvidence]);
-
-                                // AUTO SYNC
-                                const statusBtn = document.getElementById('sync-status-text');
-                                if (statusBtn) statusBtn.innerText = `Uploading Part ${currentSeq}...`;
-                                window.Utils.uploadToCloud(true).then(() => {
-                                    if (statusBtn) statusBtn.innerText = "Synced";
-                                });
-
-                            } catch (err) {
-                                console.error("Failed to save video to DB", err);
-                            }
-                        };
-                        recorder.start(1000); // 1s chunks to keep `ondataavailable` firing
-                        mediaRecorderRef.current = recorder;
-                    };
-
+                    // v33.0.0: Manual Recording for Assessors (No Auto-Rotation)
                     startSegment();
                     setIsRecording(true);
-
-
-                    // v30.7: NPTEL-Style Auto-Recording (2-Minute Chunks)
-                    const CHUNK_DURATION_MS = 2 * 60 * 1000; // 2 Minutes
-
-                    // Start the first segment immediately
-                    startSegment();
-                    setIsRecording(true);
-
-                    // Set up interval to restart recording every 2 minutes (Safe Chunking)
-                    window.recordingInterval = setInterval(() => {
-                        if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
-                            console.log("[Auto-Record] Saving 2-min chunk...");
-                            mediaRecorderRef.current.stop();
-                            // stop() triggers 'onstop' which saves the file.
-                            // onstop also logic to *not* restart if we wanted to stop.
-                            // BUT here we want to CONTINUOUSLY record.
-                            // Pro-tip: `startSegment` creates a NEW recorder. 
-                            // We just need to trigger the next start AFTER this stop.
-                            // Actually, `onstop` logic above is purely for SAVING.
-                            // We should start the NEXT segment immediately.
-                            setTimeout(startSegment, 100); // Slight buffer
-                        }
-                    }, CHUNK_DURATION_MS);
-
-                    console.log("Recording started (NPTEL Auto-Mode: 2-min chunks)");
+                    console.log("Manual Video Recording started for Assessor");
                 }
             };
 
@@ -7723,15 +7690,16 @@
 
             // SEGMENTED RECORDING LOGIC (StudentPortal)
             useEffect(() => {
-                const shouldRecord = examMode && !isLocked && !isSubmitting && (webcamActive || examMode === 'VivaLive' || examMode === 'VivaWait');
+                // v33.0.0: Strict Recording - Only for Theory/Practical (Not Viva/Assessors)
+                const isStudentExam = examMode === 'Theory' || examMode === 'Practical';
+                const shouldRecord = isStudentExam && !isLocked && !isSubmitting && webcamActive;
 
                 if (!shouldRecord) {
-                    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+                    if (mediaStream && mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+                        console.log("[Record] Stopping recording (Condition changed)");
                         mediaRecorderRef.current.stop();
-                        setIsRecording(false);
-                        if (window.studentRecordingInterval) clearInterval(window.studentRecordingInterval);
-                        recordingSessionRef.current = null;
                     }
+                    if (window.studentRecordingInterval) clearInterval(window.studentRecordingInterval);
                     return;
                 }
 
@@ -7741,87 +7709,75 @@
                     segmentSequenceRef.current = 1;
                 }
 
-                // v23: CONTINUOUS RECORDING (One File, Many Chunks)
                 const startSegment = () => {
                     const stream = mediaStream;
                     if (!stream) return;
 
-                    // v19.0.19 Options
+                    let localChunks = [];
                     let options = { mimeType: 'video/webm;codecs=vp8', videoBitsPerSecond: 300000 };
                     if (!MediaRecorder.isTypeSupported(options.mimeType)) options = { mimeType: 'video/mp4' };
                     if (!MediaRecorder.isTypeSupported(options.mimeType)) options = {};
 
                     const recorder = new MediaRecorder(stream, options);
-
-                    // v25: RAM-Buffered Single Recording (No Parts in DB)
-                    recorder.ondataavailable = (e) => {
-                        if (e.data.size > 0) {
-                            videoChunksRef.current.push(e.data);
-                        }
-                    };
+                    recorder.ondataavailable = (e) => { if (e.data.size > 0) localChunks.push(e.data); };
 
                     recorder.onstop = async () => {
-                        console.log("Recorder Stopped. Saving Full Video...");
-                        const fullBlob = new Blob(videoChunksRef.current, { type: options.mimeType || 'video/webm' });
-                        const fullKey = `vid_full_${user.id}_${Date.now()}`;
+                        const blob = new Blob(localChunks, { type: options.mimeType || 'video/webm' });
+                        const currentSeq = segmentSequenceRef.current;
+                        const key = `vid_${user.id}_${Date.now()}_part${currentSeq}`;
 
-                        if (fullBlob.size < 100000) { // < 100KB is likely a junk/cleanup fragment
-                            console.log("Video too small (" + fullBlob.size + " bytes). Discarding.");
-                            videoChunksRef.current = [];
+                        if (blob.size < 50000) { // < 50KB is likely junk
+                            console.log("[Record] Skip saving tiny segment:", blob.size);
                             return;
                         }
 
                         try {
-                            // Save ONE Single File
-                            await window.VideoDB.saveVideo(fullKey, fullBlob);
-
-                            const fullEvidence = {
-                                img: fullKey, key: fullKey, time: new Date().toISOString(),
-                                type: 'VIDEO_FULL_MERGED', storage: 'indexeddb',
-                                isFullVideo: true
+                            await window.VideoDB.saveVideo(key, blob);
+                            const newEvidence = {
+                                img: null, key: key, time: new Date().toISOString(),
+                                type: 'VIDEO_INDEXED_DB', storage: 'indexeddb',
+                                sessionId: recordingSessionRef.current,
+                                sequence: currentSeq,
+                                isSegment: true
                             };
 
                             await window.Utils.saveResponse({
-                                studentId: user.id, examType: examMode, evidence: [fullEvidence]
+                                studentId: user.id, examType: examMode, evidence: [newEvidence]
                             });
 
-                            // Trigger Upload
+                            // Trigger Immediate Cloud Sync for this part
                             window.Utils.uploadToCloud(true, 'responses');
-                            // Alert removed here - Success is handled by submitExam
-                            // alert("Exam Video Saved Successfully!");
+                            segmentSequenceRef.current++;
 
                         } catch (err) {
-                            console.error("Final Save Error", err);
-                            // Only alert on ACTUAL errors if it was a real video
-                            // alert("Error saving final video: " + err.message);
+                            console.error("[Record] Save Error", err);
                         }
-
-                        // Clear RAM
-                        videoChunksRef.current = [];
                     };
 
-                    // Start ONCE with 5s slice
-                    recorder.start(5000);
+                    recorder.start(1000); // Pulse every 1s
                     mediaRecorderRef.current = recorder;
                     setIsRecording(true);
                 };
 
-                // Entry Point
+                // Initial Start
                 if (!mediaRecorderRef.current || mediaRecorderRef.current.state === 'inactive') {
-                    if (mediaStream) {
-                        startSegment();
-                        // No more setInterval loop!
-                    }
+                    startSegment();
                 }
+
+                // v33.0.0: 60-Second Segment Rotation
+                if (window.studentRecordingInterval) clearInterval(window.studentRecordingInterval);
+                window.studentRecordingInterval = setInterval(() => {
+                    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+                        console.log("[Record] Rotating segment (60s)");
+                        mediaRecorderRef.current.stop();
+                        setTimeout(startSegment, 200); // Start next part
+                    }
+                }, 60000);
 
                 return () => {
                     if (window.studentRecordingInterval) clearInterval(window.studentRecordingInterval);
-                    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
-                        console.log("Stopping recorder on unmount...");
-                        mediaRecorderRef.current.stop();
-                    }
                 };
-            }, [examMode, isLocked, webcamActive, user.id, mediaStream, isSubmitting]); // Added isSubmitting dep
+            }, [examMode, isLocked, webcamActive, user.id, mediaStream, isSubmitting]);
             // Ensure Camera Stream is Attached to Video Element
             useEffect(() => {
                 if (webcamActive && examMode && examMode !== 'VivaLive') {
@@ -8292,16 +8248,13 @@
                 }
 
                 // STOP RECORDING EXPLICITLY & WAIT
+                // STOP RECORDING EXPLICITLY & WAIT (v33.0.0)
                 if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
-                    // DEBUG v22: Visible Alerts for Tracing
-                    alert("DEBUG 1/4: Stopping Recorder... Please wait.");
-                    console.log("Stopping Recorder for Submission...");
+                    console.log("[Submit] Finalizing last segment...");
 
-                    // CRITICAL FIX: Preserve original onstop to ensure last segment is saved
                     const originalOnStop = mediaRecorderRef.current.onstop;
                     const stopPromise = new Promise(resolve => {
                         mediaRecorderRef.current.onstop = async (e) => {
-                            console.log("Final Segment Saving...");
                             if (originalOnStop) await originalOnStop(e);
                             resolve();
                         };
@@ -8310,10 +8263,7 @@
                     mediaRecorderRef.current.stop();
                     setIsRecording(false);
                     await stopPromise;
-
-                    // v25: No more waiting for chunk writes, as we write at onstop
-                    // Safety Buffer
-                    await new Promise(r => setTimeout(r, 1000));
+                    await new Promise(r => setTimeout(r, 1000)); // Cool down
                 }
 
                 // v25: REMOVED MERGE LOGIC (Video is already saved in onstop)
