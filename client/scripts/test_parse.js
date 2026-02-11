@@ -749,7 +749,6 @@ ecordingStartTimeRef.current = Date.now();
                 // STOP RECORDING EXPLICITLY & WAIT
                 if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
                     // DEBUG v22: Visible Alerts for Tracing
-                    alert("DEBUG 1/4: Stopping Recorder... Please wait.");
                     console.log("Stopping Recorder for Submission...");
 
                     // CRITICAL FIX: Preserve original onstop to ensure last segment is saved
@@ -768,7 +767,7 @@ ecordingStartTimeRef.current = Date.now();
 
                     // v25: No more waiting for chunk writes, as we write at onstop
                     // Safety Buffer
-                    await new Promise(r => setTimeout(r, 1000));
+                    await new Promise(r => setTimeout(r, 200));
                 }
 
                 // v25: REMOVED MERGE LOGIC (Video is already saved in onstop)
@@ -901,13 +900,13 @@ ecordingStartTimeRef.current = Date.now();
                 await window.Utils.saveResponse(respObj);
 
                 // Wait for local video save (give it a moment to finish async IndexedDB writes)
-                await new Promise(r => setTimeout(r, 1000));
+                await new Promise(r => setTimeout(r, 200));
 
                 // Trigger Visible Sync (Only Responses & Only This Student)
                 // Robust Check: String convert and Force Full Sync (Visible Errors) to ensure evidence is safely in cloud
                 // Pass 'false' for silent to enable alerts if something goes wrong
                 const filterByStudent = (item) => String(item.studentId || '').trim() === String(user.id || '').trim();
-                await window.Utils.uploadToCloud(false, 'responses', filterByStudent);
+                window.Utils.uploadToCloud(true, 'responses', filterByStudent);
 
                 // SUMMARY POPUP (User Request)
                 const totalPhotos = finalEvidence.filter(e => e.type && (e.type.includes('PHOTO') || e.type.includes('MANUAL'))).length;
