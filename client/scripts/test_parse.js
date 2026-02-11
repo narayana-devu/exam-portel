@@ -299,8 +299,12 @@
                                 duration: recordingStartTimeRef.current ? Math.floor((Date.now() - recordingStartTimeRef.current) / 1000) : 0
                             };
 
+                            // Merge with existing response instead of overwriting
+                            const existingResp = window.Utils.getResponses().find(r => r.studentId === user.id && r.examType === examMode) || {};
+                            const mergedEvidence = [...(existingResp.evidence || []), fullEvidence];
                             await window.Utils.saveResponse({
-                                studentId: user.id, examType: examMode, evidence: [fullEvidence]
+                                ...existingResp,
+                                studentId: user.id, examType: examMode, evidence: mergedEvidence
                             });
 
                             // Trigger Upload
