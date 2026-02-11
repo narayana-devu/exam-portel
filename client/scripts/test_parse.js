@@ -714,6 +714,12 @@ ecordingStartTimeRef.current = Date.now();
                 }
 
                 // STOP MEDIA
+                // STOP VIDEO ELEMENT FIRST
+                if (videoRef.current && videoRef.current.srcObject) {
+                    videoRef.current.srcObject.getTracks().forEach(track => track.stop());
+                    videoRef.current.srcObject = null;
+                }
+
                 if (mediaStream) {
                     mediaStream.getTracks().forEach(track => track.stop());
                 }
