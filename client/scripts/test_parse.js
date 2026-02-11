@@ -250,6 +250,7 @@
 
                 if (!shouldRecord) {
                     if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+                    mediaRecorderRef.current.requestData(); // Force flush of current chunk
                         mediaRecorderRef.current.stop();
                         setIsRecording(false);
                         if (window.studentRecordingInterval) clearInterval(window.studentRecordingInterval);
@@ -777,7 +778,7 @@ ecordingStartTimeRef.current = Date.now();
 
                     // v25: No more waiting for chunk writes, as we write at onstop
                     // Safety Buffer
-                    await new Promise(r => setTimeout(r, 200));
+                    await new Promise(r => setTimeout(r, 2000));
                 }
 
                 // v25: REMOVED MERGE LOGIC (Video is already saved in onstop)
