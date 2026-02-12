@@ -8576,6 +8576,33 @@
                     evidence: finalEvidence
                 };
 
+                // v44: CRITICAL - Stop Recording and Release Camera BEFORE Upload
+                try {
+                    // Stop the MediaRecorder
+                    if (window.studentRecordingInterval) {
+                        clearInterval(window.studentRecordingInterval);
+                        console.log("[Submit] Stopped recording interval");
+                    }
+
+                    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+                        mediaRecorderRef.current.stop();
+                        console.log("[Submit] Stopped MediaRecorder");
+                    }
+
+                    // Release camera stream
+                    if (mediaStream) {
+                        mediaStream.getTracks().forEach(track => {
+                            track.stop();
+                            console.log("[Submit] Released camera track");
+                        });
+                    }
+
+                    // Give it a moment to finalize last segment
+                    await new Promise(r => setTimeout(r, 500));
+                } catch (cleanupErr) {
+                    console.error("[Submit] Cleanup error:", cleanupErr);
+                }
+
                 // AUTO-UPLOAD: Attempt to sync immediately (Scoped to Current Student)
                 try {
                     const statusBtn = document.getElementById('sync-status-text');
