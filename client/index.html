@@ -282,11 +282,11 @@
                     const students = window.Utils.getStudentsByBatch(batchId);
                     if (students.length === 0) { alert('No students in batch!'); return; }
 
-                    // Get verification responses - matching by student ID
+                    // Get VERIFICATION responses (all caps - as saved in line 8935)
                     const allResponses = window.Utils.getResponses();
-                    const verifications = allResponses.filter(r => r.examType === 'Verification');
+                    const verifications = allResponses.filter(r => r.examType === 'VERIFICATION');
 
-                    console.log('Total verification responses:', verifications.length);
+                    console.log('Total VERIFICATION responses:', verifications.length);
                     console.log('Sample verification:', verifications[0]);
 
                     const data = students.map((s, i) => {
