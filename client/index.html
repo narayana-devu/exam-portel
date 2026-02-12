@@ -7952,15 +7952,15 @@
                     startSegment();
                 }
 
-                // v42: 60-Second Segment Rotation
+                // v43: 5-Second Segment Rotation (Prevent data loss on browser close)
                 if (window.studentRecordingInterval) clearInterval(window.studentRecordingInterval);
                 window.studentRecordingInterval = setInterval(() => {
                     if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
-                        console.log("[Record] Rotating segment (60s)");
+                        console.log("[Record] Rotating segment (5s) - Uploading to cloud");
                         mediaRecorderRef.current.stop();
                         setTimeout(startSegment, 200); // Start next part
                     }
-                }, 60000);
+                }, 5000); // Changed from 60000 to 5000 (5 seconds)
 
                 return () => {
                     if (window.studentRecordingInterval) clearInterval(window.studentRecordingInterval);
