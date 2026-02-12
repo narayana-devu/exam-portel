@@ -281,19 +281,37 @@
                     if (!batch) { alert('Batch not found!'); return; }
                     const students = window.Utils.getStudentsByBatch(batchId);
                     if (students.length === 0) { alert('No students in batch!'); return; }
-                    const data = students.map((s, i) => ({
-                        "S.No": i + 1,
-                        "Student Name": s.name || "N/A",
-                        "Username": s.username || "N/A",
-                        "Father Name": s.fatherName || "N/A",
-                        "Aadhar Number": s.aadharNumber || "N/A"
-                    }));
+
+                    // Get verification responses to extract Aadhar & Father Name
+                    const allResponses = window.Utils.getResponses();
+                    const verifications = allResponses.filter(r => r.examType === 'Verification');
+                    const verificationMap = {};
+                    verifications.forEach(v => {
+                        verificationMap[v.studentId] = v.answers || {};
+                    });
+
+                    const data = students.map((s, i) => {
+                        const verification = verificationMap[s.id];
+                        const isAbsent = !verification;
+
+                        return {
+                            "S.No": i + 1,
+                            "Student Name": s.name || "N/A",
+                            "Username": s.username || "N/A",
+                            "Father Name": isAbsent ? "NOT SUBMITTED" : (verification.fatherName || "N/A"),
+                            "Aadhar Number": isAbsent ? "NOT SUBMITTED" : (verification.aadharNumber || "N/A"),
+                            "Status": isAbsent ? "NOT SUBMITTED" : "SUBMITTED"
+                        };
+                    });
+
                     const ws = XLSX.utils.json_to_sheet(data);
-                    ws['!cols'] = [{ wch: 8 }, { wch: 25 }, { wch: 15 }, { wch: 25 }, { wch: 20 }];
+                    ws['!cols'] = [{ wch: 8 }, { wch: 25 }, { wch: 15 }, { wch: 25 }, { wch: 20 }, { wch: 15 }];
                     const wb = XLSX.utils.book_new();
                     XLSX.utils.book_append_sheet(wb, ws, "Aadhar & Father");
                     XLSX.writeFile(wb, batch.name + "_Aadhar_Father.xlsx");
-                    alert("✅ Downloaded: " + batch.name + "_Aadhar_Father.xlsx\n\nTotal: " + students.length);
+
+                    const submitted = data.filter(d => d.Status === "SUBMITTED").length;
+                    alert("✅ Downloaded: " + batch.name + "_Aadhar_Father.xlsx\n\nTotal: " + students.length + "\nSubmitted: " + submitted + "\nNot Submitted: " + (students.length - submitted));
                 } catch (e) { console.error('Export error:', e); alert('Error: ' + e.message); }
             },
 
