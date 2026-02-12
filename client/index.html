@@ -265,314 +265,514 @@
             onIceCandidate(callback) {
                 this.socket.on('signal', (data) => {
                     if (data.signal && data.signal.type === 'candidate') {
-                        if (students.length === 0) { alert('No students in batch!'); return; }
-                        const data = students.map((s, i) => ({
-                            "S.No": i + 1,
-                            "Student Name": s.name || "N/A",
-                            "Username": s.username || "N/A",
-                            "Father Name": s.fatherName || "N/A",
-                            "Aadhar Number": s.aadharNumber || "N/A"
-                        }));
-                        const ws = XLSX.utils.json_to_sheet(data);
-                        ws['!cols'] = [{ wch: 8 }, { wch: 25 }, { wch: 15 }, { wch: 25 }, { wch: 20 }];
-                        const wb = XLSX.utils.book_new();
-                        XLSX.utils.book_append_sheet(wb, ws, "Aadhar & Father");
-                        XLSX.writeFile(wb, batch.name + "_Aadhar_Father.xlsx");
-                        alert("✅ Downloaded: " + batch.name + "_Aadhar_Father.xlsx\n\nTotal: " + students.length);
-                    } catch (e) { console.error('Export error:', e); alert('Error: ' + e.message); }
-                },
-                    generateId: () => 'id_' + Math.random().toString(36).substr(2, 9) + Date.now(),
+                        console.log("[Viva] Received Candidate");
+                        callback(data.signal.candidate);
+                    }
+                });
+            }
+        }
 
-                    downloadSampleFormat: () => {
-                        const headers = [["BatchName", "Enrollment No", "Name of Training Agency", "Name of the Trainee", "Gender(M/F/T)"]];
-                        const ws = window.XLSX.utils.aoa_to_sheet(headers);
-                        const wb = window.XLSX.utils.book_new();
-                        window.XLSX.utils.book_append_sheet(wb, ws, "Students");
-                        window.XLSX.writeFile(wb, "Student_Import_Format.xlsx");
-                    },
+        window.Utils = {
+            generateId: () => 'id_' + Math.random().toString(36).substr(2, 9) + Date.now(),
 
-                    // HELPER: Delete from Cloud
-                    // HELPER: Delete from Cloud (REST API)
-                    deleteFromCloud: async (route, id) => {
-                        if (!id) return;
-                        try {
-                            await fetch(`${API_BASE}/${route}/${id}`, {
-                                method: 'DELETE',
-                                headers: { 'x-api-key': 'portel_secure_key_2025' }
-                            });
-                        } catch (e) { console.error("API Delete failed", e); }
-                    },
+            downloadSampleFormat: () => {
+                const headers = [["BatchName", "Enrollment No", "Name of Training Agency", "Name of the Trainee", "Gender(M/F/T)"]];
+                const ws = window.XLSX.utils.aoa_to_sheet(headers);
+                const wb = window.XLSX.utils.book_new();
+                window.XLSX.utils.book_append_sheet(wb, ws, "Students");
+                window.XLSX.writeFile(wb, "Student_Import_Format.xlsx");
+            },
 
-                    // AUTOMATIC DATA HEALER (Fixes Corruption from Array-in-Array bug)
-                    healData: () => {
-                        try {
-                            const raw = localStorage.getItem(DB_KEYS.RESPONSES);
-                            if (raw) {
-                                let data = JSON.parse(raw);
-                                if (Array.isArray(data)) {
-                                    let fixed = [];
-                                    let hasCorruption = false;
+            // HELPER: Delete from Cloud
+            // HELPER: Delete from Cloud (REST API)
+            deleteFromCloud: async (route, id) => {
+                if (!id) return;
+                try {
+                    await fetch(`${API_BASE}/${route}/${id}`, {
+                        method: 'DELETE',
+                        headers: { 'x-api-key': 'portel_secure_key_2025' }
+                    });
+                } catch (e) { console.error("API Delete failed", e); }
+            },
 
-                                    // Recursive flatten or just 1-level check
-                                    const collect = (arr) => {
-                                        for (let i = 0; i < arr.length; i++) {
-                                            if (Array.isArray(arr[i])) {
-                                                hasCorruption = true;
-                                                collect(arr[i]); // Recursive flatten
-                                            } else {
-                                                fixed.push(arr[i]);
-                                            }
-                                        }
-                                    };
-                                    collect(data);
+            // AUTOMATIC DATA HEALER (Fixes Corruption from Array-in-Array bug)
+            healData: () => {
+                try {
+                    const raw = localStorage.getItem(DB_KEYS.RESPONSES);
+                    if (raw) {
+                        let data = JSON.parse(raw);
+                        if (Array.isArray(data)) {
+                            let fixed = [];
+                            let hasCorruption = false;
 
-                                    if (hasCorruption) {
-                                        console.warn("MakeItApp: Data Corruption Detected. Healing...");
-                                        localStorage.setItem(DB_KEYS.RESPONSES, JSON.stringify(fixed));
-                                        alert("System has automatically repaired some data files. Please try Uploading again.");
+                            // Recursive flatten or just 1-level check
+                            const collect = (arr) => {
+                                for (let i = 0; i < arr.length; i++) {
+                                    if (Array.isArray(arr[i])) {
+                                        hasCorruption = true;
+                                        collect(arr[i]); // Recursive flatten
+                                    } else {
+                                        fixed.push(arr[i]);
                                     }
                                 }
-                            }
-                        } catch (e) { console.error("Heal failed", e); }
-                    },
-
-                    // NEW: Atomic Save to Cloud
-                    _syncLock: false,
-
-                    // CLOUD SYNC FUNCTIONS (REST API Version) - v18.0
-                    uploadToCloud: async (silent = false, targetRoute = null, filterFn = null, forceAll = false) => {
-                        if (window.Utils._syncLock) {
-                            console.log("[Sync] Already in progress, skipping...");
-                            return;
-                        }
-                        window.Utils._syncLock = true;
-
-                        try {
-                            const statusBtn = document.getElementById('sync-status-text');
-                            const MAPPING = {
-                                'ssc': DB_KEYS.SSC, 'qps': DB_KEYS.QP, 'nos': DB_KEYS.NOS, 'pcs': DB_KEYS.PC,
-                                'batches': DB_KEYS.BATCHES, 'students': DB_KEYS.STUDENTS,
-                                'question_papers': DB_KEYS.QUESTION_PAPERS,
-                                'responses': DB_KEYS.RESPONSES,
-                                'assessors': 'se_assessors'
                             };
+                            collect(data);
 
-                            // SYNC LOCK SAFETY: Reset lock after 5 mins if it hangs (supports large video uploads)
-                            setTimeout(() => { if (window.Utils._syncLock) { console.warn("[Sync] Lock timeout - forcing release"); window.Utils._syncLock = false; } }, 300000);
-
-                            let success = 0;
-                            let skipped = 0;
-                            let failCount = 0;
-
-                            if (!navigator.onLine) {
-                                if (!silent) alert("No Internet Connection. Sync skipped.");
-                                window.Utils._syncLock = false; // RELEASE LOCK
-                                return;
+                            if (hasCorruption) {
+                                console.warn("MakeItApp: Data Corruption Detected. Healing...");
+                                localStorage.setItem(DB_KEYS.RESPONSES, JSON.stringify(fixed));
+                                alert("System has automatically repaired some data files. Please try Uploading again.");
                             }
+                        }
+                    }
+                } catch (e) { console.error("Heal failed", e); }
+            },
 
-                            for (const [route, key] of Object.entries(MAPPING)) {
-                                if (targetRoute && route !== targetRoute) continue;
-                                try {
-                                    const dataStr = localStorage.getItem(key);
-                                    if (dataStr && dataStr !== '[]') {
-                                        let items = JSON.parse(dataStr);
-                                        if (filterFn) items = items.filter(filterFn);
+            // NEW: Atomic Save to Cloud
+            _syncLock: false,
 
-                                        // PENDING SYNC CHECK
-                                        // ForceAll sends everything.
-                                        // Otherwise: Send if !synced OR if it has un-uploaded media (Responses only)
-                                        const pendingItems = items.filter(i => {
-                                            if (forceAll) return true;
-                                            if (!i.synced) return true;
-                                            if (route === 'responses' && i.evidence) {
-                                                return i.evidence.some(ev => (ev.storage === 'indexeddb' || ev.type === 'VIDEO_INDEXED_DB') && !ev.url && !ev._fileMissing);
-                                            }
-                                            return false;
-                                        });
+            // CLOUD SYNC FUNCTIONS (REST API Version) - v18.0
+            uploadToCloud: async (silent = false, targetRoute = null, filterFn = null, forceAll = false) => {
+                if (window.Utils._syncLock) {
+                    console.log("[Sync] Already in progress, skipping...");
+                    return;
+                }
+                window.Utils._syncLock = true;
 
-                                        if (pendingItems.length === 0) {
-                                            skipped += items.length;
-                                            continue;
-                                        }
+                try {
+                    const statusBtn = document.getElementById('sync-status-text');
+                    const MAPPING = {
+                        'ssc': DB_KEYS.SSC, 'qps': DB_KEYS.QP, 'nos': DB_KEYS.NOS, 'pcs': DB_KEYS.PC,
+                        'batches': DB_KEYS.BATCHES, 'students': DB_KEYS.STUDENTS,
+                        'question_papers': DB_KEYS.QUESTION_PAPERS,
+                        'responses': DB_KEYS.RESPONSES,
+                        'assessors': 'se_assessors'
+                    };
 
-                                        if (statusBtn && !silent) statusBtn.innerText = `Syncing ${route}... (${pendingItems.length})`;
+                    // SYNC LOCK SAFETY: Reset lock after 5 mins if it hangs (supports large video uploads)
+                    setTimeout(() => { if (window.Utils._syncLock) { console.warn("[Sync] Lock timeout - forcing release"); window.Utils._syncLock = false; } }, 300000);
 
-                                        // PRE-PROCESS: Upload Media (Images & Videos) from IndexedDB to S3
-                                        if (route === 'responses') {
-                                            // 1. Gather all actionable media items first
-                                            const mediaQueue = [];
+                    let success = 0;
+                    let skipped = 0;
+                    let failCount = 0;
 
-                                            for (let item of pendingItems) {
-                                                if (item.evidence && Array.isArray(item.evidence)) {
-                                                    item.evidence.forEach(ev => {
-                                                        const isIndexedDB = ev.type === 'VIDEO_INDEXED_DB' || ev.storage === 'indexeddb';
-                                                        const localKey = ev.key || ev.img;
-                                                        // Only add if needs upload and not known missing
-                                                        if (isIndexedDB && localKey && !ev.url && !ev.uploaded && !ev._fileMissing) {
-                                                            mediaQueue.push({ ev, item, localKey }); // Store ref to ev and parent item
-                                                        }
-                                                    });
+                    if (!navigator.onLine) {
+                        if (!silent) alert("No Internet Connection. Sync skipped.");
+                        window.Utils._syncLock = false; // RELEASE LOCK
+                        return;
+                    }
+
+                    for (const [route, key] of Object.entries(MAPPING)) {
+                        if (targetRoute && route !== targetRoute) continue;
+                        try {
+                            const dataStr = localStorage.getItem(key);
+                            if (dataStr && dataStr !== '[]') {
+                                let items = JSON.parse(dataStr);
+                                if (filterFn) items = items.filter(filterFn);
+
+                                // PENDING SYNC CHECK
+                                // ForceAll sends everything.
+                                // Otherwise: Send if !synced OR if it has un-uploaded media (Responses only)
+                                const pendingItems = items.filter(i => {
+                                    if (forceAll) return true;
+                                    if (!i.synced) return true;
+                                    if (route === 'responses' && i.evidence) {
+                                        return i.evidence.some(ev => (ev.storage === 'indexeddb' || ev.type === 'VIDEO_INDEXED_DB') && !ev.url && !ev._fileMissing);
+                                    }
+                                    return false;
+                                });
+
+                                if (pendingItems.length === 0) {
+                                    skipped += items.length;
+                                    continue;
+                                }
+
+                                if (statusBtn && !silent) statusBtn.innerText = `Syncing ${route}... (${pendingItems.length})`;
+
+                                // PRE-PROCESS: Upload Media (Images & Videos) from IndexedDB to S3
+                                if (route === 'responses') {
+                                    // 1. Gather all actionable media items first
+                                    const mediaQueue = [];
+
+                                    for (let item of pendingItems) {
+                                        if (item.evidence && Array.isArray(item.evidence)) {
+                                            item.evidence.forEach(ev => {
+                                                const isIndexedDB = ev.type === 'VIDEO_INDEXED_DB' || ev.storage === 'indexeddb';
+                                                const localKey = ev.key || ev.img;
+                                                // Only add if needs upload and not known missing
+                                                if (isIndexedDB && localKey && !ev.url && !ev.uploaded && !ev._fileMissing) {
+                                                    mediaQueue.push({ ev, item, localKey }); // Store ref to ev and parent item
                                                 }
-                                            }
+                                            });
+                                        }
+                                    }
 
-                                            // 2. Process in Batches of 3 (Parallel Uploads)
-                                            // This drastically improves speed over sequential awaiting
-                                            if (mediaQueue.length > 0) {
-                                                if (statusBtn && !silent) statusBtn.innerText = `Uploading ${mediaQueue.length} Media Files...`;
-                                                console.log(`[Sync] Starting Parallel Upload for ${mediaQueue.length} files (Batch Size: 5)`);
+                                    // 2. Process in Batches of 3 (Parallel Uploads)
+                                    // This drastically improves speed over sequential awaiting
+                                    if (mediaQueue.length > 0) {
+                                        if (statusBtn && !silent) statusBtn.innerText = `Uploading ${mediaQueue.length} Media Files...`;
+                                        console.log(`[Sync] Starting Parallel Upload for ${mediaQueue.length} files (Batch Size: 5)`);
 
-                                                const BATCH_SIZE = 5;
-                                                for (let i = 0; i < mediaQueue.length; i += BATCH_SIZE) {
-                                                    const batch = mediaQueue.slice(i, i + BATCH_SIZE);
+                                        const BATCH_SIZE = 5;
+                                        for (let i = 0; i < mediaQueue.length; i += BATCH_SIZE) {
+                                            const batch = mediaQueue.slice(i, i + BATCH_SIZE);
 
-                                                    await Promise.all(batch.map(async ({ ev, item, localKey }) => {
+                                            await Promise.all(batch.map(async ({ ev, item, localKey }) => {
+                                                try {
+                                                    const blob = await window.VideoDB.getVideo(localKey);
+                                                    if (!blob) {
+                                                        console.warn(`[Sync] File Missing: ${localKey}`);
+                                                        ev._fileMissing = true;
+                                                        return;
+                                                    }
+
+                                                    const isVideo = blob.type.includes('video');
+                                                    const extension = isVideo ? 'webm' : 'jpg';
+                                                    const fileName = `media/${isVideo ? 'videos' : 'photos'}/${Date.now()}_${item.studentId}_${localKey}.${extension}`;
+                                                    let uploadSuccess = false;
+
+                                                    // 1. TRY DIRECT S3 FOR LARGE VIDEOS (>1MB)
+                                                    if (isVideo && blob.size > 1024 * 1024) {
                                                         try {
-                                                            const blob = await window.VideoDB.getVideo(localKey);
-                                                            if (!blob) {
-                                                                console.warn(`[Sync] File Missing: ${localKey}`);
-                                                                ev._fileMissing = true;
-                                                                return;
-                                                            }
-
-                                                            const isVideo = blob.type.includes('video');
-                                                            const extension = isVideo ? 'webm' : 'jpg';
-                                                            const fileName = `media/${isVideo ? 'videos' : 'photos'}/${Date.now()}_${item.studentId}_${localKey}.${extension}`;
-                                                            let uploadSuccess = false;
-
-                                                            // 1. TRY DIRECT S3 FOR LARGE VIDEOS (>1MB)
-                                                            if (isVideo && blob.size > 1024 * 1024) {
-                                                                try {
-                                                                    console.log(`[Sync] Requesting Presigned URL for ${fileName} (${(blob.size / 1024 / 1024).toFixed(2)} MB)`);
-                                                                    const preRes = await fetch(`${API_BASE}/presigned-url?fileName=${encodeURIComponent(fileName)}&contentType=${encodeURIComponent(blob.type)}`, {
-                                                                        headers: { 'x-api-key': 'portel_secure_key_2025' }
-                                                                    });
-                                                                    if (preRes.ok) {
-                                                                        const { uploadUrl } = await preRes.json();
-                                                                        const s3Res = await fetch(uploadUrl, {
-                                                                            method: 'PUT',
-                                                                            body: blob,
-                                                                            headers: { 'Content-Type': blob.type }
-                                                                        });
-                                                                        if (s3Res.ok) {
-                                                                            const finalUrl = uploadUrl.split('?')[0];
-                                                                            ev.url = finalUrl;
-                                                                            ev.img = finalUrl;
-                                                                            if (ev.type === 'VIDEO_INDEXED_DB') ev.type = 'VIDEO_S3';
-                                                                            ev.uploaded = true;
-                                                                            ev.storage = 's3';
-                                                                            uploadSuccess = true;
-                                                                            console.log(`[Sync] Direct S3 Upload Success: ${finalUrl}`);
-                                                                        } else {
-                                                                            console.warn("[Sync] Direct S3 PUT Failed (Likely S3 CORS). Falling back to Server...");
-                                                                        }
-                                                                    }
-                                                                } catch (e) { console.warn("[Sync] Direct S3 Error. Falling back to Server...", e); }
-                                                            }
-                                                            // 2. FALLBACK TO SERVER UPLOAD (OR SMALL FILES)
-                                                            if (!uploadSuccess) {
-
-                                                                const formData = new FormData();
-                                                                formData.append('file', blob, `${item.studentId}_${localKey}.${extension}`);
-
-                                                                const uploadRes = await fetch(`${API_BASE}/upload-media`, {
-                                                                    method: 'POST',
-                                                                    headers: { 'x-api-key': 'portel_secure_key_2025' },
-                                                                    body: formData
+                                                            console.log(`[Sync] Requesting Presigned URL for ${fileName} (${(blob.size / 1024 / 1024).toFixed(2)} MB)`);
+                                                            const preRes = await fetch(`${API_BASE}/presigned-url?fileName=${encodeURIComponent(fileName)}&contentType=${encodeURIComponent(blob.type)}`, {
+                                                                headers: { 'x-api-key': 'portel_secure_key_2025' }
+                                                            });
+                                                            if (preRes.ok) {
+                                                                const { uploadUrl } = await preRes.json();
+                                                                const s3Res = await fetch(uploadUrl, {
+                                                                    method: 'PUT',
+                                                                    body: blob,
+                                                                    headers: { 'Content-Type': blob.type }
                                                                 });
-
-                                                                if (uploadRes.ok) {
-                                                                    const json = await uploadRes.json();
-                                                                    ev.url = json.url;
-                                                                    ev.img = json.url;
+                                                                if (s3Res.ok) {
+                                                                    const finalUrl = uploadUrl.split('?')[0];
+                                                                    ev.url = finalUrl;
+                                                                    ev.img = finalUrl;
                                                                     if (ev.type === 'VIDEO_INDEXED_DB') ev.type = 'VIDEO_S3';
                                                                     ev.uploaded = true;
                                                                     ev.storage = 's3';
-                                                                    console.log(`[Sync] Media Uploaded (via Server Fallback): ${json.url}`);
+                                                                    uploadSuccess = true;
+                                                                    console.log(`[Sync] Direct S3 Upload Success: ${finalUrl}`);
                                                                 } else {
-                                                                    console.error("Media Upload Failed (Server even failed)", uploadRes.statusText);
+                                                                    console.warn("[Sync] Direct S3 PUT Failed (Likely S3 CORS). Falling back to Server...");
                                                                 }
                                                             }
-                                                        } catch (err) {
-                                                            console.error("Media Upload Exception", err);
+                                                        } catch (e) { console.warn("[Sync] Direct S3 Error. Falling back to Server...", e); }
+                                                    }
+                                                    // 2. FALLBACK TO SERVER UPLOAD (OR SMALL FILES)
+                                                    if (!uploadSuccess) {
+
+                                                        const formData = new FormData();
+                                                        formData.append('file', blob, `${item.studentId}_${localKey}.${extension}`);
+
+                                                        const uploadRes = await fetch(`${API_BASE}/upload-media`, {
+                                                            method: 'POST',
+                                                            headers: { 'x-api-key': 'portel_secure_key_2025' },
+                                                            body: formData
+                                                        });
+
+                                                        if (uploadRes.ok) {
+                                                            const json = await uploadRes.json();
+                                                            ev.url = json.url;
+                                                            ev.img = json.url;
+                                                            if (ev.type === 'VIDEO_INDEXED_DB') ev.type = 'VIDEO_S3';
+                                                            ev.uploaded = true;
+                                                            ev.storage = 's3';
+                                                            console.log(`[Sync] Media Uploaded (via Server Fallback): ${json.url}`);
+                                                        } else {
+                                                            console.error("Media Upload Failed (Server even failed)", uploadRes.statusText);
                                                         }
-                                                    }));
-
-                                                    // Optional: Update UI progress
-                                                    if (statusBtn && !silent) statusBtn.innerText = `Uploaded ${Math.min(i + BATCH_SIZE, mediaQueue.length)}/${mediaQueue.length} Files...`;
+                                                    }
+                                                } catch (err) {
+                                                    console.error("Media Upload Exception", err);
                                                 }
+                                            }));
 
-                                                // Save updates locally after all uploads (so we have URLs)
-                                                // We need to save the *parent items* that were modified.
-                                                const uniqueParents = [...new Set(mediaQueue.map(q => q.item))];
-                                                // But wait, pendingItems is already the list.
-                                                // Just assume if queue was > 0, we have updates.
-                                                // Actually, `items` passed to uploadToCloud is just the pending list.
-                                                // We need to update the source in localStorage.
-                                                // The outer loop handles `localStorage.setItem(key, ...)` BUT passed `pendingItems`.
-                                                // We modified `pendingItems` in place.
-                                                // So we just need to ensure the outer save happens.
-
-                                                // Re-save logic from original code:
-                                                // `if (hasMediaUpdates) localStorage.setItem(key, JSON.stringify(items));`
-                                                // We need to mimic this.
-                                                if (mediaQueue.length > 0) {
-                                                    // We don't have easy access to the full `items` array from `pendingItems` if it was filtered?
-                                                    // Wait, `items` variable in the scope IS the full list from localStorage.
-                                                    // `pendingItems` is `items` filtered or just `items`.
-                                                    // Looking at context: `let pendingItems = items;` (usually).
-                                                    // Let's assume we can confirm `items` is in scope or we must re-read.
-                                                    // The original code had: `if (hasMediaUpdates) localStorage.setItem(key, JSON.stringify(items));`
-                                                    // So `items` is available.
-                                                    localStorage.setItem(key, JSON.stringify(items));
-                                                }
-                                            }
+                                            // Optional: Update UI progress
+                                            if (statusBtn && !silent) statusBtn.innerText = `Uploaded ${Math.min(i + BATCH_SIZE, mediaQueue.length)}/${mediaQueue.length} Files...`;
                                         }
 
-                                        // BULK UPLOAD JSON METADATA
-                                        console.log(`[Sync] Uploading ${pendingItems.length} items to /api/sync/${route}`);
-                                        const response = await fetch(`${API_BASE}/sync/${route}`, {
-                                            method: 'POST',
-                                            headers: { 'Content-Type': 'application/json', 'x-api-key': 'portel_secure_key_2025' },
-                                            body: JSON.stringify(pendingItems)
-                                        });
+                                        // Save updates locally after all uploads (so we have URLs)
+                                        // We need to save the *parent items* that were modified.
+                                        const uniqueParents = [...new Set(mediaQueue.map(q => q.item))];
+                                        // But wait, pendingItems is already the list.
+                                        // Just assume if queue was > 0, we have updates.
+                                        // Actually, `items` passed to uploadToCloud is just the pending list.
+                                        // We need to update the source in localStorage.
+                                        // The outer loop handles `localStorage.setItem(key, ...)` BUT passed `pendingItems`.
+                                        // We modified `pendingItems` in place.
+                                        // So we just need to ensure the outer save happens.
 
-                                        if (response.ok) {
-                                            // ULTRA-SAFE: Only mark as synced if ALL media within this batch was uploaded
-                                            items.forEach(i => {
-                                                if (route === 'responses' && i.evidence) {
-                                                    const hasUnuploadedMedia = i.evidence.some(ev => (ev.storage === 'indexeddb' || ev.type === 'VIDEO_INDEXED_DB') && !ev.url && !ev._fileMissing);
-                                                    if (hasUnuploadedMedia) {
-                                                        i.synced = false;
-                                                        return;
-                                                    }
-                                                }
-                                                if (!i.synced) i.synced = true;
-                                            });
+                                        // Re-save logic from original code:
+                                        // `if (hasMediaUpdates) localStorage.setItem(key, JSON.stringify(items));`
+                                        // We need to mimic this.
+                                        if (mediaQueue.length > 0) {
+                                            // We don't have easy access to the full `items` array from `pendingItems` if it was filtered?
+                                            // Wait, `items` variable in the scope IS the full list from localStorage.
+                                            // `pendingItems` is `items` filtered or just `items`.
+                                            // Looking at context: `let pendingItems = items;` (usually).
+                                            // Let's assume we can confirm `items` is in scope or we must re-read.
+                                            // The original code had: `if (hasMediaUpdates) localStorage.setItem(key, JSON.stringify(items));`
+                                            // So `items` is available.
                                             localStorage.setItem(key, JSON.stringify(items));
-                                            success += pendingItems.length;
-                                        } else {
-                                            throw new Error(`Server Error: ${response.statusText}`);
                                         }
                                     }
-                                } catch (e) {
-                                    console.error(`Sync error ${route}`, e);
-                                    failCount++;
+                                }
+
+                                // BULK UPLOAD JSON METADATA
+                                console.log(`[Sync] Uploading ${pendingItems.length} items to /api/sync/${route}`);
+                                const response = await fetch(`${API_BASE}/sync/${route}`, {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json', 'x-api-key': 'portel_secure_key_2025' },
+                                    body: JSON.stringify(pendingItems)
+                                });
+
+                                if (response.ok) {
+                                    // ULTRA-SAFE: Only mark as synced if ALL media within this batch was uploaded
+                                    items.forEach(i => {
+                                        if (route === 'responses' && i.evidence) {
+                                            const hasUnuploadedMedia = i.evidence.some(ev => (ev.storage === 'indexeddb' || ev.type === 'VIDEO_INDEXED_DB') && !ev.url && !ev._fileMissing);
+                                            if (hasUnuploadedMedia) {
+                                                i.synced = false;
+                                                return;
+                                            }
+                                        }
+                                        if (!i.synced) i.synced = true;
+                                    });
+                                    localStorage.setItem(key, JSON.stringify(items));
+                                    success += pendingItems.length;
+                                } else {
+                                    throw new Error(`Server Error: ${response.statusText}`);
                                 }
                             }
-
-                            const isOk = failCount === 0 && success > 0;
-                            if (isOk && statusBtn && !silent) statusBtn.innerText = "Sync Complete";
-                            return isOk;
-                        } catch (globalErr) {
-                            console.error("Global Sync Error", globalErr);
-                            return false;
-                        } finally {
-                            window.Utils._syncLock = false;
+                        } catch (e) {
+                            console.error(`Sync error ${route}`, e);
+                            failCount++;
                         }
-                    },
+                    }
+
+                    const isOk = failCount === 0 && success > 0;
+                    if (isOk && statusBtn && !silent) statusBtn.innerText = "Sync Complete";
+                    return isOk;
+                } catch (globalErr) {
+                    console.error("Global Sync Error", globalErr);
+                    return false;
+                } finally {
+                    window.Utils._syncLock = false;
+                }
+            },
 
 
-                    downloadFromCloud: async (silent = false) => {
+            downloadFromCloud: async (silent = false) => {
+                const MAPPING = {
+                    'batches': DB_KEYS.BATCHES, 'students': DB_KEYS.STUDENTS,
+                    'qps': DB_KEYS.QP, 'nos': DB_KEYS.NOS, 'pcs': DB_KEYS.PC,
+                    'ssc': DB_KEYS.SSC, 'responses': DB_KEYS.RESPONSES,
+                    'question_papers': DB_KEYS.QUESTION_PAPERS,
+                    'assessors': 'se_assessors'
+                };
+                let successCount = 0;
+                const statusBtn = document.getElementById('sync-status-text');
+                if (statusBtn && !silent) statusBtn.innerText = "Downloading...";
+
+                for (const [route, key] of Object.entries(MAPPING)) {
+                    try {
+                        const res = await fetch(`${API_BASE}/${route}`, {
+                            headers: { 'x-api-key': 'portel_secure_key_2025' }
+                        });
+                        if (res.ok) {
+                            const data = await res.json();
+                            if (Array.isArray(data)) {
+                                const localItems = JSON.parse(localStorage.getItem(key) || '[]');
+                                const localMap = new Map();
+                                localItems.forEach(i => localMap.set(i.id, i));
+
+                                // 1. Identify and remove local items that were previously synced but are now missing in Cloud
+                                // ONLY if NOT silent (Regular Sync). Auto-heal (silent) should NEVER delete for safety.
+                                if (!silent) {
+                                    const serverIds = new Set(data.map(s => s.id));
+                                    for (const [id, item] of localMap.entries()) {
+                                        if (item.synced && !serverIds.has(id)) {
+                                            console.log(`[Sync] Removing locally deleted item: ${id} from ${route}`);
+                                            localMap.delete(id);
+                                        }
+                                    }
+                                }
+
+                                // 2. Update existing or add new items from Cloud
+                                data.forEach(s => {
+                                    const local = localMap.get(s.id);
+                                    if (!local || local.synced || silent) {
+                                        localMap.set(s.id, { ...s, synced: true });
+                                    }
+                                });
+
+                                localStorage.setItem(key, JSON.stringify(Array.from(localMap.values())));
+                                successCount++;
+                            }
+                        }
+                    } catch (e) { console.error(`Download error ${route}`, e); }
+                }
+                if (!silent) alert(`Downloaded ${successCount} collections from Server.`);
+                if (statusBtn && !silent) statusBtn.innerText = "Synced";
+                window.dispatchEvent(new Event('cloud-sync-complete'));
+                return successCount > 0;
+            },
+
+            getSSC: () => JSON.parse(localStorage.getItem(DB_KEYS.SSC) || '[]'),
+            saveSSC: (ssc) => {
+                const list = window.Utils.getSSC();
+                if (!ssc.id) ssc.id = Date.now().toString(36) + Math.random().toString(36).substr(2);
+                ssc.synced = false;
+
+                const existingIndex = list.findIndex(item => item.id === ssc.id);
+                if (existingIndex >= 0) list[existingIndex] = ssc;
+                else list.push(ssc);
+
+                localStorage.setItem(DB_KEYS.SSC, JSON.stringify(list));
+                window.Utils.uploadToCloud(true, 'ssc');
+            },
+            deleteSSC: (id) => {
+                window.Utils.deleteFromCloud('ssc', id);
+                // 1. Get SSC List and remove target
+                let list = window.Utils.getSSC().filter(s => s.id !== id);
+                localStorage.setItem(DB_KEYS.SSC, JSON.stringify(list));
+
+                // 2. Cascading Delete: Find all QPs for this SSC
+                const allQPs = window.Utils.getQPs();
+                const sscQPs = allQPs.filter(q => q.sscId === id);
+                const sscQPIds = sscQPs.map(q => q.id);
+
+                if (sscQPIds.length > 0) {
+                    sscQPIds.forEach(qpId => window.Utils.deleteFromCloud('qps', qpId));
+                    // Remove QPs
+                    const remainingQPs = allQPs.filter(q => q.sscId !== id);
+                    localStorage.setItem(DB_KEYS.QP, JSON.stringify(remainingQPs));
+
+                    // 3. Find NOS for these QPs
+                    const allNOS = window.Utils.getNOS();
+                    const qpNOS = allNOS.filter(n => sscQPIds.includes(n.qpId));
+                    const qpNOSIds = qpNOS.map(n => n.id);
+
+                    if (qpNOSIds.length > 0) {
+                        qpNOSIds.forEach(nId => window.Utils.deleteFromCloud('nos', nId));
+                        // Remove NOS
+                        const remainingNOS = allNOS.filter(n => !sscQPIds.includes(n.qpId));
+                        localStorage.setItem(DB_KEYS.NOS, JSON.stringify(remainingNOS));
+
+                        // 4. Remove PCs for these NOS
+                        const allPCs = window.Utils.getPCs();
+                        // Fix for filter:
+                        const pcsToDelete = allPCs.filter(p => qpNOSIds.includes(p.nosId));
+                        pcsToDelete.forEach(p => window.Utils.deleteFromCloud('pcs', p.id));
+
+                        const remainingPCs = allPCs.filter(p => !qpNOSIds.includes(p.nosId));
+                        localStorage.setItem(DB_KEYS.PC, JSON.stringify(remainingPCs));
+                    }
+
+                    // 5. Remove Batches logic
+                    // Remove Question Papers linked to this SSC
+                    const allPapers = window.Utils.getQuestionPapers();
+                    const sscPapers = allPapers.filter(p => p.sscId === id);
+                    if (sscPapers.length > 0) {
+                        sscPapers.forEach(p => window.Utils.deleteFromCloud('question_papers', p.id));
+
+                        const sscPaperIds = sscPapers.map(p => p.id);
+                        const remainingPapers = allPapers.filter(p => p.sscId !== id);
+                        localStorage.setItem(DB_KEYS.QUESTION_PAPERS, JSON.stringify(remainingPapers));
+
+                        // Remove Batches linked to these Papers
+                        const allBatches = window.Utils.getBatches();
+                        const batchesToDelete = allBatches.filter(b => sscPaperIds.includes(b.theoryPaperId) || sscPaperIds.includes(b.practicalPaperId));
+
+                        if (batchesToDelete.length > 0) {
+                            batchesToDelete.forEach(b => window.Utils.deleteFromCloud('batches', b.id));
+
+                            const batchIdsToDelete = batchesToDelete.map(b => b.id);
+                            const remainingBatches = allBatches.filter(b => !batchIdsToDelete.includes(b.id));
+                            localStorage.setItem(DB_KEYS.BATCHES, JSON.stringify(remainingBatches));
+
+                            // Remove Students in these Batches
+                            const allStudents = window.Utils.getStudents();
+                            const studentsToDelete = allStudents.filter(s => batchIdsToDelete.includes(s.batchId));
+                            studentsToDelete.forEach(s => window.Utils.deleteFromCloud('students', s.id));
+
+                            const remainingStudents = allStudents.filter(s => !batchIdsToDelete.includes(s.batchId));
+                            localStorage.setItem(DB_KEYS.STUDENTS, JSON.stringify(remainingStudents));
+                        }
+                    }
+                }
+            },
+            getQPs: () => JSON.parse(localStorage.getItem(DB_KEYS.QP) || '[]'),
+            getQPsBySSC: (sscId) => window.Utils.getQPs().filter(q => q.sscId === sscId),
+            saveQP: (qp) => {
+                const list = window.Utils.getQPs();
+                if (!qp.id) qp.id = Date.now().toString(36) + Math.random().toString(36).substr(2);
+                qp.synced = false; // Add this
+                const existingIndex = list.findIndex(item => item.id === qp.id);
+                if (existingIndex >= 0) list[existingIndex] = qp;
+                else list.push(qp);
+                localStorage.setItem(DB_KEYS.QP, JSON.stringify(list));
+                window.Utils.uploadToCloud(true, 'qps');
+            },
+            deleteQP: (id) => {
+                window.Utils.deleteFromCloud('qps', id);
+                let list = window.Utils.getQPs().filter(q => q.id !== id);
+                localStorage.setItem(DB_KEYS.QP, JSON.stringify(list));
+            },
+            getNOS: () => JSON.parse(localStorage.getItem(DB_KEYS.NOS) || '[]'),
+            getNOSByQP: (qpId) => window.Utils.getNOS().filter(n => n.qpId === qpId),
+            saveNOS: (nos) => {
+                const list = window.Utils.getNOS();
+                if (!nos.id) nos.id = Date.now().toString(36) + Math.random().toString(36).substr(2);
+                nos.synced = false; // Add this
+                const existingIndex = list.findIndex(item => item.id === nos.id);
+                if (existingIndex >= 0) list[existingIndex] = nos;
+                else list.push(nos);
+                localStorage.setItem(DB_KEYS.NOS, JSON.stringify(list));
+                window.Utils.uploadToCloud(true, 'nos');
+            },
+            deleteNOS: (id) => {
+                window.Utils.deleteFromCloud('nos', id);
+                let list = window.Utils.getNOS().filter(n => n.id !== id);
+                localStorage.setItem(DB_KEYS.NOS, JSON.stringify(list));
+            },
+            getPCs: () => JSON.parse(localStorage.getItem(DB_KEYS.PC) || '[]'),
+            getPCsByNOS: (nosId) => window.Utils.getPCs().filter(p => p.nosId === nosId),
+            savePC: (pc) => {
+                const list = window.Utils.getPCs();
+                if (!pc.id) pc.id = Date.now().toString(36) + Math.random().toString(36).substr(2);
+                pc.synced = false; // Add this
+                const existingIndex = list.findIndex(item => item.id === pc.id);
+                if (existingIndex >= 0) list[existingIndex] = pc;
+                else list.push(pc);
+                localStorage.setItem(DB_KEYS.PC, JSON.stringify(list));
+                window.Utils.uploadToCloud(true, 'pcs');
+            },
+            deletePC: (id) => {
+                window.Utils.deleteFromCloud('pcs', id);
+                let list = window.Utils.getPCs().filter(p => p.id !== id);
+                localStorage.setItem(DB_KEYS.PC, JSON.stringify(list));
+            },
+            getBatches: () => JSON.parse(localStorage.getItem(DB_KEYS.BATCHES) || '[]'),
+            saveToCloud: async (route, item) => {
+                try {
+                    if (!item || !item.id) return false;
+                    if (navigator.onLine === false) return false;
+
+                    const response = await fetch(`${API_BASE}/${route}`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'x-api-key': 'portel_secure_key_2025'
+                        },
+                        body: JSON.stringify(item)
+                    });
+
+                    if (response.ok) {
+                        console.log(`[Sync] ${route} saved to S3.`);
+                        // Update local sync status
                         const MAPPING = {
                             'batches': DB_KEYS.BATCHES, 'students': DB_KEYS.STUDENTS,
                             'qps': DB_KEYS.QP, 'nos': DB_KEYS.NOS, 'pcs': DB_KEYS.PC,
@@ -580,686 +780,478 @@
                             'question_papers': DB_KEYS.QUESTION_PAPERS,
                             'assessors': 'se_assessors'
                         };
-                        let successCount = 0;
-                        const statusBtn = document.getElementById('sync-status-text');
-                        if (statusBtn && !silent) statusBtn.innerText = "Downloading...";
-
-                        for (const [route, key] of Object.entries(MAPPING)) {
-                            try {
-                                const res = await fetch(`${API_BASE}/${route}`, {
-                                    headers: { 'x-api-key': 'portel_secure_key_2025' }
-                                });
-                                if (res.ok) {
-                                    const data = await res.json();
-                                    if (Array.isArray(data)) {
-                                        const localItems = JSON.parse(localStorage.getItem(key) || '[]');
-                                        const localMap = new Map();
-                                        localItems.forEach(i => localMap.set(i.id, i));
-
-                                        // 1. Identify and remove local items that were previously synced but are now missing in Cloud
-                                        // ONLY if NOT silent (Regular Sync). Auto-heal (silent) should NEVER delete for safety.
-                                        if (!silent) {
-                                            const serverIds = new Set(data.map(s => s.id));
-                                            for (const [id, item] of localMap.entries()) {
-                                                if (item.synced && !serverIds.has(id)) {
-                                                    console.log(`[Sync] Removing locally deleted item: ${id} from ${route}`);
-                                                    localMap.delete(id);
-                                                }
-                                            }
-                                        }
-
-                                        // 2. Update existing or add new items from Cloud
-                                        data.forEach(s => {
-                                            const local = localMap.get(s.id);
-                                            if (!local || local.synced || silent) {
-                                                localMap.set(s.id, { ...s, synced: true });
-                                            }
-                                        });
-
-                                        localStorage.setItem(key, JSON.stringify(Array.from(localMap.values())));
-                                        successCount++;
-                                    }
-                                }
-                            } catch (e) { console.error(`Download error ${route}`, e); }
-                        }
-                        if (!silent) alert(`Downloaded ${successCount} collections from Server.`);
-                        if (statusBtn && !silent) statusBtn.innerText = "Synced";
-                        window.dispatchEvent(new Event('cloud-sync-complete'));
-                        return successCount > 0;
-                    },
-
-                    getSSC: () => JSON.parse(localStorage.getItem(DB_KEYS.SSC) || '[]'),
-                    saveSSC: (ssc) => {
-                        const list = window.Utils.getSSC();
-                        if (!ssc.id) ssc.id = Date.now().toString(36) + Math.random().toString(36).substr(2);
-                        ssc.synced = false;
-
-                        const existingIndex = list.findIndex(item => item.id === ssc.id);
-                        if (existingIndex >= 0) list[existingIndex] = ssc;
-                        else list.push(ssc);
-
-                        localStorage.setItem(DB_KEYS.SSC, JSON.stringify(list));
-                        window.Utils.uploadToCloud(true, 'ssc');
-                    },
-                    deleteSSC: (id) => {
-                        window.Utils.deleteFromCloud('ssc', id);
-                        // 1. Get SSC List and remove target
-                        let list = window.Utils.getSSC().filter(s => s.id !== id);
-                        localStorage.setItem(DB_KEYS.SSC, JSON.stringify(list));
-
-                        // 2. Cascading Delete: Find all QPs for this SSC
-                        const allQPs = window.Utils.getQPs();
-                        const sscQPs = allQPs.filter(q => q.sscId === id);
-                        const sscQPIds = sscQPs.map(q => q.id);
-
-                        if (sscQPIds.length > 0) {
-                            sscQPIds.forEach(qpId => window.Utils.deleteFromCloud('qps', qpId));
-                            // Remove QPs
-                            const remainingQPs = allQPs.filter(q => q.sscId !== id);
-                            localStorage.setItem(DB_KEYS.QP, JSON.stringify(remainingQPs));
-
-                            // 3. Find NOS for these QPs
-                            const allNOS = window.Utils.getNOS();
-                            const qpNOS = allNOS.filter(n => sscQPIds.includes(n.qpId));
-                            const qpNOSIds = qpNOS.map(n => n.id);
-
-                            if (qpNOSIds.length > 0) {
-                                qpNOSIds.forEach(nId => window.Utils.deleteFromCloud('nos', nId));
-                                // Remove NOS
-                                const remainingNOS = allNOS.filter(n => !sscQPIds.includes(n.qpId));
-                                localStorage.setItem(DB_KEYS.NOS, JSON.stringify(remainingNOS));
-
-                                // 4. Remove PCs for these NOS
-                                const allPCs = window.Utils.getPCs();
-                                // Fix for filter:
-                                const pcsToDelete = allPCs.filter(p => qpNOSIds.includes(p.nosId));
-                                pcsToDelete.forEach(p => window.Utils.deleteFromCloud('pcs', p.id));
-
-                                const remainingPCs = allPCs.filter(p => !qpNOSIds.includes(p.nosId));
-                                localStorage.setItem(DB_KEYS.PC, JSON.stringify(remainingPCs));
-                            }
-
-                            // 5. Remove Batches logic
-                            // Remove Question Papers linked to this SSC
-                            const allPapers = window.Utils.getQuestionPapers();
-                            const sscPapers = allPapers.filter(p => p.sscId === id);
-                            if (sscPapers.length > 0) {
-                                sscPapers.forEach(p => window.Utils.deleteFromCloud('question_papers', p.id));
-
-                                const sscPaperIds = sscPapers.map(p => p.id);
-                                const remainingPapers = allPapers.filter(p => p.sscId !== id);
-                                localStorage.setItem(DB_KEYS.QUESTION_PAPERS, JSON.stringify(remainingPapers));
-
-                                // Remove Batches linked to these Papers
-                                const allBatches = window.Utils.getBatches();
-                                const batchesToDelete = allBatches.filter(b => sscPaperIds.includes(b.theoryPaperId) || sscPaperIds.includes(b.practicalPaperId));
-
-                                if (batchesToDelete.length > 0) {
-                                    batchesToDelete.forEach(b => window.Utils.deleteFromCloud('batches', b.id));
-
-                                    const batchIdsToDelete = batchesToDelete.map(b => b.id);
-                                    const remainingBatches = allBatches.filter(b => !batchIdsToDelete.includes(b.id));
-                                    localStorage.setItem(DB_KEYS.BATCHES, JSON.stringify(remainingBatches));
-
-                                    // Remove Students in these Batches
-                                    const allStudents = window.Utils.getStudents();
-                                    const studentsToDelete = allStudents.filter(s => batchIdsToDelete.includes(s.batchId));
-                                    studentsToDelete.forEach(s => window.Utils.deleteFromCloud('students', s.id));
-
-                                    const remainingStudents = allStudents.filter(s => !batchIdsToDelete.includes(s.batchId));
-                                    localStorage.setItem(DB_KEYS.STUDENTS, JSON.stringify(remainingStudents));
-                                }
+                        const key = MAPPING[route];
+                        if (key) {
+                            let list = JSON.parse(localStorage.getItem(key) || '[]');
+                            const idx = list.findIndex(i => i.id === item.id);
+                            if (idx >= 0) {
+                                list[idx].synced = true;
+                                localStorage.setItem(key, JSON.stringify(list));
                             }
                         }
-                    },
-                    getQPs: () => JSON.parse(localStorage.getItem(DB_KEYS.QP) || '[]'),
-                    getQPsBySSC: (sscId) => window.Utils.getQPs().filter(q => q.sscId === sscId),
-                    saveQP: (qp) => {
-                        const list = window.Utils.getQPs();
-                        if (!qp.id) qp.id = Date.now().toString(36) + Math.random().toString(36).substr(2);
-                        qp.synced = false; // Add this
-                        const existingIndex = list.findIndex(item => item.id === qp.id);
-                        if (existingIndex >= 0) list[existingIndex] = qp;
-                        else list.push(qp);
-                        localStorage.setItem(DB_KEYS.QP, JSON.stringify(list));
-                        window.Utils.uploadToCloud(true, 'qps');
-                    },
-                    deleteQP: (id) => {
-                        window.Utils.deleteFromCloud('qps', id);
-                        let list = window.Utils.getQPs().filter(q => q.id !== id);
-                        localStorage.setItem(DB_KEYS.QP, JSON.stringify(list));
-                    },
-                    getNOS: () => JSON.parse(localStorage.getItem(DB_KEYS.NOS) || '[]'),
-                    getNOSByQP: (qpId) => window.Utils.getNOS().filter(n => n.qpId === qpId),
-                    saveNOS: (nos) => {
-                        const list = window.Utils.getNOS();
-                        if (!nos.id) nos.id = Date.now().toString(36) + Math.random().toString(36).substr(2);
-                        nos.synced = false; // Add this
-                        const existingIndex = list.findIndex(item => item.id === nos.id);
-                        if (existingIndex >= 0) list[existingIndex] = nos;
-                        else list.push(nos);
-                        localStorage.setItem(DB_KEYS.NOS, JSON.stringify(list));
-                        window.Utils.uploadToCloud(true, 'nos');
-                    },
-                    deleteNOS: (id) => {
-                        window.Utils.deleteFromCloud('nos', id);
-                        let list = window.Utils.getNOS().filter(n => n.id !== id);
-                        localStorage.setItem(DB_KEYS.NOS, JSON.stringify(list));
-                    },
-                    getPCs: () => JSON.parse(localStorage.getItem(DB_KEYS.PC) || '[]'),
-                    getPCsByNOS: (nosId) => window.Utils.getPCs().filter(p => p.nosId === nosId),
-                    savePC: (pc) => {
-                        const list = window.Utils.getPCs();
-                        if (!pc.id) pc.id = Date.now().toString(36) + Math.random().toString(36).substr(2);
-                        pc.synced = false; // Add this
-                        const existingIndex = list.findIndex(item => item.id === pc.id);
-                        if (existingIndex >= 0) list[existingIndex] = pc;
-                        else list.push(pc);
-                        localStorage.setItem(DB_KEYS.PC, JSON.stringify(list));
-                        window.Utils.uploadToCloud(true, 'pcs');
-                    },
-                    deletePC: (id) => {
-                        window.Utils.deleteFromCloud('pcs', id);
-                        let list = window.Utils.getPCs().filter(p => p.id !== id);
-                        localStorage.setItem(DB_KEYS.PC, JSON.stringify(list));
-                    },
-                    getBatches: () => JSON.parse(localStorage.getItem(DB_KEYS.BATCHES) || '[]'),
-                    saveToCloud: async (route, item) => {
-                        try {
-                            if (!item || !item.id) return false;
-                            if (navigator.onLine === false) return false;
-
-                            const response = await fetch(`${API_BASE}/${route}`, {
-                                method: 'POST',
-                                headers: {
-                                    'Content-Type': 'application/json',
-                                    'x-api-key': 'portel_secure_key_2025'
-                                },
-                                body: JSON.stringify(item)
-                            });
-
-                            if (response.ok) {
-                                console.log(`[Sync] ${route} saved to S3.`);
-                                // Update local sync status
-                                const MAPPING = {
-                                    'batches': DB_KEYS.BATCHES, 'students': DB_KEYS.STUDENTS,
-                                    'qps': DB_KEYS.QP, 'nos': DB_KEYS.NOS, 'pcs': DB_KEYS.PC,
-                                    'ssc': DB_KEYS.SSC, 'responses': DB_KEYS.RESPONSES,
-                                    'question_papers': DB_KEYS.QUESTION_PAPERS,
-                                    'assessors': 'se_assessors'
-                                };
-                                const key = MAPPING[route];
-                                if (key) {
-                                    let list = JSON.parse(localStorage.getItem(key) || '[]');
-                                    const idx = list.findIndex(i => i.id === item.id);
-                                    if (idx >= 0) {
-                                        list[idx].synced = true;
-                                        localStorage.setItem(key, JSON.stringify(list));
-                                    }
-                                }
-                                return true;
-                            }
-                            return false;
-                        } catch (e) {
-                            console.error(`Save ${route} failed`, e);
-                            return false;
-                        }
-                    },
-                    deleteFromCloud: async (route, id) => {
-                        try {
-                            if (!id) return;
-                            if (navigator.onLine === false) return;
-                            console.log(`Deleting from S3: ${route}/${id}`);
-                            await fetch(`${API_BASE}/${route}/${id}`, {
-                                method: 'DELETE',
-                                headers: { 'x-api-key': 'portel_secure_key_2025' }
-                            });
-                        } catch (e) {
-                            console.error(`Delete ${route} failed`, e);
-                        }
-                    },
-
-                    // ... (Other functions) ...
-
-                    saveBatch: async (batch, silent = false) => {
-                        let list = window.Utils.getBatches();
-                        if (!batch.id) batch.id = Date.now().toString(36) + Math.random().toString(36).substr(2);
-                        batch.synced = false; // Add this
-
-                        const existingIndex = list.findIndex(b => b.id === batch.id);
-                        if (existingIndex >= 0) {
-                            list[existingIndex] = batch; // Update
-                        } else {
-                            list.push(batch); // Insert
-                        }
-
-                        localStorage.setItem(DB_KEYS.BATCHES, JSON.stringify(list));
-
-                        // v19.0.9: PRIORITIZE Direct Save to S3 for instant confirmation
-                        const directOk = await window.Utils.saveToCloud('batches', batch);
-                        if (directOk) {
-                            batch.synced = true;
-                            // Update list with synced status
-                            const updatedList = window.Utils.getBatches();
-                            const idx = updatedList.findIndex(b => b.id === batch.id);
-                            if (idx >= 0) updatedList[idx].synced = true;
-                            localStorage.setItem(DB_KEYS.BATCHES, JSON.stringify(updatedList));
-
-                            if (!silent) alert("Success: Batch Saved & Synced to Cloud!");
-                        } else {
-                            // Fallback to background sync
-                            const backgroundOk = await window.Utils.uploadToCloud(true, 'batches');
-                            if (!silent && !backgroundOk) {
-                                alert("Batch Saved Locally but Cloud Sync FAILED.\nPlease check connection and TRY AGAIN (Save again).");
-                            } else if (!silent && backgroundOk) {
-                                alert("Success: Batch Saved & Synced to Cloud (Background)!");
-                            }
-                        }
-                    },
-                    updateBatches: (batches) => localStorage.setItem(DB_KEYS.BATCHES, JSON.stringify(batches)),
-                    deleteBatch: (id) => {
-                        // 1. Delete Batch
-                        window.Utils.deleteFromCloud('batches', id);
-                        let list = window.Utils.getBatches().filter(b => b.id !== id);
-                        localStorage.setItem(DB_KEYS.BATCHES, JSON.stringify(list));
-
-                        // 2. Delete Related Assessors (Fixes login issue)
-                        let allAssessors = window.Utils.getAssessors();
-                        let assessorsToDelete = allAssessors.filter(a => a.batchId === id);
-                        assessorsToDelete.forEach(a => window.Utils.deleteFromCloud('assessors', a.id));
-                        let remainingAssessors = allAssessors.filter(a => a.batchId !== id);
-                        localStorage.setItem('se_assessors', JSON.stringify(remainingAssessors));
-
-                        // 3. Delete Related Students
-                        let allStudents = window.Utils.getStudents();
-                        let studentsToDelete = allStudents.filter(s => s.batchId === id);
-                        studentsToDelete.forEach(s => window.Utils.deleteFromCloud('students', s.id));
-                        let remainingStudents = allStudents.filter(s => s.batchId !== id);
-                        localStorage.setItem(DB_KEYS.STUDENTS, JSON.stringify(remainingStudents));
-
-                        // 4. Delete Related Responses (Cleanup)
-                        let allResponses = window.Utils.getResponses();
-                        // Filter out responses belonging to deleted students OR the batch itself
-                        let responsesToDelete = allResponses.filter(r => r.batchId === id || studentsToDelete.find(s => s.id === r.studentId));
-
-                        // CRITICAL: Actually delete from Cloud too
-                        if (responsesToDelete.length > 0) {
-                            console.log(`[Sync] Deleting ${responsesToDelete.length} responses from Cloud for batch ${id}`);
-                            responsesToDelete.forEach(r => window.Utils.deleteFromCloud('responses', r.id));
-                        }
-
-                        let remainingResponses = allResponses.filter(r => r.batchId !== id && !studentsToDelete.find(s => s.id === r.studentId));
-                        localStorage.setItem(DB_KEYS.RESPONSES, JSON.stringify(remainingResponses));
-                    },
-                    deleteAllBatches: () => {
-                        const batches = window.Utils.getBatches();
-                        batches.forEach(b => window.Utils.deleteBatch(b.id));
-                        // Force sync/refresh logic if needed, but deleteBatch handles local storage.
-                        // Maybe clear any residual data?
-                        // localStorage.setItem(DB_KEYS.BATCHES, '[]');
-                    },
-                    factoryReset: async () => {
-                        if (!confirm("?? FACTORY RESET WARNING ??\n\nThis will PERMANENTLY DELETE ALL DATA from both your device AND the Cloud.\n\nThis includes data from ALL connected devices.\n\nAre you sure you want to proceed?")) return;
-
-                        const statusBtn = document.getElementById('sync-status-text');
-                        const originalText = statusBtn ? statusBtn.innerText : '';
-
-                        try {
-                            if (!navigator.onLine) {
-                                alert("You are offline. Factory Reset requires an internet connection to wipe the cloud.");
-                                return;
-                            }
-
-                            if (statusBtn) statusBtn.innerText = "Connecting to Cloud...";
-
-                            const collections = [
-                                'ssc', 'qps', 'nos', 'pcs',
-                                'batches', 'students', 'assessors',
-                                'responses', 'question_papers',
-                                'synced_chunks'
-                            ];
-
-                            let totalDeleted = 0;
-                            const errors = [];
-                            const API_KEY = 'portel_secure_key_2025';
-                            const headers = { 'x-api-key': API_KEY };
-
-                            for (const col of collections) {
-                                if (statusBtn) statusBtn.innerText = `Wiping ${col}...`;
-                                try {
-                                    const res = await fetch(`${API_BASE}/wipe/${col}?apiKey=${API_KEY}`, {
-                                        method: 'DELETE',
-                                        headers
-                                    });
-
-                                    if (res.ok) {
-                                        totalDeleted++;
-                                    } else {
-                                        errors.push(`${col} (Status ${res.status})`);
-                                    }
-                                } catch (err) {
-                                    errors.push(`${col} (Network Error)`);
-                                }
-                            }
-
-                            // Clear Local
-                            localStorage.clear();
-                            try {
-                                indexedDB.deleteDatabase('VideoStorage');
-                            } catch (e) { }
-
-                            const errorSummary = errors.length > 0 ? `\n\n⚠️ FAILURES:\n- ${errors.join('\n- ')}` : "";
-                            alert(`Factory Reset Complete.\n\n- Cloud Data: Wiped (${totalDeleted}/${collections.length} collections)${errorSummary}\n- Local Data: Cleared\n\nThe app will now reload.`);
-                            window.location.reload();
-
-                        } catch (e) {
-                            console.error("Factory Reset Fatal Error", e);
-                            alert("Factory Reset Error: " + e.message + "\n\nLocal data will be cleared, but cloud data might remain.");
-                            localStorage.clear();
-                            window.location.reload();
-                        }
-                    },
-                    getStudents: () => JSON.parse(localStorage.getItem(DB_KEYS.STUDENTS) || '[]'),
-                    getStudentsByBatch: (batchId) => window.Utils.getStudents().filter(s => s.batchId === batchId),
-                    saveStudent: (student) => {
-                        const list = window.Utils.getStudents();
-                        if (!student.id) student.id = Date.now().toString(36) + Math.random().toString(36).substr(2);
-                        student.synced = false;
-
-                        const existingIndex = list.findIndex(s => s.id === student.id);
-                        if (existingIndex >= 0) list[existingIndex] = student;
-                        else list.push(student);
-
-                        localStorage.setItem(DB_KEYS.STUDENTS, JSON.stringify(list));
-                        window.Utils.uploadToCloud(true, 'students');
-                    },
-                    saveStudentsBulk: (students) => {
-                        const list = window.Utils.getStudents();
-                        students.forEach(s => {
-                            if (!s.id) s.id = Date.now().toString(36) + Math.random().toString(36).substr(2);
-                            s.synced = false;
-                            const existingIndex = list.findIndex(ex => ex.id === s.id);
-                            if (existingIndex >= 0) list[existingIndex] = s;
-                            else list.push(s);
-                        });
-                        localStorage.setItem(DB_KEYS.STUDENTS, JSON.stringify(list));
-                        window.Utils.uploadToCloud(true, 'students');
-                    },
-                    deleteStudent: (id) => {
-                        window.Utils.deleteFromCloud('students', id);
-                        let list = window.Utils.getStudents().filter(s => s.id !== id);
-                        localStorage.setItem(DB_KEYS.STUDENTS, JSON.stringify(list));
-                    },
-                    authenticateStudent: (username, password) => window.Utils.getStudents().find(s => String(s.username).trim().toLowerCase() === String(username).trim().toLowerCase() && String(s.password).trim() === String(password).trim()),
-
-                    // Assessor Management
-                    getAssessors: () => JSON.parse(localStorage.getItem('se_assessors') || '[]'),
-                    saveAssessor: async (assessor) => {
-                        const list = window.Utils.getAssessors();
-                        if (!assessor.id) assessor.id = Date.now().toString(36) + Math.random().toString(36).substr(2);
-                        if (!assessor.createdAt) assessor.createdAt = new Date().toISOString();
-                        assessor.synced = false; // Add this
-
-                        // Save Local
-                        const existingIndex = list.findIndex(a => a.id === assessor.id);
-                        if (existingIndex >= 0) list[existingIndex] = assessor;
-                        else list.push(assessor);
-                        localStorage.setItem('se_assessors', JSON.stringify(list));
-
-                        // Save Cloud
-                        await window.Utils.uploadToCloud(true, 'assessors');
-                    },
-                    deleteAssessor: (id) => {
-                        window.Utils.deleteFromCloud('assessors', id);
-                        let list = window.Utils.getAssessors().filter(a => a.id !== id);
-                        localStorage.setItem('se_assessors', JSON.stringify(list));
-                    },
-                    authenticateAssessor: (username, password) => {
-                        // 1. Check New Assessors Table
-                        const fromList = window.Utils.getAssessors().find(a =>
-                            a && a.username && a.password &&
-                            String(a.username).trim().toLowerCase() === String(username).trim().toLowerCase() &&
-                            String(a.password).trim() === String(password).trim()
-                        );
-                        if (fromList) return fromList;
-
-                        // 2. Fallback: Check Batches (Legacy / Direct Batch Credentials)
-                        const fromBatch = window.Utils.getBatches().find(b =>
-                            String(b.assessorUsername).trim().toLowerCase() === String(username).trim().toLowerCase() &&
-                            String(b.assessorPassword).trim() === String(password).trim()
-                        );
-
-                        if (fromBatch) {
-                            return {
-                                id: fromBatch.id, // Use batch ID as fallback ID
-                                name: 'Assessor (' + fromBatch.name + ')',
-                                username: fromBatch.assessorUsername,
-                                batchId: fromBatch.id, // Critical for context
-                                sscId: fromBatch.sscId,
-                                qpId: fromBatch.qpId,
-                                role: 'assessor'
-                            };
-                        }
-                        return null;
-                    },
-
-                    getQuestionPapers: () => JSON.parse(localStorage.getItem(DB_KEYS.QUESTION_PAPERS) || '[]'),
-                    saveQuestionPaper: (qp) => {
-                        const list = window.Utils.getQuestionPapers();
-                        if (!qp.id) qp.id = Date.now().toString(36) + Math.random().toString(36).substr(2);
-                        qp.synced = false;
-
-                        const existingIndex = list.findIndex(q => q.id === qp.id);
-                        if (existingIndex >= 0) list[existingIndex] = qp;
-                        else list.push(qp);
-
-                        localStorage.setItem(DB_KEYS.QUESTION_PAPERS, JSON.stringify(list));
-                        window.Utils.uploadToCloud(true, 'question_papers');
-                    },
-                    deleteQuestionPaper: (id) => {
-                        window.Utils.deleteFromCloud('question_papers', id);
-                        let list = window.Utils.getQuestionPapers().filter(q => q.id !== id);
-                        localStorage.setItem(DB_KEYS.QUESTION_PAPERS, JSON.stringify(list));
-                    },
-                    getResponses: () => JSON.parse(localStorage.getItem(DB_KEYS.RESPONSES) || '[]'),
-
-                    // Export Verification Data to Excel (optionally filtered by batch)
-                    exportVerificationData: (batchId = null) => {
-                        try {
-                            let allStudents = window.Utils.getStudents();
-
-                            // Filter by batch if batchId is provided
-                            if (batchId) {
-                                allStudents = allStudents.filter(s => s.batchId === batchId);
-                                if (allStudents.length === 0) {
-                                    alert('No students found in this batch!');
-                                    return;
-                                }
-                            }
-
-                            const allResponses = window.Utils.getResponses();
-                            const verifications = allResponses.filter(r => r.examType === 'Verification');
-
-                            // Create a map of student IDs to their verification data
-                            const verificationMap = {};
-                            verifications.forEach(v => {
-                                verificationMap[v.studentId] = v.answers || {};
-                            });
-
-                            // Get batch name for filename (if filtering by batch)
-                            let batchName = 'All_Batches';
-                            if (batchId) {
-                                const batch = window.Utils.getBatches().find(b => b.id === batchId);
-                                batchName = batch ? (batch.name || batch.batchName || batchId) : batchId;
-                            }
-
-                            // Prepare Excel data - include ALL students
-                            const data = allStudents.map((student, index) => {
-                                const verification = verificationMap[student.id];
-                                const isAbsent = !verification;
-
-                                return {
-                                    'S.No': index + 1,
-                                    'Student ID': student.enrollmentNo || student.id || 'N/A',
-                                    'Student Name': student.name || 'N/A',
-                                    'Father Name': isAbsent ? 'ABSENT' : (verification.fatherName || 'N/A'),
-                                    'Aadhaar Number': isAbsent ? 'ABSENT' : (verification.aadharNumber || 'N/A'),
-                                    'Status': isAbsent ? 'ABSENT' : 'SUBMITTED',
-                                    'Submitted On': isAbsent ? '-' : (verification.timestamp ? new Date(verification.timestamp).toLocaleString() : 'N/A')
-                                };
-                            });
-
-                            // Create Excel workbook
-                            const worksheet = window.XLSX.utils.json_to_sheet(data);
-                            const workbook = window.XLSX.utils.book_new();
-                            window.XLSX.utils.book_append_sheet(workbook, worksheet, "Student Verification");
-
-                            // Set column widths for better readability
-                            worksheet['!cols'] = [
-                                { wch: 6 },  // S.No
-                                { wch: 15 }, // Student ID
-                                { wch: 25 }, // Student Name
-                                { wch: 25 }, // Father Name
-                                { wch: 18 }, // Aadhaar Number
-                                { wch: 12 }, // Status
-                                { wch: 20 }  // Submitted On
-                            ];
-
-                            // Download file with batch name and current date
-                            const filename = `Verification_${batchName}_${new Date().toISOString().split('T')[0]}.xlsx`;
-                            window.XLSX.writeFile(workbook, filename);
-
-                            alert(`✅ Excel file downloaded successfully!\\n\\nBatch: ${batchName}\\nTotal Students: ${data.length}\\nSubmitted: ${data.filter(d => d.Status === 'SUBMITTED').length}\\nAbsent: ${data.filter(d => d.Status === 'ABSENT').length}`);
-                        } catch (error) {
-                            console.error('Export error:', error);
-                            alert('Error exporting data: ' + error.message);
-                        }
-                    },
-
-                    base64ToBlob: (base64) => {
-                        const parts = base64.split(';base64,');
-                        const contentType = parts[0].split(':')[1];
-                        const raw = window.atob(parts[1]);
-                        const rawLength = raw.length;
-                        const uInt8Array = new Uint8Array(rawLength);
-                        for (let i = 0; i < rawLength; ++i) {
-                            uInt8Array[i] = raw.charCodeAt(i);
-                        }
-                        return new Blob([uInt8Array], { type: contentType });
-                    },
-
-                    saveResponse: async (response) => {
-                        try {
-                            // MIGRATION TO INDEXEDDB FOR IMAGES
-                            if (response.evidence && Array.isArray(response.evidence)) {
-                                for (let i = 0; i < response.evidence.length; i++) {
-                                    const ev = response.evidence[i];
-                                    // If it's a base64 string (starts with data:image or data:video), offload it
-                                    if (ev.img && (ev.img.startsWith('data:image') || ev.img.startsWith('data:video'))) {
-                                        const blob = window.Utils.base64ToBlob(ev.img);
-                                        const key = `ev_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-                                        await VideoDB.saveVideo(key, blob); // reusing generic Method
-
-                                        // VERIFY IMMEDIATE READ
-                                        const check = await VideoDB.getVideo(key);
-                                        if (!check) console.error(`[CRITICAL] Immediate Readback Failed for ${key}`);
-                                        else console.log(`[VideoDB] Verified ${key} exists.`);
-
-                                        response.evidence[i] = { ...ev, img: key, storage: 'indexeddb' };
-                                    }
-                                }
-                            }
-
-                            if (!response.id) response.id = `${response.studentId}_${response.examType}`;
-                            response.synced = false; // Add this
-
-                            const list = window.Utils.getResponses();
-                            const existing = list.findIndex(r => r.studentId === response.studentId && r.examType === response.examType);
-                            if (existing >= 0) {
-                                const old = list[existing];
-                                let newEvidence = [...(old.evidence || [])];
-                                if (response.evidence) {
-                                    response.evidence.forEach(newItem => {
-                                        // Check if this evidence key already exists to update it (e.g. adding downloadUrl)
-                                        const idx = newItem.key ? newEvidence.findIndex(e => e.key === newItem.key) : -1;
-                                        if (idx >= 0) {
-                                            newEvidence[idx] = { ...newEvidence[idx], ...newItem };
-                                        } else {
-                                            newEvidence.push(newItem);
-                                        }
-                                    });
-                                }
-                                list[existing] = { ...old, ...response, evidence: newEvidence };
-                            }
-                            else list.push(response);
-
-                            localStorage.setItem(DB_KEYS.RESPONSES, JSON.stringify(list));
-                            window.Utils.uploadToCloud(true); // Trigger sync for responses
-                        } catch (e) {
-                            console.error("Storage Error", e);
-                            // Fallback to alert if IndexedDB fails or something else is wrong
-                            if (e.name === 'QuotaExceededError') {
-                                alert("Storage Full! Please contact support.");
-                            }
-                        }
-                    },
-                    // Duplicate removed
-                    deleteEvidence: async (studentId, examType, evidenceItemOrSession) => {
-                        const responses = window.Utils.getResponses();
-                        const respIdx = responses.findIndex(r => r.studentId === studentId && r.examType === examType);
-                        if (respIdx === -1) return;
-
-                        const response = responses[respIdx];
-                        const itemsToDelete = evidenceItemOrSession.isGroup ? evidenceItemOrSession.parts : [evidenceItemOrSession];
-
-                        for (const item of itemsToDelete) {
-                            // 1. Delete from Cloud (S3)
-                            if (item.url && item.url.includes('amazonaws.com')) {
-                                try {
-                                    const urlObj = new URL(item.url);
-                                    let s3Key = urlObj.pathname.startsWith('/') ? urlObj.pathname.substring(1) : urlObj.pathname;
-                                    s3Key = decodeURIComponent(s3Key);
-                                    console.log(`[Delete] Cloud Key: ${s3Key}`);
-                                    await fetch(`${API_BASE}/media?key=${encodeURIComponent(s3Key)}&apiKey=portel_secure_key_2025`, { method: 'DELETE' });
-                                } catch (e) { console.error("Cloud delete failed", e); }
-                            }
-
-                            // 2. Delete from Local (IndexedDB)
-                            const localKey = (item.storage === 'indexeddb' || !item.url) ? item.img : null;
-                            if (localKey && !localKey.startsWith('data:') && !localKey.startsWith('blob:')) {
-                                try { await VideoDB.deleteVideo(localKey); console.log(`[Delete] Local Key: ${localKey}`); } catch (e) { }
-                            }
-
-                            // 3. Remove from metadata array
-                            // Matching by key or img (exact match)
-                            response.evidence = response.evidence.filter(ev =>
-                                (ev.key && ev.key !== item.key) ||
-                                (!ev.key && ev.img !== item.img)
-                            );
-                        }
-
-                        response.synced = false;
-                        responses[respIdx] = response;
-                        localStorage.setItem(DB_KEYS.RESPONSES, JSON.stringify(responses));
-                        window.Utils.uploadToCloud(true, 'responses');
                         return true;
-                    },
-
-                    formatTime12h: (timeStr) => {
-                        if (!timeStr) return '';
-                        try {
-                            const [h, m] = timeStr.split(':');
-                            const hh = parseInt(h);
-                            const suffix = hh >= 12 ? 'PM' : 'AM';
-                            const h12 = hh % 12 || 12;
-                            return `${h12}:${m} ${suffix}`;
-                        } catch (e) { return timeStr; }
                     }
+                    return false;
+                } catch (e) {
+                    console.error(`Save ${route} failed`, e);
+                    return false;
+                }
+            },
+            deleteFromCloud: async (route, id) => {
+                try {
+                    if (!id) return;
+                    if (navigator.onLine === false) return;
+                    console.log(`Deleting from S3: ${route}/${id}`);
+                    await fetch(`${API_BASE}/${route}/${id}`, {
+                        method: 'DELETE',
+                        headers: { 'x-api-key': 'portel_secure_key_2025' }
+                    });
+                } catch (e) {
+                    console.error(`Delete ${route} failed`, e);
+                }
+            },
+
+            // ... (Other functions) ...
+
+            saveBatch: async (batch, silent = false) => {
+                let list = window.Utils.getBatches();
+                if (!batch.id) batch.id = Date.now().toString(36) + Math.random().toString(36).substr(2);
+                batch.synced = false; // Add this
+
+                const existingIndex = list.findIndex(b => b.id === batch.id);
+                if (existingIndex >= 0) {
+                    list[existingIndex] = batch; // Update
+                } else {
+                    list.push(batch); // Insert
+                }
+
+                localStorage.setItem(DB_KEYS.BATCHES, JSON.stringify(list));
+
+                // v19.0.9: PRIORITIZE Direct Save to S3 for instant confirmation
+                const directOk = await window.Utils.saveToCloud('batches', batch);
+                if (directOk) {
+                    batch.synced = true;
+                    // Update list with synced status
+                    const updatedList = window.Utils.getBatches();
+                    const idx = updatedList.findIndex(b => b.id === batch.id);
+                    if (idx >= 0) updatedList[idx].synced = true;
+                    localStorage.setItem(DB_KEYS.BATCHES, JSON.stringify(updatedList));
+
+                    if (!silent) alert("Success: Batch Saved & Synced to Cloud!");
+                } else {
+                    // Fallback to background sync
+                    const backgroundOk = await window.Utils.uploadToCloud(true, 'batches');
+                    if (!silent && !backgroundOk) {
+                        alert("Batch Saved Locally but Cloud Sync FAILED.\nPlease check connection and TRY AGAIN (Save again).");
+                    } else if (!silent && backgroundOk) {
+                        alert("Success: Batch Saved & Synced to Cloud (Background)!");
+                    }
+                }
+            },
+            updateBatches: (batches) => localStorage.setItem(DB_KEYS.BATCHES, JSON.stringify(batches)),
+            deleteBatch: (id) => {
+                // 1. Delete Batch
+                window.Utils.deleteFromCloud('batches', id);
+                let list = window.Utils.getBatches().filter(b => b.id !== id);
+                localStorage.setItem(DB_KEYS.BATCHES, JSON.stringify(list));
+
+                // 2. Delete Related Assessors (Fixes login issue)
+                let allAssessors = window.Utils.getAssessors();
+                let assessorsToDelete = allAssessors.filter(a => a.batchId === id);
+                assessorsToDelete.forEach(a => window.Utils.deleteFromCloud('assessors', a.id));
+                let remainingAssessors = allAssessors.filter(a => a.batchId !== id);
+                localStorage.setItem('se_assessors', JSON.stringify(remainingAssessors));
+
+                // 3. Delete Related Students
+                let allStudents = window.Utils.getStudents();
+                let studentsToDelete = allStudents.filter(s => s.batchId === id);
+                studentsToDelete.forEach(s => window.Utils.deleteFromCloud('students', s.id));
+                let remainingStudents = allStudents.filter(s => s.batchId !== id);
+                localStorage.setItem(DB_KEYS.STUDENTS, JSON.stringify(remainingStudents));
+
+                // 4. Delete Related Responses (Cleanup)
+                let allResponses = window.Utils.getResponses();
+                // Filter out responses belonging to deleted students OR the batch itself
+                let responsesToDelete = allResponses.filter(r => r.batchId === id || studentsToDelete.find(s => s.id === r.studentId));
+
+                // CRITICAL: Actually delete from Cloud too
+                if (responsesToDelete.length > 0) {
+                    console.log(`[Sync] Deleting ${responsesToDelete.length} responses from Cloud for batch ${id}`);
+                    responsesToDelete.forEach(r => window.Utils.deleteFromCloud('responses', r.id));
+                }
+
+                let remainingResponses = allResponses.filter(r => r.batchId !== id && !studentsToDelete.find(s => s.id === r.studentId));
+                localStorage.setItem(DB_KEYS.RESPONSES, JSON.stringify(remainingResponses));
+            },
+            deleteAllBatches: () => {
+                const batches = window.Utils.getBatches();
+                batches.forEach(b => window.Utils.deleteBatch(b.id));
+                // Force sync/refresh logic if needed, but deleteBatch handles local storage.
+                // Maybe clear any residual data?
+                // localStorage.setItem(DB_KEYS.BATCHES, '[]');
+            },
+            factoryReset: async () => {
+                if (!confirm("?? FACTORY RESET WARNING ??\n\nThis will PERMANENTLY DELETE ALL DATA from both your device AND the Cloud.\n\nThis includes data from ALL connected devices.\n\nAre you sure you want to proceed?")) return;
+
+                const statusBtn = document.getElementById('sync-status-text');
+                const originalText = statusBtn ? statusBtn.innerText : '';
+
+                try {
+                    if (!navigator.onLine) {
+                        alert("You are offline. Factory Reset requires an internet connection to wipe the cloud.");
+                        return;
+                    }
+
+                    if (statusBtn) statusBtn.innerText = "Connecting to Cloud...";
+
+                    const collections = [
+                        'ssc', 'qps', 'nos', 'pcs',
+                        'batches', 'students', 'assessors',
+                        'responses', 'question_papers',
+                        'synced_chunks'
+                    ];
+
+                    let totalDeleted = 0;
+                    const errors = [];
+                    const API_KEY = 'portel_secure_key_2025';
+                    const headers = { 'x-api-key': API_KEY };
+
+                    for (const col of collections) {
+                        if (statusBtn) statusBtn.innerText = `Wiping ${col}...`;
+                        try {
+                            const res = await fetch(`${API_BASE}/wipe/${col}?apiKey=${API_KEY}`, {
+                                method: 'DELETE',
+                                headers
+                            });
+
+                            if (res.ok) {
+                                totalDeleted++;
+                            } else {
+                                errors.push(`${col} (Status ${res.status})`);
+                            }
+                        } catch (err) {
+                            errors.push(`${col} (Network Error)`);
+                        }
+                    }
+
+                    // Clear Local
+                    localStorage.clear();
+                    try {
+                        indexedDB.deleteDatabase('VideoStorage');
+                    } catch (e) { }
+
+                    const errorSummary = errors.length > 0 ? `\n\n⚠️ FAILURES:\n- ${errors.join('\n- ')}` : "";
+                    alert(`Factory Reset Complete.\n\n- Cloud Data: Wiped (${totalDeleted}/${collections.length} collections)${errorSummary}\n- Local Data: Cleared\n\nThe app will now reload.`);
+                    window.location.reload();
+
+                } catch (e) {
+                    console.error("Factory Reset Fatal Error", e);
+                    alert("Factory Reset Error: " + e.message + "\n\nLocal data will be cleared, but cloud data might remain.");
+                    localStorage.clear();
+                    window.location.reload();
+                }
+            },
+            getStudents: () => JSON.parse(localStorage.getItem(DB_KEYS.STUDENTS) || '[]'),
+            getStudentsByBatch: (batchId) => window.Utils.getStudents().filter(s => s.batchId === batchId),
+            saveStudent: (student) => {
+                const list = window.Utils.getStudents();
+                if (!student.id) student.id = Date.now().toString(36) + Math.random().toString(36).substr(2);
+                student.synced = false;
+
+                const existingIndex = list.findIndex(s => s.id === student.id);
+                if (existingIndex >= 0) list[existingIndex] = student;
+                else list.push(student);
+
+                localStorage.setItem(DB_KEYS.STUDENTS, JSON.stringify(list));
+                window.Utils.uploadToCloud(true, 'students');
+            },
+            saveStudentsBulk: (students) => {
+                const list = window.Utils.getStudents();
+                students.forEach(s => {
+                    if (!s.id) s.id = Date.now().toString(36) + Math.random().toString(36).substr(2);
+                    s.synced = false;
+                    const existingIndex = list.findIndex(ex => ex.id === s.id);
+                    if (existingIndex >= 0) list[existingIndex] = s;
+                    else list.push(s);
+                });
+                localStorage.setItem(DB_KEYS.STUDENTS, JSON.stringify(list));
+                window.Utils.uploadToCloud(true, 'students');
+            },
+            deleteStudent: (id) => {
+                window.Utils.deleteFromCloud('students', id);
+                let list = window.Utils.getStudents().filter(s => s.id !== id);
+                localStorage.setItem(DB_KEYS.STUDENTS, JSON.stringify(list));
+            },
+            authenticateStudent: (username, password) => window.Utils.getStudents().find(s => String(s.username).trim().toLowerCase() === String(username).trim().toLowerCase() && String(s.password).trim() === String(password).trim()),
+
+            // Assessor Management
+            getAssessors: () => JSON.parse(localStorage.getItem('se_assessors') || '[]'),
+            saveAssessor: async (assessor) => {
+                const list = window.Utils.getAssessors();
+                if (!assessor.id) assessor.id = Date.now().toString(36) + Math.random().toString(36).substr(2);
+                if (!assessor.createdAt) assessor.createdAt = new Date().toISOString();
+                assessor.synced = false; // Add this
+
+                // Save Local
+                const existingIndex = list.findIndex(a => a.id === assessor.id);
+                if (existingIndex >= 0) list[existingIndex] = assessor;
+                else list.push(assessor);
+                localStorage.setItem('se_assessors', JSON.stringify(list));
+
+                // Save Cloud
+                await window.Utils.uploadToCloud(true, 'assessors');
+            },
+            deleteAssessor: (id) => {
+                window.Utils.deleteFromCloud('assessors', id);
+                let list = window.Utils.getAssessors().filter(a => a.id !== id);
+                localStorage.setItem('se_assessors', JSON.stringify(list));
+            },
+            authenticateAssessor: (username, password) => {
+                // 1. Check New Assessors Table
+                const fromList = window.Utils.getAssessors().find(a =>
+                    a && a.username && a.password &&
+                    String(a.username).trim().toLowerCase() === String(username).trim().toLowerCase() &&
+                    String(a.password).trim() === String(password).trim()
+                );
+                if (fromList) return fromList;
+
+                // 2. Fallback: Check Batches (Legacy / Direct Batch Credentials)
+                const fromBatch = window.Utils.getBatches().find(b =>
+                    String(b.assessorUsername).trim().toLowerCase() === String(username).trim().toLowerCase() &&
+                    String(b.assessorPassword).trim() === String(password).trim()
+                );
+
+                if (fromBatch) {
+                    return {
+                        id: fromBatch.id, // Use batch ID as fallback ID
+                        name: 'Assessor (' + fromBatch.name + ')',
+                        username: fromBatch.assessorUsername,
+                        batchId: fromBatch.id, // Critical for context
+                        sscId: fromBatch.sscId,
+                        qpId: fromBatch.qpId,
+                        role: 'assessor'
                     };
+                }
+                return null;
+            },
+
+            getQuestionPapers: () => JSON.parse(localStorage.getItem(DB_KEYS.QUESTION_PAPERS) || '[]'),
+            saveQuestionPaper: (qp) => {
+                const list = window.Utils.getQuestionPapers();
+                if (!qp.id) qp.id = Date.now().toString(36) + Math.random().toString(36).substr(2);
+                qp.synced = false;
+
+                const existingIndex = list.findIndex(q => q.id === qp.id);
+                if (existingIndex >= 0) list[existingIndex] = qp;
+                else list.push(qp);
+
+                localStorage.setItem(DB_KEYS.QUESTION_PAPERS, JSON.stringify(list));
+                window.Utils.uploadToCloud(true, 'question_papers');
+            },
+            deleteQuestionPaper: (id) => {
+                window.Utils.deleteFromCloud('question_papers', id);
+                let list = window.Utils.getQuestionPapers().filter(q => q.id !== id);
+                localStorage.setItem(DB_KEYS.QUESTION_PAPERS, JSON.stringify(list));
+            },
+            getResponses: () => JSON.parse(localStorage.getItem(DB_KEYS.RESPONSES) || '[]'),
+
+            // Export Verification Data to Excel (optionally filtered by batch)
+            exportVerificationData: (batchId = null) => {
+                try {
+                    let allStudents = window.Utils.getStudents();
+
+                    // Filter by batch if batchId is provided
+                    if (batchId) {
+                        allStudents = allStudents.filter(s => s.batchId === batchId);
+                        if (allStudents.length === 0) {
+                            alert('No students found in this batch!');
+                            return;
+                        }
+                    }
+
+                    const allResponses = window.Utils.getResponses();
+                    const verifications = allResponses.filter(r => r.examType === 'Verification');
+
+                    // Create a map of student IDs to their verification data
+                    const verificationMap = {};
+                    verifications.forEach(v => {
+                        verificationMap[v.studentId] = v.answers || {};
+                    });
+
+                    // Get batch name for filename (if filtering by batch)
+                    let batchName = 'All_Batches';
+                    if (batchId) {
+                        const batch = window.Utils.getBatches().find(b => b.id === batchId);
+                        batchName = batch ? (batch.name || batch.batchName || batchId) : batchId;
+                    }
+
+                    // Prepare Excel data - include ALL students
+                    const data = allStudents.map((student, index) => {
+                        const verification = verificationMap[student.id];
+                        const isAbsent = !verification;
+
+                        return {
+                            'S.No': index + 1,
+                            'Student ID': student.enrollmentNo || student.id || 'N/A',
+                            'Student Name': student.name || 'N/A',
+                            'Father Name': isAbsent ? 'ABSENT' : (verification.fatherName || 'N/A'),
+                            'Aadhaar Number': isAbsent ? 'ABSENT' : (verification.aadharNumber || 'N/A'),
+                            'Status': isAbsent ? 'ABSENT' : 'SUBMITTED',
+                            'Submitted On': isAbsent ? '-' : (verification.timestamp ? new Date(verification.timestamp).toLocaleString() : 'N/A')
+                        };
+                    });
+
+                    // Create Excel workbook
+                    const worksheet = window.XLSX.utils.json_to_sheet(data);
+                    const workbook = window.XLSX.utils.book_new();
+                    window.XLSX.utils.book_append_sheet(workbook, worksheet, "Student Verification");
+
+                    // Set column widths for better readability
+                    worksheet['!cols'] = [
+                        { wch: 6 },  // S.No
+                        { wch: 15 }, // Student ID
+                        { wch: 25 }, // Student Name
+                        { wch: 25 }, // Father Name
+                        { wch: 18 }, // Aadhaar Number
+                        { wch: 12 }, // Status
+                        { wch: 20 }  // Submitted On
+                    ];
+
+                    // Download file with batch name and current date
+                    const filename = `Verification_${batchName}_${new Date().toISOString().split('T')[0]}.xlsx`;
+                    window.XLSX.writeFile(workbook, filename);
+
+                    alert(`✅ Excel file downloaded successfully!\\n\\nBatch: ${batchName}\\nTotal Students: ${data.length}\\nSubmitted: ${data.filter(d => d.Status === 'SUBMITTED').length}\\nAbsent: ${data.filter(d => d.Status === 'ABSENT').length}`);
+                } catch (error) {
+                    console.error('Export error:', error);
+                    alert('Error exporting data: ' + error.message);
+                }
+            },
+
+            base64ToBlob: (base64) => {
+                const parts = base64.split(';base64,');
+                const contentType = parts[0].split(':')[1];
+                const raw = window.atob(parts[1]);
+                const rawLength = raw.length;
+                const uInt8Array = new Uint8Array(rawLength);
+                for (let i = 0; i < rawLength; ++i) {
+                    uInt8Array[i] = raw.charCodeAt(i);
+                }
+                return new Blob([uInt8Array], { type: contentType });
+            },
+
+            saveResponse: async (response) => {
+                try {
+                    // MIGRATION TO INDEXEDDB FOR IMAGES
+                    if (response.evidence && Array.isArray(response.evidence)) {
+                        for (let i = 0; i < response.evidence.length; i++) {
+                            const ev = response.evidence[i];
+                            // If it's a base64 string (starts with data:image or data:video), offload it
+                            if (ev.img && (ev.img.startsWith('data:image') || ev.img.startsWith('data:video'))) {
+                                const blob = window.Utils.base64ToBlob(ev.img);
+                                const key = `ev_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+                                await VideoDB.saveVideo(key, blob); // reusing generic Method
+
+                                // VERIFY IMMEDIATE READ
+                                const check = await VideoDB.getVideo(key);
+                                if (!check) console.error(`[CRITICAL] Immediate Readback Failed for ${key}`);
+                                else console.log(`[VideoDB] Verified ${key} exists.`);
+
+                                response.evidence[i] = { ...ev, img: key, storage: 'indexeddb' };
+                            }
+                        }
+                    }
+
+                    if (!response.id) response.id = `${response.studentId}_${response.examType}`;
+                    response.synced = false; // Add this
+
+                    const list = window.Utils.getResponses();
+                    const existing = list.findIndex(r => r.studentId === response.studentId && r.examType === response.examType);
+                    if (existing >= 0) {
+                        const old = list[existing];
+                        let newEvidence = [...(old.evidence || [])];
+                        if (response.evidence) {
+                            response.evidence.forEach(newItem => {
+                                // Check if this evidence key already exists to update it (e.g. adding downloadUrl)
+                                const idx = newItem.key ? newEvidence.findIndex(e => e.key === newItem.key) : -1;
+                                if (idx >= 0) {
+                                    newEvidence[idx] = { ...newEvidence[idx], ...newItem };
+                                } else {
+                                    newEvidence.push(newItem);
+                                }
+                            });
+                        }
+                        list[existing] = { ...old, ...response, evidence: newEvidence };
+                    }
+                    else list.push(response);
+
+                    localStorage.setItem(DB_KEYS.RESPONSES, JSON.stringify(list));
+                    window.Utils.uploadToCloud(true); // Trigger sync for responses
+                } catch (e) {
+                    console.error("Storage Error", e);
+                    // Fallback to alert if IndexedDB fails or something else is wrong
+                    if (e.name === 'QuotaExceededError') {
+                        alert("Storage Full! Please contact support.");
+                    }
+                }
+            },
+            // Duplicate removed
+            deleteEvidence: async (studentId, examType, evidenceItemOrSession) => {
+                const responses = window.Utils.getResponses();
+                const respIdx = responses.findIndex(r => r.studentId === studentId && r.examType === examType);
+                if (respIdx === -1) return;
+
+                const response = responses[respIdx];
+                const itemsToDelete = evidenceItemOrSession.isGroup ? evidenceItemOrSession.parts : [evidenceItemOrSession];
+
+                for (const item of itemsToDelete) {
+                    // 1. Delete from Cloud (S3)
+                    if (item.url && item.url.includes('amazonaws.com')) {
+                        try {
+                            const urlObj = new URL(item.url);
+                            let s3Key = urlObj.pathname.startsWith('/') ? urlObj.pathname.substring(1) : urlObj.pathname;
+                            s3Key = decodeURIComponent(s3Key);
+                            console.log(`[Delete] Cloud Key: ${s3Key}`);
+                            await fetch(`${API_BASE}/media?key=${encodeURIComponent(s3Key)}&apiKey=portel_secure_key_2025`, { method: 'DELETE' });
+                        } catch (e) { console.error("Cloud delete failed", e); }
+                    }
+
+                    // 2. Delete from Local (IndexedDB)
+                    const localKey = (item.storage === 'indexeddb' || !item.url) ? item.img : null;
+                    if (localKey && !localKey.startsWith('data:') && !localKey.startsWith('blob:')) {
+                        try { await VideoDB.deleteVideo(localKey); console.log(`[Delete] Local Key: ${localKey}`); } catch (e) { }
+                    }
+
+                    // 3. Remove from metadata array
+                    // Matching by key or img (exact match)
+                    response.evidence = response.evidence.filter(ev =>
+                        (ev.key && ev.key !== item.key) ||
+                        (!ev.key && ev.img !== item.img)
+                    );
+                }
+
+                response.synced = false;
+                responses[respIdx] = response;
+                localStorage.setItem(DB_KEYS.RESPONSES, JSON.stringify(responses));
+                window.Utils.uploadToCloud(true, 'responses');
+                return true;
+            },
+
+            formatTime12h: (timeStr) => {
+                if (!timeStr) return '';
+                try {
+                    const [h, m] = timeStr.split(':');
+                    const hh = parseInt(h);
+                    const suffix = hh >= 12 ? 'PM' : 'AM';
+                    const h12 = hh % 12 || 12;
+                    return `${h12}:${m} ${suffix}`;
+                } catch (e) { return timeStr; }
+            }
+        };
     </script>
 
     <script type="text/babel">
-                    const { useState, useEffect, useRef } = React;
+        const { useState, useEffect, useRef } = React;
         const { createRoot } = ReactDOM;
 
         // Safe Icon Component
@@ -9193,6 +9185,32 @@
         const container = document.getElementById('root');
         const root = ReactDOM.createRoot(container);
         root.render(<App />);
+    </script>
+
+    <script>
+        // Add exportAadharFatherData function (v43)
+        window.Utils.exportAadharFatherData = function (batchId) {
+            try {
+                const batch = window.Utils.getBatches().find(b => b.id === batchId);
+                if (!batch) { alert('Batch not found!'); return; }
+                const students = window.Utils.getStudentsByBatch(batchId);
+                if (students.length === 0) { alert('No students found!'); return; }
+                const data = students.map((s, i) => ({
+                    "S.No": i + 1,
+                    "Student Name": s.name || "N/A",
+                    "Username": s.username || "N/A",
+                    "Father Name": s.fatherName || "N/A",
+                    "Aadhar Number": s.aadharNumber || "N/A"
+                }));
+                const ws = XLSX.utils.json_to_sheet(data);
+                ws['!cols'] = [{ wch: 8 }, { wch: 25 }, { wch: 15 }, { wch: 25 }, { wch: 20 }];
+                const wb = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(wb, ws, "Aadhar & Father");
+                XLSX.writeFile(wb, batch.name + "_Aadhar_Father.xlsx");
+                alert("✅ Downloaded: " + batch.name + "_Aadhar_Father.xlsx\n\nTotal: " + students.length);
+            } catch (e) { alert('Error: ' + e.message); }
+        };
+        console.log("✓ exportAadharFatherData loaded");
     </script>
 </body>
 
