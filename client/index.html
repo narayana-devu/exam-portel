@@ -82,7 +82,7 @@
             alert(report);
             return false;
         };
-        console.log("v41 DEPLOYMENT ACTIVE - DIAGNOSTIC MODE - CLEANUP 2 (VERBOSE ERROR ON)");
+        console.log("v42 DEPLOYMENT ACTIVE - DIAGNOSTIC MODE - CLEANUP 2 (VERBOSE ERROR ON)");
 
         // DATA LAYER
         const DB_KEYS = {
@@ -1055,10 +1055,20 @@
             },
             getResponses: () => JSON.parse(localStorage.getItem(DB_KEYS.RESPONSES) || '[]'),
 
-            // Export Verification Data to Excel
-            exportVerificationData: () => {
+            // Export Verification Data to Excel (optionally filtered by batch)
+            exportVerificationData: (batchId = null) => {
                 try {
-                    const allStudents = window.Utils.getStudents();
+                    let allStudents = window.Utils.getStudents();
+
+                    // Filter by batch if batchId is provided
+                    if (batchId) {
+                        allStudents = allStudents.filter(s => s.batchId === batchId);
+                        if (allStudents.length === 0) {
+                            alert('No students found in this batch!');
+                            return;
+                        }
+                    }
+
                     const allResponses = window.Utils.getResponses();
                     const verifications = allResponses.filter(r => r.examType === 'Verification');
 
@@ -1067,6 +1077,13 @@
                     verifications.forEach(v => {
                         verificationMap[v.studentId] = v.answers || {};
                     });
+
+                    // Get batch name for filename (if filtering by batch)
+                    let batchName = 'All_Batches';
+                    if (batchId) {
+                        const batch = window.Utils.getBatches().find(b => b.id === batchId);
+                        batchName = batch ? (batch.name || batch.batchName || batchId) : batchId;
+                    }
 
                     // Prepare Excel data - include ALL students
                     const data = allStudents.map((student, index) => {
@@ -1100,11 +1117,11 @@
                         { wch: 20 }  // Submitted On
                     ];
 
-                    // Download file with current date
-                    const filename = `Student_Verification_Data_${new Date().toISOString().split('T')[0]}.xlsx`;
+                    // Download file with batch name and current date
+                    const filename = `Verification_${batchName}_${new Date().toISOString().split('T')[0]}.xlsx`;
                     window.XLSX.writeFile(workbook, filename);
 
-                    alert(`✅ Excel file downloaded successfully!\\n\\nTotal Students: ${data.length}\\nSubmitted: ${data.filter(d => d.Status === 'SUBMITTED').length}\\nAbsent: ${data.filter(d => d.Status === 'ABSENT').length}`);
+                    alert(`✅ Excel file downloaded successfully!\\n\\nBatch: ${batchName}\\nTotal Students: ${data.length}\\nSubmitted: ${data.filter(d => d.Status === 'SUBMITTED').length}\\nAbsent: ${data.filter(d => d.Status === 'ABSENT').length}`);
                 } catch (error) {
                     console.error('Export error:', error);
                     alert('Error exporting data: ' + error.message);
@@ -1476,7 +1493,7 @@
                                     <div className={`w-2 h-2 rounded-full ${navigator.onLine ? 'bg-green-500' : 'bg-red-500'}`}></div>
                                     {navigator.onLine ? "Cloud Connected" : "Offline Mode"}
                                 </span>
-                                <span>v41</span>
+                                <span>v42</span>
                             </div>
                             {error && <p className="text-red-500 text-sm text-center bg-red-50 p-2 rounded">{error}</p>}
                             <div className="flex gap-2">
@@ -1500,7 +1517,7 @@
                             </div>
                             <div className="text-center text-xs text-gray-400 mt-4 space-y-1">
                                 <p>Demo: admin/admin</p>
-                                <p className="text-gray-400 text-[10px] mt-2">v41 (Safety Sync)</p>
+                                <p className="text-gray-400 text-[10px] mt-2">v42 (Safety Sync)</p>
                             </div>
                         </form>
                     </div>
@@ -1523,7 +1540,7 @@
                 <div className="w-64 bg-slate-800 text-white min-h-screen flex flex-col">
                     <div className="p-6 border-b border-slate-700">
                         <h1 className="text-xl font-bold">NSXpertise</h1>
-                        <p className="text-xs text-slate-400 mt-1">v41</p>
+                        <p className="text-xs text-slate-400 mt-1">v42</p>
                         <div className="flex flex-col gap-1 mt-3">
                             <button
                                 onClick={() => { if (confirm('Clear cache for v30?')) { localStorage.clear(); location.reload(true); } }}
@@ -1598,10 +1615,6 @@
                             <button onClick={() => setActiveTab('assessors')}
                                 className={`w-full flex items-center gap-3 px-4 py-2 rounded-lg transition-colors ${activeTab === 'assessors' ? 'bg-indigo-600' : 'text-slate-300 hover:bg-slate-700'}`}>
                                 <Icons.UserPlus /> <span className="text-sm">Assessors</span>
-                            </button>
-                            <button onClick={() => window.Utils.exportVerificationData()}
-                                className="w-full flex items-center gap-3 px-4 py-2 rounded-lg transition-colors bg-green-600 hover:bg-green-700 text-white mt-2">
-                                <Icons.Download /> <span className="text-sm font-bold">Export Verification Data</span>
                             </button>
                         </div>
 
@@ -2167,6 +2180,15 @@
                                 <option value="">Select Batch</option>
                                 {batches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
                             </select>
+                            {selectedBatch && (
+                                <button
+                                    onClick={() => window.Utils.exportVerificationData(selectedBatch)}
+                                    className="mt-2 w-full bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded-lg flex items-center justify-center gap-2 text-sm font-bold transition-colors shadow-sm"
+                                >
+                                    <Icons.Download className="w-4 h-4" />
+                                    Export Verification Data (Excel)
+                                </button>
+                            )}
                         </div>
                     </div>
                     {/* Grid Area */}
@@ -6301,7 +6323,7 @@
                     recordingSessionRef.current = `session_${Date.now()}`;
                     segmentSequenceRef.current = 1;
 
-                    // v41: Manual Recording for Assessors
+                    // v42: Manual Recording for Assessors
                     startSegment();
                     setIsRecording(true);
                     console.log("Manual Video Recording started for Assessor");
@@ -7751,7 +7773,7 @@
 
             // SEGMENTED RECORDING LOGIC (StudentPortal)
             useEffect(() => {
-                // v41: Strict Recording - Only for Theory/Practical (Not Viva/Assessors)
+                // v42: Strict Recording - Only for Theory/Practical (Not Viva/Assessors)
                 const isStudentExam = examMode === 'Theory' || examMode === 'Practical';
                 const shouldRecord = isStudentExam && !isLocked && !isSubmitting && webcamActive;
 
@@ -7825,7 +7847,7 @@
                     startSegment();
                 }
 
-                // v41: 60-Second Segment Rotation
+                // v42: 60-Second Segment Rotation
                 if (window.studentRecordingInterval) clearInterval(window.studentRecordingInterval);
                 window.studentRecordingInterval = setInterval(() => {
                     if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
@@ -8309,7 +8331,7 @@
                 }
 
                 // STOP RECORDING EXPLICITLY & WAIT
-                // STOP RECORDING EXPLICITLY & WAIT (v41)
+                // STOP RECORDING EXPLICITLY & WAIT (v42)
                 if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
                     console.log("[Submit] Finalizing last segment...");
 
@@ -8687,10 +8709,10 @@
                                 "Cloud Batch IDs": cloudBatches.map(b => b.id).join(", "),
                                 "Cloud Student's BatchID": cloudStudent ? cloudStudent.batchId : "N/A",
                                 "Browser Online": navigator.onLine,
-                                "App Version": "v41"
+                                "App Version": "v42"
                             };
                             console.table(diag);
-                            const msg = "--- STUDENT DIAGNOSTICS (v41) ---\n\n" +
+                            const msg = "--- STUDENT DIAGNOSTICS (v42) ---\n\n" +
                                 Object.entries(diag).map(([k, v]) => `${k}: ${JSON.stringify(v)}`).join("\n") +
                                 "\n\nActions:\n1. If Target Batch Found is NO -> Admin must Save it.\n2. If Cloud Student ID is different -> Mismatch!";
                             if (confirm(msg)) {
