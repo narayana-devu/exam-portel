@@ -282,16 +282,26 @@
                     const students = window.Utils.getStudentsByBatch(batchId);
                     if (students.length === 0) { alert('No students in batch!'); return; }
 
-                    // Get verification responses to extract Aadhar & Father Name
+                    // Get verification responses - matching by student ID
                     const allResponses = window.Utils.getResponses();
                     const verifications = allResponses.filter(r => r.examType === 'Verification');
-                    const verificationMap = {};
-                    verifications.forEach(v => {
-                        verificationMap[v.studentId] = v.answers || {};
-                    });
+
+                    console.log('Total verification responses:', verifications.length);
+                    console.log('Sample verification:', verifications[0]);
 
                     const data = students.map((s, i) => {
-                        const verification = verificationMap[s.id];
+                        // Try to find verification by studentId first, then by student object match
+                        let verification = null;
+                        const verif = verifications.find(v =>
+                            v.studentId === s.id ||
+                            v.studentId === s.username ||
+                            (v.student && v.student.id === s.id)
+                        );
+
+                        if (verif) {
+                            verification = verif.answers || {};
+                        }
+
                         const isAbsent = !verification;
 
                         return {
