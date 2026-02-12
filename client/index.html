@@ -286,23 +286,47 @@
                     const allResponses = window.Utils.getResponses();
                     const verifications = allResponses.filter(r => r.examType === 'VERIFICATION');
 
+                    console.log('=== AADHAR/FATHER EXPORT DEBUG ===');
                     console.log('Total VERIFICATION responses:', verifications.length);
-                    console.log('Sample verification:', verifications[0]);
+                    console.log('Total students in batch:', students.length);
+                    if (verifications.length > 0) {
+                        console.log('Sample verification object:', verifications[0]);
+                        console.log('Sample student object:', students[0]);
+                    }
 
                     const data = students.map((s, i) => {
-                        // Try to find verification by studentId first, then by student object match
+                        // Try multiple matching strategies
                         let verification = null;
-                        const verif = verifications.find(v =>
-                            v.studentId === s.id ||
-                            v.studentId === s.username ||
-                            (v.student && v.student.id === s.id)
-                        );
+                        let matchMethod = 'NONE';
+
+                        const verif = verifications.find(v => {
+                            if (v.studentId === s.id) {
+                                matchMethod = 'by s.id';
+                                return true;
+                            }
+                            if (v.studentId === s.username) {
+                                matchMethod = 'by s.username';
+                                return true;
+                            }
+                            if (v.student && v.student.id === s.id) {
+                                matchMethod = 'by v.student.id';
+                                return true;
+                            }
+                            if (v.student && v.student.username === s.username) {
+                                matchMethod = 'by v.student.username';
+                                return true;
+                            }
+                            return false;
+                        });
 
                         if (verif) {
                             verification = verif.answers || {};
+                            console.log(`✓ Matched student "${s.name}" (${matchMethod}):`, verification);
+                        } else {
+                            console.log(`✗ NO MATCH for student "${s.name}" (id: ${s.id}, username: ${s.username})`);
                         }
 
-                        const isAbsent = !verification;
+                        const isAbsent = !verification || !verification.fatherName;
 
                         return {
                             "S.No": i + 1,
