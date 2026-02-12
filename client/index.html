@@ -9191,7 +9191,7 @@
         // Add exportAadharFatherData function (v43)
         window.Utils.exportAadharFatherData = function (batchId) {
             try {
-                const batch = window.Utils.getB atches().find(b => b.id === batchId);
+                const batch = window.Utils.getBatches().find(b => b.id === batchId);
                 if (!batch) { alert('Batch not found!'); return; }
                 const students = window.Utils.getStudentsByBatch(batchId);
                 if (students.length === 0) { alert('No students found!'); return; }
