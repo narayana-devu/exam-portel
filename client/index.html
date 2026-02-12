@@ -5702,183 +5702,169 @@
 
 
 
-            // ERROR HANDLING WRAPPER
-            try {
-                if (!selectedBatch) return (
-                    <div>
-                        <div className="grid grid-cols-2 gap-4 mb-6 bg-white p-4 rounded shadow-sm">
-                            <div>
-                                <label className="text-xs font-bold text-gray-500 block mb-1">Filter by Sector (SSC)</label>
-                                <select className="w-full p-2 border rounded" value={filterSSC} onChange={e => { setFilterSSC(e.target.value); setFilterQP(''); }}>
-                                    <option value="">Select Sector Skill Council</option>
-                                    {sscList.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                                </select>
-                            </div>
-                            <div>
-                                <label className="text-xs font-bold text-gray-500 block mb-1">Filter by Qualification Pack (QP)</label>
-                                <select className="w-full p-2 border rounded" value={filterQP} onChange={e => setFilterQP(e.target.value)}>
-                                    <option value="">All QPs</option>
-                                    {qpList.filter(q => filterSSC && q.sscId === filterSSC).map(q => <option key={q.id} value={q.id}>{q.name}</option>)}
-                                </select>
-                            </div>
+
+            if (!selectedBatch) return (
+                <div>
+                    <div className="grid grid-cols-2 gap-4 mb-6 bg-white p-4 rounded shadow-sm">
+                        <div>
+                            <label className="text-xs font-bold text-gray-500 block mb-1">Filter by Sector (SSC)</label>
+                            <select className="w-full p-2 border rounded" value={filterSSC} onChange={e => { setFilterSSC(e.target.value); setFilterQP(''); }}>
+                                <option value="">Select Sector Skill Council</option>
+                                {sscList.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                            </select>
                         </div>
-
-                        {/* Only show batches if BOTH SSC and QP are selected */}
-                        {!filterSSC || !filterQP ? (
-                            <div className="bg-blue-50 border border-blue-200 rounded-lg p-8 text-center">
-                                <Icons.Settings className="w-12 h-12 text-blue-400 mx-auto mb-3" />
-                                <h3 className="text-lg font-bold text-blue-900 mb-2">Select Filters to View Batches</h3>
-                                <p className="text-blue-700 text-sm">
-                                    Please select <strong>Sector (SSC)</strong> and <strong>Qualification Pack (QP)</strong> above to view batches
-                                </p>
-                            </div>
-                        ) : (
-                            <div className="grid gap-4 md:grid-cols-2">
-                                {batches.filter(b => {
-                                    // Resolve the actual Question Papers assigned to this batch
-                                    const tPaper = allQPapers.find(p => p.id === b.theoryPaperId);
-                                    const pPaper = allQPapers.find(p => p.id === b.practicalPaperId);
-                                    const vPaper = allQPapers.find(p => p.id === b.vivaPaperId);
-
-                                    // 1. If SSC Filter is set, check if any paper belongs to that SSC
-                                    if (filterSSC) {
-                                        const matchesSSC = (tPaper && tPaper.sscId === filterSSC) ||
-                                            (pPaper && pPaper.sscId === filterSSC) ||
-                                            (vPaper && vPaper.sscId === filterSSC);
-                                        if (!matchesSSC) return false;
-                                    }
-
-                                    // 2. If QP Filter is set, check if any paper belongs to that QP ID
-                                    if (filterQP) {
-                                        const matchesQP = (tPaper && String(tPaper.qpId) === String(filterQP)) ||
-                                            (pPaper && String(pPaper.qpId) === String(filterQP)) ||
-                                            (vPaper && String(vPaper.qpId) === String(filterQP));
-                                        if (!matchesQP) return false;
-                                    }
-
-                                    // 3. Show by default if no filters block it
-                                    return true;
-                                }).map(b => (
-                                    <div key={b.id} onClick={() => setSelectedBatch(b)} className="bg-white p-6 rounded shadow cursor-pointer hover:shadow-lg border-l-4 border-indigo-500 group relative">
-                                        <button
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                if (confirm('Are you sure you want to delete this batch? All associated students and data will be removed.')) {
-                                                    window.Utils.deleteBatch(b.id);
-                                                    setBatches(window.Utils.getBatches());
-                                                }
-                                            }}
-                                            className="absolute top-4 right-4 text-gray-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity p-2 hover:bg-red-50 rounded-full"
-                                            title="Delete Batch"
-                                        >
-                                            <Icons.Trash2 className="w-5 h-5" />
-                                        </button>
-                                        <h3 className="font-bold text-lg">{b.name}</h3>
-                                        <p className="text-gray-500 text-sm mb-2">{b.startDate} - {b.endDate}</p>
-                                        <div className="text-xs text-gray-400">
-                                            <span>{window.Utils.getStudentsByBatch(b.id).length} Students</span>
-                                        </div>
-                                        <div className="text-xs text-gray-400">
-                                            QP: {qpList.find(q => q.id === (allQPapers.find(p => p.id === (b.theoryPaperId || b.practicalPaperId || b.vivaPaperId))?.qpId))?.name || 'N/A'}
-                                        </div>
-                                    </div>
-
-                                ))}
-                                {batches.filter(b => {
-                                    const tPaper = allQPapers.find(p => p.id === b.theoryPaperId);
-                                    const pPaper = allQPapers.find(p => p.id === b.practicalPaperId);
-                                    const vPaper = allQPapers.find(p => p.id === b.vivaPaperId);
-                                    if (filterSSC) {
-                                        const matchesSSC = (tPaper && tPaper.sscId === filterSSC) || (pPaper && pPaper.sscId === filterSSC) || (vPaper && vPaper.sscId === filterSSC);
-                                        if (!matchesSSC) return false;
-                                    }
-                                    if (filterQP) {
-                                        const matchesQP = (tPaper && String(tPaper.qpId) === String(filterQP)) || (pPaper && String(pPaper.qpId) === String(filterQP)) || (vPaper && String(vPaper.qpId) === String(filterQP));
-                                        if (!matchesQP) return false;
-                                    }
-                                    return true;
-                                }).length === 0 && <div className="text-gray-400 col-span-2 text-center py-8">No Batches Found for Selected Filters</div>}
-                            </div>
-                        )}
-                    </div>
-                );
-
-                if (!examType) return (
-                    <div>
-                        <button onClick={() => setSelectedBatch(null)} className="mb-4 text-indigo-600 font-medium flex items-center gap-1"><Icons.ChevronDown className="rotate-90" /> Back to Batches</button>
-                        <h3 className="text-xl font-bold mb-4">Select Exam Type</h3>
-                        <div className="flex gap-4">
-                            {['Theory', 'Practical', 'Viva', 'Photo'].map(t => (
-                                <button key={t} onClick={() => loadResults(t)} className="flex-1 bg-white p-8 rounded shadow text-xl font-bold hover:shadow-lg border border-gray-100">{t}</button>
-                            ))}
+                        <div>
+                            <label className="text-xs font-bold text-gray-500 block mb-1">Filter by Qualification Pack (QP)</label>
+                            <select className="w-full p-2 border rounded" value={filterQP} onChange={e => setFilterQP(e.target.value)}>
+                                <option value="">All QPs</option>
+                                {qpList.filter(q => filterSSC && q.sscId === filterSSC).map(q => <option key={q.id} value={q.id}>{q.name}</option>)}
+                            </select>
                         </div>
                     </div>
-                );
 
-                if (!selectedStudent) return (
-                    <div>
-                        <div className="flex justify-between items-center mb-4">
-                            <button onClick={() => setExamType(null)} className="text-indigo-600 font-medium flex items-center gap-1"><Icons.ChevronDown className="rotate-90" /> Back</button>
+                    {/* Only show batches if BOTH SSC and QP are selected */}
+                    {!filterSSC || !filterQP ? (
+                        <div className="bg-blue-50 border border-blue-200 rounded-lg p-8 text-center">
+                            <Icons.Settings className="w-12 h-12 text-blue-400 mx-auto mb-3" />
+                            <h3 className="text-lg font-bold text-blue-900 mb-2">Select Filters to View Batches</h3>
+                            <p className="text-blue-700 text-sm">
+                                Please select <strong>Sector (SSC)</strong> and <strong>Qualification Pack (QP)</strong> above to view batches
+                            </p>
                         </div>
-                        <h3 className="text-xl font-bold mb-4">{selectedBatch.name} - {examType} Results</h3>
-                        <div className="bg-white rounded overflow-hidden shadow">
-                            {students.map((s, i) => {
-                                let hasResponse = false;
+                    ) : (
+                        <div className="grid gap-4 md:grid-cols-2">
+                            {batches.filter(b => {
+                                // Resolve the actual Question Papers assigned to this batch
+                                const tPaper = allQPapers.find(p => p.id === b.theoryPaperId);
+                                const pPaper = allQPapers.find(p => p.id === b.practicalPaperId);
+                                const vPaper = allQPapers.find(p => p.id === b.vivaPaperId);
 
-                                if (examType === 'Photo') {
-                                    // For Photo tab, check if ANY response has MANUAL evidence
-                                    const studentResponses = allResponses.filter(r => r.studentId === s.id);
-                                    hasResponse = studentResponses.some(r => r.evidence && r.evidence.some(e => e.type && e.type.includes('MANUAL')));
-                                } else {
-                                    // For T/P/V, check if response exists AND if evidence (if any) is NOT purely manual
-                                    // Actually, for T/P/V, we usually check attendance.
-                                    // But to be strict: if it's purely manual, it shouldn't count as "Present" in Theory tab?
-                                    // Let's keep it simple: matches ExamType.
-                                    hasResponse = allResponses.some(r => r.studentId === s.id && r.examType === examType);
+                                // 1. If SSC Filter is set, check if any paper belongs to that SSC
+                                if (filterSSC) {
+                                    const matchesSSC = (tPaper && tPaper.sscId === filterSSC) ||
+                                        (pPaper && pPaper.sscId === filterSSC) ||
+                                        (vPaper && vPaper.sscId === filterSSC);
+                                    if (!matchesSSC) return false;
                                 }
-                                return (
-                                    <div key={s.id} className={`p-4 border-b flex justify-between items-center hover:opacity-90 transition-opacity ${hasResponse ? 'bg-green-50 border-green-100 text-green-900' : 'bg-red-50 border-red-100 text-red-900'}`}>
-                                        <div className="flex items-center gap-2">
-                                            <span className={`w-2 h-2 rounded-full ${hasResponse ? 'bg-green-500' : 'bg-red-500'}`}></span>
-                                            <span className="font-medium">{i + 1}. {s.name} ({s.username})</span>
-                                            <span className={`text-xs px-2 py-0.5 rounded border ${hasResponse ? 'bg-green-100 border-green-200 text-green-700' : 'bg-red-100 border-red-200 text-red-700'}`}>
-                                                {hasResponse ? 'Present' : 'Absent'}
-                                            </span>
-                                        </div>
-                                        <button onClick={() => viewEvidence(s)} className={`font-medium hover:underline flex items-center gap-1 ${hasResponse ? 'text-green-700' : 'text-red-700'}`}>
-                                            View Evidence (All) <Icons.ChevronRight className="w-4 h-4" />
-                                        </button>
-                                    </div>
-                                );
-                            })}
-                            {students.length === 0 && <div className="p-8 text-center text-gray-500">No students found</div>}
-                        </div>
-                    </div>
-                );
 
-                if (selectedStudent) {
-                    return (
-                        <StudentGradingView
-                            student={selectedStudent}
-                            batch={selectedBatch}
-                            examType={examType}
-                            allQPapers={allQPapers}
-                            onBack={() => setSelectedStudent(null)}
-                            role={props.role} // Pass role
-                        />
-                    );
-                }
-            } catch (error) {
-                // SHOW ERROR IN POPUP
-                setTimeout(() => {
-                    alert(`❌ RESULTS TAB ERROR:\n\nError: ${error.message}\n\nStack: ${error.stack}\n\nPlease screenshot this and share with developer.`);
-                }, 100);
-                return (
-                    <div className="bg-red-50 border border-red-200 rounded-lg p-8 text-center">
-                        <h3 className="text-lg font-bold text-red-900 mb-2">Error Loading Results</h3>
-                        <p className="text-red-700 text-sm font-mono text-left bg-white p-4 rounded">{error.message}</p>
-                        <pre className="text-left text-xs mt-4 bg-gray-100 p-2 rounded overflow-auto">{error.stack}</pre>
+                                // 2. If QP Filter is set, check if any paper belongs to that QP ID
+                                if (filterQP) {
+                                    const matchesQP = (tPaper && String(tPaper.qpId) === String(filterQP)) ||
+                                        (pPaper && String(pPaper.qpId) === String(filterQP)) ||
+                                        (vPaper && String(vPaper.qpId) === String(filterQP));
+                                    if (!matchesQP) return false;
+                                }
+
+                                // 3. Show by default if no filters block it
+                                return true;
+                            }).map(b => (
+                                <div key={b.id} onClick={() => setSelectedBatch(b)} className="bg-white p-6 rounded shadow cursor-pointer hover:shadow-lg border-l-4 border-indigo-500 group relative">
+                                    <button
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            if (confirm('Are you sure you want to delete this batch? All associated students and data will be removed.')) {
+                                                window.Utils.deleteBatch(b.id);
+                                                setBatches(window.Utils.getBatches());
+                                            }
+                                        }}
+                                        className="absolute top-4 right-4 text-gray-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity p-2 hover:bg-red-50 rounded-full"
+                                        title="Delete Batch"
+                                    >
+                                        <Icons.Trash2 className="w-5 h-5" />
+                                    </button>
+                                    <h3 className="font-bold text-lg">{b.name}</h3>
+                                    <p className="text-gray-500 text-sm mb-2">{b.startDate} - {b.endDate}</p>
+                                    <div className="text-xs text-gray-400">
+                                        <span>{window.Utils.getStudentsByBatch(b.id).length} Students</span>
+                                    </div>
+                                    <div className="text-xs text-gray-400">
+                                        QP: {qpList.find(q => q.id === (allQPapers.find(p => p.id === (b.theoryPaperId || b.practicalPaperId || b.vivaPaperId))?.qpId))?.name || 'N/A'}
+                                    </div>
+                                </div>
+
+                            ))}
+                            {batches.filter(b => {
+                                const tPaper = allQPapers.find(p => p.id === b.theoryPaperId);
+                                const pPaper = allQPapers.find(p => p.id === b.practicalPaperId);
+                                const vPaper = allQPapers.find(p => p.id === b.vivaPaperId);
+                                if (filterSSC) {
+                                    const matchesSSC = (tPaper && tPaper.sscId === filterSSC) || (pPaper && pPaper.sscId === filterSSC) || (vPaper && vPaper.sscId === filterSSC);
+                                    if (!matchesSSC) return false;
+                                }
+                                if (filterQP) {
+                                    const matchesQP = (tPaper && String(tPaper.qpId) === String(filterQP)) || (pPaper && String(pPaper.qpId) === String(filterQP)) || (vPaper && String(vPaper.qpId) === String(filterQP));
+                                    if (!matchesQP) return false;
+                                }
+                                return true;
+                            }).length === 0 && <div className="text-gray-400 col-span-2 text-center py-8">No Batches Found for Selected Filters</div>}
+                        </div>
+                    )}
+                </div>
+            );
+
+            if (!examType) return (
+                <div>
+                    <button onClick={() => setSelectedBatch(null)} className="mb-4 text-indigo-600 font-medium flex items-center gap-1"><Icons.ChevronDown className="rotate-90" /> Back to Batches</button>
+                    <h3 className="text-xl font-bold mb-4">Select Exam Type</h3>
+                    <div className="flex gap-4">
+                        {['Theory', 'Practical', 'Viva', 'Photo'].map(t => (
+                            <button key={t} onClick={() => loadResults(t)} className="flex-1 bg-white p-8 rounded shadow text-xl font-bold hover:shadow-lg border border-gray-100">{t}</button>
+                        ))}
                     </div>
+                </div>
+            );
+
+            if (!selectedStudent) return (
+                <div>
+                    <div className="flex justify-between items-center mb-4">
+                        <button onClick={() => setExamType(null)} className="text-indigo-600 font-medium flex items-center gap-1"><Icons.ChevronDown className="rotate-90" /> Back</button>
+                    </div>
+                    <h3 className="text-xl font-bold mb-4">{selectedBatch.name} - {examType} Results</h3>
+                    <div className="bg-white rounded overflow-hidden shadow">
+                        {students.map((s, i) => {
+                            let hasResponse = false;
+
+                            if (examType === 'Photo') {
+                                // For Photo tab, check if ANY response has MANUAL evidence
+                                const studentResponses = allResponses.filter(r => r.studentId === s.id);
+                                hasResponse = studentResponses.some(r => r.evidence && r.evidence.some(e => e.type && e.type.includes('MANUAL')));
+                            } else {
+                                // For T/P/V, check if response exists AND if evidence (if any) is NOT purely manual
+                                // Actually, for T/P/V, we usually check attendance.
+                                // But to be strict: if it's purely manual, it shouldn't count as "Present" in Theory tab?
+                                // Let's keep it simple: matches ExamType.
+                                hasResponse = allResponses.some(r => r.studentId === s.id && r.examType === examType);
+                            }
+                            return (
+                                <div key={s.id} className={`p-4 border-b flex justify-between items-center hover:opacity-90 transition-opacity ${hasResponse ? 'bg-green-50 border-green-100 text-green-900' : 'bg-red-50 border-red-100 text-red-900'}`}>
+                                    <div className="flex items-center gap-2">
+                                        <span className={`w-2 h-2 rounded-full ${hasResponse ? 'bg-green-500' : 'bg-red-500'}`}></span>
+                                        <span className="font-medium">{i + 1}. {s.name} ({s.username})</span>
+                                        <span className={`text-xs px-2 py-0.5 rounded border ${hasResponse ? 'bg-green-100 border-green-200 text-green-700' : 'bg-red-100 border-red-200 text-red-700'}`}>
+                                            {hasResponse ? 'Present' : 'Absent'}
+                                        </span>
+                                    </div>
+                                    <button onClick={() => viewEvidence(s)} className={`font-medium hover:underline flex items-center gap-1 ${hasResponse ? 'text-green-700' : 'text-red-700'}`}>
+                                        View Evidence (All) <Icons.ChevronRight className="w-4 h-4" />
+                                    </button>
+                                </div>
+                            );
+                        })}
+                        {students.length === 0 && <div className="p-8 text-center text-gray-500">No students found</div>}
+                    </div>
+                </div>
+            );
+
+            if (selectedStudent) {
+                return (
+                    <StudentGradingView
+                        student={selectedStudent}
+                        batch={selectedBatch}
+                        examType={examType}
+                        allQPapers={allQPapers}
+                        onBack={() => setSelectedStudent(null)}
+                        role={props.role} // Pass role
+                    />
                 );
             }
         };
