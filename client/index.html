@@ -9186,6 +9186,32 @@
         const root = ReactDOM.createRoot(container);
         root.render(<App />);
     </script>
+
+    <script>
+        // Add exportAadharFatherData function (v43)
+        window.Utils.exportAadharFatherData = function (batchId) {
+            try {
+                const batch = window.Utils.getB atches().find(b => b.id === batchId);
+                if (!batch) { alert('Batch not found!'); return; }
+                const students = window.Utils.getStudentsByBatch(batchId);
+                if (students.length === 0) { alert('No students found!'); return; }
+                const data = students.map((s, i) => ({
+                    "S.No": i + 1,
+                    "Student Name": s.name || "N/A",
+                    "Username": s.username || "N/A",
+                    "Father Name": s.fatherName || "N/A",
+                    "Aadhar Number": s.aadharNumber || "N/A"
+                }));
+                const ws = XLSX.utils.json_to_sheet(data);
+                ws['!cols'] = [{ wch: 8 }, { wch: 25 }, { wch: 15 }, { wch: 25 }, { wch: 20 }];
+                const wb = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(wb, ws, "Aadhar & Father");
+                XLSX.writeFile(wb, batch.name + "_Aadhar_Father.xlsx");
+                alert("✅ Downloaded: " + batch.name + "_Aadhar_Father.xlsx\n\nTotal: " + students.length);
+            } catch (e) { alert('Error: ' + e.message); }
+        };
+        console.log("✓ exportAadharFatherData loaded");
+    </script>
 </body>
 
 </html>
