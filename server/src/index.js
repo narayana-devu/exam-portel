@@ -1,9 +1,22 @@
+const fs = require('fs');
+const path = require('path');
 const express = require('express');
 const cors = require('cors');
-const path = require('path');
-const fs = require('fs');
 const http = require('http');
 const { Server } = require("socket.io");
+const sqlite3 = require('sqlite3').verbose();
+
+// Manual .env parser (since dotenv is not installed and npm is blocked)
+if (fs.existsSync(path.join(__dirname, '../../.env'))) {
+    const envConfig = fs.readFileSync(path.join(__dirname, '../../.env'), 'utf8');
+    envConfig.split('\n').forEach(line => {
+        const [key, ...value] = line.split('=');
+        if (key && value) {
+            process.env[key.trim()] = value.join('=').trim();
+        }
+    });
+    console.log('[ENV] Loaded local environment variables');
+}
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -455,6 +468,75 @@ app.post('/api/upload-media', authMiddleware, upload.single('file'), async (req,
     } catch (e) {
         res.status(500).json({ error: e.message });
     }
+});
+
+// v48: WhatsApp Endpoint (Local Express Support)
+const https = require('https');
+const querystring = require('querystring');
+
+app.post('/api/send-whatsapp', authMiddleware, (req, res) => {
+    const { phone, message } = req.body;
+    if (!phone || !message) {
+        return res.status(400).json({ error: 'Phone and message required' });
+    }
+
+    const GUPSHUP_API_KEY = process.env.GUPSHUP_API_KEY;
+    const GUPSHUP_APP_NAME = process.env.GUPSHUP_APP_NAME;
+
+    if (!GUPSHUP_API_KEY || !GUPSHUP_APP_NAME) {
+        console.error('Missing Gupshup credentials');
+        return res.status(500).json({ error: 'Server configuration error: Missing Gupshup Env Vars' });
+    }
+
+    const postData = querystring.stringify({
+        channel: 'whatsapp',
+        source: GUPSHUP_APP_NAME,
+        destination: phone,
+        'src.name': GUPSHUP_APP_NAME,
+        message: JSON.stringify({
+            type: 'text',
+            text: message
+        })
+    });
+
+    const options = {
+        hostname: 'api.gupshup.io',
+        path: '/sm/api/v1/msg',
+        method: 'POST',
+        headers: {
+            'apikey': GUPSHUP_API_KEY,
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'Content-Length': Buffer.byteLength(postData)
+        }
+    };
+
+    const apiReq = https.request(options, (apiRes) => {
+        let data = '';
+        apiRes.on('data', (chunk) => { data += chunk; });
+        apiRes.on('end', () => {
+            try {
+                const jsonResponse = JSON.parse(data);
+                if (apiRes.statusCode >= 200 && apiRes.statusCode < 300) {
+                    console.log('✅ WhatsApp Sent:', jsonResponse);
+                    res.json({ success: true, data: jsonResponse });
+                } else {
+                    console.error('❌ Gupshup Error:', jsonResponse);
+                    res.status(apiRes.statusCode).json({ error: 'Gupshup API Failed', details: jsonResponse });
+                }
+            } catch (e) {
+                console.error('❌ Gupshup Parse Error:', data);
+                res.status(500).json({ error: 'Invalid response from Gupshup' });
+            }
+        });
+    });
+
+    apiReq.on('error', (e) => {
+        console.error('❌ WhatsApp Request Error:', e);
+        res.status(500).json({ error: e.message });
+    });
+
+    apiReq.write(postData);
+    apiReq.end();
 });
 
 // DELETE MEDIA FROM S3

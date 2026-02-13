@@ -82,7 +82,7 @@
             alert(report);
             return false;
         };
-        console.log("v44 DEPLOYMENT ACTIVE - DIAGNOSTIC MODE - 5s Video Sync");
+        console.log("v45 DEPLOYMENT ACTIVE - DIAGNOSTIC MODE - 5s Video Sync");
 
         // DATA LAYER
         const DB_KEYS = {
@@ -1026,7 +1026,7 @@
                 }
             },
 
-            // v44: Notification System
+            // v45: Notification System
             getNotifications: () => JSON.parse(localStorage.getItem('notifications') || '[]'),
             createNotification: (type, data) => {
                 const notifications = window.Utils.getNotifications();
@@ -1651,7 +1651,7 @@
                                     <div className={`w-2 h-2 rounded-full ${navigator.onLine ? 'bg-green-500' : 'bg-red-500'}`}></div>
                                     {navigator.onLine ? "Cloud Connected" : "Offline Mode"}
                                 </span>
-                                <span>v44</span>
+                                <span>v45</span>
                             </div>
                             {error && <p className="text-red-500 text-sm text-center bg-red-50 p-2 rounded">{error}</p>}
                             <div className="flex gap-2">
@@ -1675,7 +1675,7 @@
                             </div>
                             <div className="text-center text-xs text-gray-400 mt-4 space-y-1">
                                 <p>Demo: admin/admin</p>
-                                <p className="text-gray-400 text-[10px] mt-2">v44 (5s Video Sync)</p>
+                                <p className="text-gray-400 text-[10px] mt-2">v45 (5s Video Sync)</p>
                             </div>
                         </form>
                     </div>
@@ -1698,7 +1698,7 @@
                 <div className="w-64 bg-slate-800 text-white min-h-screen flex flex-col">
                     <div className="p-6 border-b border-slate-700">
                         <h1 className="text-xl font-bold">NSXpertise</h1>
-                        <p className="text-xs text-slate-400 mt-1">v44</p>
+                        <p className="text-xs text-slate-400 mt-1">v45</p>
                         <div className="flex flex-col gap-1 mt-3">
                             <button
                                 onClick={() => { if (confirm('Clear cache for v30?')) { localStorage.clear(); location.reload(true); } }}
@@ -6354,7 +6354,7 @@
                     evList = [...targetResp.evidence];
                 }
 
-                // v44: FIX - Only include VERIFICATION evidence in Photo tab
+                // v45: FIX - Only include VERIFICATION evidence in Photo tab
                 // This prevents verification selfies/IDs from appearing in Theory/Practical/Viva tabs
                 if (examType === 'Photo') {
                     const verifResp = allStudentResponses.find(r => r.examType === 'VERIFICATION');
@@ -7200,6 +7200,60 @@
             const [stats, setStats] = useState({ batches: 0, students: 0, qps: 0, assessors: 0 });
             const [recentBatches, setRecentBatches] = useState([]);
 
+            // v48: Scheduled Notification Poller (Dynamic End Time)
+            useEffect(() => {
+                const checkScheduledAlerts = () => {
+                    const batches = window.Utils.getBatches();
+                    const now = new Date();
+                    const todayStr = now.toISOString().split('T')[0];
+                    const currentTimeStr = now.toTimeString().slice(0, 5); // HH:MM
+
+                    batches.forEach(batch => {
+                        // 1. Check Date
+                        if (batch.endDate === todayStr) {
+                            // 2. Check Time (Trigger if current time >= batch end time)
+                            if (batch.endTime && currentTimeStr >= batch.endTime) {
+                                const storageKey = `scheduled_msg_${batch.id}_${todayStr}`;
+
+                                // 3. Check if already alerted
+                                if (!localStorage.getItem(storageKey)) {
+                                    console.log(`[Scheduler] Auto-Triggering WhatsApp for Batch: ${batch.name}`);
+
+                                    const notification = {
+                                        type: 'ALL_COMPLETED',
+                                        message: `Batch "${batch.name}" ended. Auto-sending WhatsApp report...`,
+                                        batchName: batch.name,
+                                        batchId: batch.id,
+                                        examType: 'Batch End'
+                                    };
+
+                                    // Create UI Notification
+                                    window.Utils.createNotification(notification);
+
+                                    // AUTO-SEND WHATSAPP (No Manual Click)
+                                    if (window.Utils.sendWhatsAppAlert) {
+                                        window.Utils.sendWhatsAppAlert(notification).then(res => {
+                                            console.log("Auto-WhatsApp Result:", res);
+                                            // Optional: Update notification to say "Sent" if we had state here
+                                        }).catch(err => {
+                                            console.error("Auto-WhatsApp Failed:", err);
+                                        });
+                                    }
+
+                                    // Mark as sent
+                                    localStorage.setItem(storageKey, 'true');
+                                }
+                            }
+                        }
+                    });
+                };
+
+                const interval = setInterval(checkScheduledAlerts, 50000); // Check every 50s
+                checkScheduledAlerts(); // Initial check
+
+                return () => clearInterval(interval);
+            }, []);
+
             useEffect(() => {
                 const loadStats = () => {
                     const batches = window.Utils.getBatches();
@@ -7472,7 +7526,7 @@
                                     </span>
                                 </div>
 
-                                {/* v44: Notification Bell */}
+                                {/* v45: Notification Bell */}
                                 <div className="relative">
                                     <button
                                         onClick={() => setShowNotifications(!showNotifications)}
@@ -8771,7 +8825,7 @@
                     evidence: finalEvidence
                 };
 
-                // v44: CRITICAL - Stop Recording and Release Camera BEFORE Upload
+                // v45: CRITICAL - Stop Recording and Release Camera BEFORE Upload
                 try {
                     // Stop the MediaRecorder
                     if (window.studentRecordingInterval) {
