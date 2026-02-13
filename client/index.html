@@ -8694,14 +8694,7 @@
                     console.log("[Submit] Finalizing last segment...");
 
                     const originalOnStop = mediaRecorderRef.current.onstop;
-                    const stopPromise = new Promise(resolve => {
-                        mediaRecorderRef.current.onstop = async (e) => {
-                            if (originalOnStop) await originalOnStop(e);
-                            ();
-                        };
-                    });
 
-                    ef.current.stop();
                     setIsRecording(false);
 
                     if (window.studentRecordingInterval) clearInterval(window.studentRecordingInterval);
@@ -9480,7 +9473,7 @@
                                     className="fixed bottom-4 left-4 z-[100] bg-red-600 text-white px-4 py-2 rounded-full shadow-lg text-xs font-bold opacity-50 hover:opacity-100 transition-opacity"
                                     title="Logout"
                                 >
-                                    <Iconck ce="w-4 h-4 inline mr-1" /> Logout
+                                    <Icons.Lock className="w-4 h-4 inline mr-1" /> Logout
                                 </button>
 
                                 <SyncStatusHUD />
