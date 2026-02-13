@@ -4,6 +4,8 @@ const express = require('express');
 const cors = require('cors');
 const http = require('http');
 const { Server } = require("socket.io");
+const https = require('https');
+const querystring = require('querystring');
 const sqlite3 = require('sqlite3').verbose();
 
 // Manual .env parser (since dotenv is not installed and npm is blocked)
@@ -470,11 +472,8 @@ app.post('/api/upload-media', authMiddleware, upload.single('file'), async (req,
     }
 });
 
-// v48: WhatsApp Endpoint (Local Express Support)
-const https = require('https');
-const querystring = require('querystring');
 
-app.post('/api/send-whatsapp', authMiddleware, (req, res) => {
+app.post('/api/send-whatsapp-old', authMiddleware, (req, res) => {
     const { phone, message } = req.body;
     if (!phone || !message) {
         return res.status(400).json({ error: 'Phone and message required' });
@@ -641,6 +640,70 @@ app.get('/api/media-stream', (req, res) => {
 // createCRUDEndpoints('synced_chunks', 'synced_chunks'); // Replaced by custom handler above
 
 // Removed duplicate health check from bottom
+
+
+// WHATSAPP API PROXY
+app.post('/api/send-whatsapp', async (req, res) => {
+    const { phone, message } = req.body;
+    const apiKey = process.env.GUPSHUP_API_KEY;
+    const appName = process.env.GUPSHUP_APP_NAME || 'TimeCheck'; // Default or Env
+
+    if (!apiKey) {
+        console.error("WhatsApp Error: Missing GUPSHUP_API_KEY");
+        return res.status(500).json({ error: 'Server misconfiguration: Missing API Key' });
+    }
+
+    if (!phone || !message) {
+        return res.status(400).json({ error: 'Missing phone or message' });
+    }
+
+    // Prepare Gupshup Data
+    const postData = querystring.stringify({
+        'channel': 'whatsapp',
+        'source': '917834811114', // Gupshup active number
+        'destination': phone,
+        'message': JSON.stringify({
+            'type': 'text',
+            'text': message
+        }),
+        'src.name': appName
+    });
+
+    const options = {
+        hostname: 'api.gupshup.io',
+        port: 443,
+        path: '/wa/api/v1/msg',
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'apikey': apiKey,
+            'Content-Length': postData.length
+        }
+    };
+
+    console.log(`[WhatsApp] Sending to ${phone}...`);
+
+    const apiReq = https.request(options, (apiRes) => {
+        let data = '';
+        apiRes.on('data', (chunk) => data += chunk);
+        apiRes.on('end', () => {
+            console.log(`[WhatsApp] Gupshup Response: ${apiRes.statusCode} - ${data}`);
+            if (apiRes.statusCode >= 200 && apiRes.statusCode < 300) {
+                res.json({ success: true, data: JSON.parse(data || '{}') });
+            } else {
+                res.status(apiRes.statusCode).json({ error: data });
+            }
+        });
+    });
+
+    apiReq.on('error', (e) => {
+        console.error("[WhatsApp] Request Error:", e);
+        res.status(500).json({ error: e.message });
+    });
+
+    apiReq.write(postData);
+    apiReq.end();
+});
 
 // Serve Client Static Files
 app.use(express.static(path.join(__dirname, '../../client')));

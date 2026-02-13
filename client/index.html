@@ -1698,10 +1698,10 @@
                 <div className="w-64 bg-slate-800 text-white min-h-screen flex flex-col">
                     <div className="p-6 border-b border-slate-700">
                         <h1 className="text-xl font-bold">NSXpertise</h1>
-                        <p className="text-xs text-slate-400 mt-1">v45</p>
+                        <p className="text-xs text-slate-400 mt-1">v50</p>
                         <div className="flex flex-col gap-1 mt-3">
                             <button
-                                onClick={() => { if (confirm('Clear cache for v30?')) { localStorage.clear(); location.reload(true); } }}
+                                onClick={() => { if (confirm('Clear cache for v50?')) { localStorage.clear(); location.reload(true); } }}
                                 className="text-[9px] bg-slate-700 hover:bg-red-600 px-2 py-1 rounded transition-colors text-slate-300 font-bold"
                             >
                                 FORCE UPDATE / CLEAR CACHE
@@ -1709,11 +1709,32 @@
                             <button
                                 onClick={() => {
                                     const logs = window.__syncLogs || [];
-                                    alert("--- SYNC LOGS (v33) ---\n\n" + (logs.length ? logs.join('\n') : "No errors logged."));
+                                    alert("--- SYNC LOGS (v50) ---\n\n" + (logs.length ? logs.join('\n') : "No errors logged."));
                                 }}
                                 className="text-[9px] bg-slate-700 hover:bg-indigo-600 px-2 py-1 rounded transition-colors text-slate-300 font-bold"
                             >
                                 VIEW SYNC LOGS
+                            </button>
+                            <button
+                                onClick={async () => {
+                                    const ph = prompt("Enter phone number with country code (e.g. 919999999999):", "91");
+                                    if (ph) {
+                                        try {
+                                            const res = await fetch('/api/send-whatsapp', {
+                                                method: 'POST',
+                                                headers: { 'Content-Type': 'application/json' },
+                                                body: JSON.stringify({ phone: ph, message: 'Test Message from Portel Admin' })
+                                            });
+                                            const d = await res.json();
+                                            alert(JSON.stringify(d, null, 2));
+                                        } catch (e) {
+                                            alert("Error: " + e.message);
+                                        }
+                                    }
+                                }}
+                                className="text-[9px] bg-slate-700 hover:bg-green-600 px-2 py-1 rounded transition-colors text-slate-300 font-bold"
+                            >
+                                TEST WHATSAPP
                             </button>
                         </div>
                     </div>
