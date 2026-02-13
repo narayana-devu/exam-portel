@@ -6266,19 +6266,21 @@
                 // Let's assume they are attached to the actual exam response or we look for ANY evidence.
 
                 // STRICT SEPARATION: Only load evidence for the specific Exam Type
-                // STRICT SEPARATION: Only load evidence for the specific Exam Type
                 if (targetResp && targetResp.evidence) {
                     evList = [...targetResp.evidence];
                 }
 
-                // v30.7 FIX: Always include VERIFICATION evidence (Selfie/ID) if it exists
-                const verifResp = allStudentResponses.find(r => r.examType === 'VERIFICATION');
-                if (verifResp) {
-                    if (verifResp.answers) setVerificationInfo(verifResp.answers); // Load Father/Aadhar
-                    if (verifResp.evidence) {
-                        console.log("Found Verification Evidence:", verifResp.evidence.length);
-                        // Prepend verification evidence so it appears first
-                        evList = [...verifResp.evidence, ...evList];
+                // v44: FIX - Only include VERIFICATION evidence in Photo tab
+                // This prevents verification selfies/IDs from appearing in Theory/Practical/Viva tabs
+                if (examType === 'Photo') {
+                    const verifResp = allStudentResponses.find(r => r.examType === 'VERIFICATION');
+                    if (verifResp) {
+                        if (verifResp.answers) setVerificationInfo(verifResp.answers); // Load Father/Aadhar
+                        if (verifResp.evidence) {
+                            console.log("Found Verification Evidence:", verifResp.evidence.length);
+                            // Prepend verification evidence so it appears first in Photo tab only
+                            evList = [...verifResp.evidence, ...evList];
+                        }
                     }
                 }
 
