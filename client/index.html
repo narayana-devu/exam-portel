@@ -7471,7 +7471,9 @@
                                         className="relative p-2 hover:bg-gray-100 rounded-full transition-colors"
                                         title="Notifications"
                                     >
-                                        <Icons.Bell className="w-6 h-6 text-gray-600" />
+                                        <svg className="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                                        </svg>
                                         {unreadCount > 0 && (
                                             <span className="absolute top-0 right-0 w-5 h-5 bg-red-500 text-white text-xs font-bold rounded-full flex items-center justify-center">
                                                 {unreadCount > 9 ? '9+' : unreadCount}
@@ -7496,7 +7498,9 @@
                                             <div className="overflow-y-auto flex-1">
                                                 {notifications.length === 0 ? (
                                                     <div className="p-8 text-center text-gray-400">
-                                                        <Icons.Bell className="w-12 h-12 mx-auto mb-2 opacity-30" />
+                                                        <svg className="w-12 h-12 mx-auto mb-2 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                                                        </svg>
                                                         <p className="text-sm">No notifications yet</p>
                                                     </div>
                                                 ) : (
@@ -7509,9 +7513,13 @@
                                                             <div className="flex items-start gap-3">
                                                                 <div className={`mt-1 ${notif.type === 'ALL_COMPLETED' ? 'text-green-500' : 'text-blue-500'}`}>
                                                                     {notif.type === 'ALL_COMPLETED' ? (
-                                                                        <Icons.CheckCircle className="w-5 h-5" />
+                                                                        <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                                                                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                                                                        </svg>
                                                                     ) : (
-                                                                        <Icons.Bell className="w-5 h-5" />
+                                                                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                                                                        </svg>
                                                                     )}
                                                                 </div>
                                                                 <div className="flex-1">
