@@ -1043,6 +1043,14 @@
                 localStorage.setItem('notifications', JSON.stringify(notifications));
                 // Trigger custom event for UI update
                 window.dispatchEvent(new CustomEvent('notificationCreated', { detail: notification }));
+
+                // v46: Auto-send WhatsApp for completion notifications
+                if (type === 'ALL_COMPLETED' && window.Utils.sendWhatsAppAlert) {
+                    window.Utils.sendWhatsAppAlert(notification).catch(err => {
+                        console.warn('WhatsApp send failed (non-blocking):', err);
+                    });
+                }
+
                 return notification;
             },
             markNotificationRead: (id) => {
@@ -9412,6 +9420,47 @@
                 try {
                     const saved = localStorage.getItem('se_user');
                     if (saved) setUser(JSON.parse(saved));
+
+                    // Extend window.Utils with notification functions
+                    window.Utils = {
+                        ...window.Utils,
+                        getNotifications: () => {
+                            const stored = localStorage.getItem('notifications');
+                            return stored ? JSON.parse(stored) : [];
+                        },
+
+                        // v46: WhatsApp Integration
+                        sendWhatsAppAlert: async (notification) => {
+                            const ADMIN_PHONE = '+917981927566'; // Admin WhatsApp number
+
+                            const message = `🔔 *Exam Portal Alert*\n\n${notification.message}\n\nBatch: ${notification.batchName}\nExam: ${notification.examType}\n\n🔗 Login: https://exam-portel.vercel.app`;
+
+                            try {
+                                const response = await fetch('/api/send-whatsapp', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({
+                                        phone: ADMIN_PHONE,
+                                        message: message
+                                    })
+                                });
+
+                                const data = await response.json();
+
+                                if (response.ok) {
+                                    console.log('✅ WhatsApp notification sent successfully');
+                                    return { success: true, data };
+                                } else {
+                                    console.warn('⚠️ WhatsApp send failed:', data);
+                                    return { success: false, error: data };
+                                }
+                            } catch (error) {
+                                console.warn('⚠️ WhatsApp API error:', error.message);
+                                // Don't break the app if WhatsApp fails
+                                return { success: false, error: error.message };
+                            }
+                        },
+                    };
                 } catch (e) { console.error(e); }
             }, []);
 
