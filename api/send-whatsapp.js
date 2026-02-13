@@ -25,7 +25,8 @@ export default async function handler(req, res) {
 
     try {
         // Call Gupshup WhatsApp API
-        const response = await fetch('https://api.gupshup.io/sm/api/v1/msg', {
+        // Match working local server logic for Sandbox
+        const response = await fetch('https://api.gupshup.io/wa/api/v1/msg', {
             method: 'POST',
             headers: {
                 'apikey': GUPSHUP_API_KEY,
@@ -33,9 +34,9 @@ export default async function handler(req, res) {
             },
             body: new URLSearchParams({
                 channel: 'whatsapp',
-                source: GUPSHUP_APP_NAME,
+                source: '917834811114', // Match working sandbox source
                 destination: phone,
-                'src.name': GUPSHUP_APP_NAME,
+                'src.name': GUPSHUP_APP_NAME, // 'exammessage'
                 message: JSON.stringify({
                     type: 'text',
                     text: message

@@ -658,38 +658,40 @@ app.post('/api/send-whatsapp', async (req, res) => {
     }
 
     // Prepare Gupshup Data
+    // For Sandbox/ACP, 'source' is often the phone number, and 'src.name' is the app name.
     const postData = querystring.stringify({
         'channel': 'whatsapp',
-        'source': '917834811114', // Gupshup active number
+        'source': '917834811114', // Sandbox Phone Number
         'destination': phone,
         'message': JSON.stringify({
             'type': 'text',
             'text': message
         }),
-        'src.name': appName
+        'src.name': appName // 'exammessage'
     });
 
     const options = {
         hostname: 'api.gupshup.io',
         port: 443,
-        path: '/wa/api/v1/msg',
+        path: '/wa/api/v1/msg', // Match Sandbox screenshot
         method: 'POST',
         headers: {
             'Content-Type': 'application/x-www-form-urlencoded',
-            'apikey': apiKey,
+            'apikey': apiKey, // Match Sandbox screenshot
             'Content-Length': postData.length
         }
     };
-
-    console.log(`[WhatsApp] Sending to ${phone}...`);
 
     const apiReq = https.request(options, (apiRes) => {
         let data = '';
         apiRes.on('data', (chunk) => data += chunk);
         apiRes.on('end', () => {
-            console.log(`[WhatsApp] Gupshup Response: ${apiRes.statusCode} - ${data}`);
             if (apiRes.statusCode >= 200 && apiRes.statusCode < 300) {
-                res.json({ success: true, data: JSON.parse(data || '{}') });
+                try {
+                    res.json({ success: true, data: JSON.parse(data || '{}') });
+                } catch (e) {
+                    res.json({ success: true, raw: data });
+                }
             } else {
                 res.status(apiRes.statusCode).json({ error: data });
             }

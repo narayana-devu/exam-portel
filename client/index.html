@@ -1053,6 +1053,42 @@
 
                 return notification;
             },
+
+            // v48: WhatsApp Sender Utility
+            sendWhatsAppAlert: async (notification) => {
+                if (!notification || !notification.actionData) return;
+
+                // Get Admin Phone (You might want to make this configurable later)
+                // For now, hardcoded or prompts are tricky for auto-alerts.
+                // We'll require an Admin Setting for "Alert Phone Number".
+                // Fallback to a default if not set.
+                let adminPhone = localStorage.getItem('admin_whatsapp_phone');
+                if (!adminPhone) {
+                    // console.warn("No Admin WhatsApp Phone set. Skipping alert.");
+                    // return;
+                    adminPhone = '917981927566'; // Default/Fallback
+                }
+
+                const msg = `🔔 *Portel Alert*: ${notification.message}\nBatch: ${notification.batchName}`;
+
+                try {
+                    const res = await fetch('/api/send-whatsapp', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'x-api-key': 'portel_secure_key_2025' // Authorization
+                        },
+                        body: JSON.stringify({
+                            phone: adminPhone,
+                            message: msg
+                        })
+                    });
+                    const data = await res.json();
+                    console.log("[WhatsApp] Auto-Alert Sent:", data);
+                } catch (e) {
+                    console.error("[WhatsApp] Auto-Alert Failed:", e);
+                }
+            },
             markNotificationRead: (id) => {
                 const notifications = window.Utils.getNotifications();
                 const notif = notifications.find(n => n.id === id);
@@ -1722,7 +1758,10 @@
                                         try {
                                             const res = await fetch('/api/send-whatsapp', {
                                                 method: 'POST',
-                                                headers: { 'Content-Type': 'application/json' },
+                                                headers: {
+                                                    'Content-Type': 'application/json',
+                                                    'x-api-key': 'portel_secure_key_2025'
+                                                },
                                                 body: JSON.stringify({ phone: ph, message: 'Test Message from Portel Admin' })
                                             });
                                             const d = await res.json();
