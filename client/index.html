@@ -1025,6 +1025,82 @@
                     window.location.reload();
                 }
             },
+
+            // v44: Notification System
+            getNotifications: () => JSON.parse(localStorage.getItem('notifications') || '[]'),
+            createNotification: (type, data) => {
+                const notifications = window.Utils.getNotifications();
+                const notification = {
+                    id: 'notif_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
+                    type,
+                    timestamp: new Date().toISOString(),
+                    read: false,
+                    ...data
+                };
+                notifications.unshift(notification); // Add to beginning
+                // Keep max 50 notifications
+                if (notifications.length > 50) notifications.length = 50;
+                localStorage.setItem('notifications', JSON.stringify(notifications));
+                // Trigger custom event for UI update
+                window.dispatchEvent(new CustomEvent('notificationCreated', { detail: notification }));
+                return notification;
+            },
+            markNotificationRead: (id) => {
+                const notifications = window.Utils.getNotifications();
+                const notif = notifications.find(n => n.id === id);
+                if (notif) {
+                    notif.read = true;
+                    localStorage.setItem('notifications', JSON.stringify(notifications));
+                    window.dispatchEvent(new Event('notificationUpdated'));
+                }
+            },
+            markAllNotificationsRead: () => {
+                const notifications = window.Utils.getNotifications();
+                notifications.forEach(n => n.read = true);
+                localStorage.setItem('notifications', JSON.stringify(notifications));
+                window.dispatchEvent(new Event('notificationUpdated'));
+            },
+            checkBatchCompletion: (batchId, examType) => {
+                // Check if all students in batch completed this exam
+                const students = window.Utils.getStudentsByBatch(batchId);
+                if (students.length === 0) return false;
+
+                const responses = window.Utils.getResponses();
+                const completedCount = responses.filter(r =>
+                    r.examType === examType &&
+                    students.some(s => s.id === r.studentId)
+                ).length;
+
+                const allCompleted = completedCount === students.length;
+
+                if (allCompleted) {
+                    // Check if we already notified for this
+                    const existingNotif = window.Utils.getNotifications().find(n =>
+                        n.type === 'ALL_COMPLETED' &&
+                        n.batchId === batchId &&
+                        n.examType === examType
+                    );
+
+                    if (!existingNotif) {
+                        const batch = window.Utils.getBatches().find(b => b.id === batchId);
+                        const batchName = batch ? batch.name : batchId;
+
+                        window.Utils.createNotification('ALL_COMPLETED', {
+                            batchId,
+                            batchName,
+                            examType,
+                            totalStudents: students.length,
+                            message: `✅ All ${students.length} students completed ${examType} - Ready to grade!`,
+                            actionText: 'Start Grading',
+                            actionData: { batchId, examType }
+                        });
+
+                        console.log(`[Notification] Created: All students completed ${examType} for batch ${batchName}`);
+                    }
+                }
+
+                return allCompleted;
+            },
             getStudents: () => JSON.parse(localStorage.getItem(DB_KEYS.STUDENTS) || '[]'),
             getStudentsByBatch: (batchId) => window.Utils.getStudents().filter(s => s.batchId === batchId),
             saveStudent: (student) => {
@@ -7296,16 +7372,39 @@
             const [activeTab, setActiveTab] = useState('dashboard');
             const [selectedQPForNOS, setSelectedQPForNOS] = useState(null);
             const [allQPapers, setAllQPapers] = useState([]); // Added allQPapers state
+            const [notifications, setNotifications] = useState([]);
+            const [showNotifications, setShowNotifications] = useState(false);
 
             useEffect(() => {
                 const loadQPs = () => setAllQPapers(window.Utils.getQuestionPapers());
                 loadQPs();
                 window.addEventListener('cloud-sync-complete', loadQPs);
 
+                // Load notifications
+                const loadNotifications = () => setNotifications(window.Utils.getNotifications());
+                loadNotifications();
+                window.addEventListener('notificationCreated', loadNotifications);
+                window.addEventListener('notificationUpdated', loadNotifications);
+
                 return () => {
                     window.removeEventListener('cloud-sync-complete', loadQPs);
+                    window.removeEventListener('notificationCreated', loadNotifications);
+                    window.removeEventListener('notificationUpdated', loadNotifications);
                 };
             }, []);
+
+            const unreadCount = notifications.filter(n => !n.read).length;
+
+            const handleNotificationClick = (notif) => {
+                window.Utils.markNotificationRead(notif.id);
+                setShowNotifications(false);
+
+                if (notif.actionData) {
+                    // Navigate to Results tab with batch/exam pre-selected
+                    setActiveTab('results');
+                    // You could add more sophisticated navigation here
+                }
+            };
 
             const handleNavigateToNOS = (qp) => {
                 setSelectedQPForNOS(qp);
@@ -7363,6 +7462,84 @@
                                     >
                                         Auto-Sync On
                                     </span>
+                                </div>
+
+                                {/* v44: Notification Bell */}
+                                <div className="relative">
+                                    <button
+                                        onClick={() => setShowNotifications(!showNotifications)}
+                                        className="relative p-2 hover:bg-gray-100 rounded-full transition-colors"
+                                        title="Notifications"
+                                    >
+                                        <Icons.Bell className="w-6 h-6 text-gray-600" />
+                                        {unreadCount > 0 && (
+                                            <span className="absolute top-0 right-0 w-5 h-5 bg-red-500 text-white text-xs font-bold rounded-full flex items-center justify-center">
+                                                {unreadCount > 9 ? '9+' : unreadCount}
+                                            </span>
+                                        )}
+                                    </button>
+
+                                    {/* Notification Panel */}
+                                    {showNotifications && (
+                                        <div className="absolute right-0 mt-2 w-96 bg-white rounded-lg shadow-2xl border border-gray-200 z-50 max-h-96 overflow-hidden flex flex-col">
+                                            <div className="p-4 border-b border-gray-200 flex justify-between items-center bg-gray-50">
+                                                <h3 className="font-bold text-gray-800">Notifications</h3>
+                                                {unreadCount > 0 && (
+                                                    <button
+                                                        onClick={() => window.Utils.markAllNotificationsRead()}
+                                                        className="text-xs text-indigo-600 hover:text-indigo-800 font-medium"
+                                                    >
+                                                        Mark all read
+                                                    </button>
+                                                )}
+                                            </div>
+                                            <div className="overflow-y-auto flex-1">
+                                                {notifications.length === 0 ? (
+                                                    <div className="p-8 text-center text-gray-400">
+                                                        <Icons.Bell className="w-12 h-12 mx-auto mb-2 opacity-30" />
+                                                        <p className="text-sm">No notifications yet</p>
+                                                    </div>
+                                                ) : (
+                                                    notifications.slice(0, 10).map(notif => (
+                                                        <div
+                                                            key={notif.id}
+                                                            onClick={() => handleNotificationClick(notif)}
+                                                            className={`p-4 border-b border-gray-100 cursor-pointer hover:bg-gray-50 transition-colors ${!notif.read ? 'bg-blue-50' : ''}`}
+                                                        >
+                                                            <div className="flex items-start gap-3">
+                                                                <div className={`mt-1 ${notif.type === 'ALL_COMPLETED' ? 'text-green-500' : 'text-blue-500'}`}>
+                                                                    {notif.type === 'ALL_COMPLETED' ? (
+                                                                        <Icons.CheckCircle className="w-5 h-5" />
+                                                                    ) : (
+                                                                        <Icons.Bell className="w-5 h-5" />
+                                                                    )}
+                                                                </div>
+                                                                <div className="flex-1">
+                                                                    <p className="text-sm font-medium text-gray-800">{notif.message}</p>
+                                                                    {notif.batchName && (
+                                                                        <p className="text-xs text-gray-500 mt-1">Batch: {notif.batchName}</p>
+                                                                    )}
+                                                                    <p className="text-xs text-gray-400 mt-1">
+                                                                        {(() => {
+                                                                            const diff = Date.now() - new Date(notif.timestamp).getTime();
+                                                                            const mins = Math.floor(diff / 60000);
+                                                                            const hrs = Math.floor(mins / 60);
+                                                                            if (hrs > 0) return `${hrs}h ago`;
+                                                                            if (mins > 0) return `${mins}m ago`;
+                                                                            return 'Just now';
+                                                                        })()}
+                                                                    </p>
+                                                                </div>
+                                                                {!notif.read && (
+                                                                    <div className="w-2 h-2 bg-blue-500 rounded-full mt-2"></div>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    ))
+                                                )}
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
 
                                 <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 font-bold">A</div>
