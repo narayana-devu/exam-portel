@@ -82,7 +82,7 @@
             alert(report);
             return false;
         };
-        console.log("v45 DEPLOYMENT ACTIVE - DIAGNOSTIC MODE - 5s Video Sync");
+        console.log("v70 DEPLOYMENT ACTIVE - AI Question Generation + Custom Distribution");
 
         // DATA LAYER
         const DB_KEYS = {
@@ -200,6 +200,16 @@
                             resolve(undefined);
                         }
                     };
+                    request.onerror = (e) => reject(e.target.error);
+                });
+            },
+            deleteVideo: async (key) => {
+                const db = await VideoDB.init();
+                return new Promise((resolve, reject) => {
+                    const tx = db.transaction(VideoDB.storeName, 'readwrite');
+                    const store = tx.objectStore(VideoDB.storeName);
+                    const request = store.delete(key);
+                    request.onsuccess = () => resolve();
                     request.onerror = (e) => reject(e.target.error);
                 });
             }
@@ -790,8 +800,20 @@
                 localStorage.setItem(DB_KEYS.QP, JSON.stringify(list));
                 window.Utils.uploadToCloud(true, 'qps');
             },
-            deleteQP: (id) => {
-                window.Utils.deleteFromCloud('qps', id);
+            deleteQP: async (id) => {
+                // 1. Find and delete associated NOS
+                const allNOS = window.Utils.getNOS();
+                const qpNOS = allNOS.filter(n => n.qpId === id);
+
+                for (const nos of qpNOS) {
+                    // This will handle PCs and the NOS itself
+                    await window.Utils.deleteNOS(nos.id);
+                }
+
+                // 2. Delete QP from cloud
+                await window.Utils.deleteFromCloud('qps', id);
+
+                // 3. Remove QP from local
                 let list = window.Utils.getQPs().filter(q => q.id !== id);
                 localStorage.setItem(DB_KEYS.QP, JSON.stringify(list));
             },
@@ -807,8 +829,23 @@
                 localStorage.setItem(DB_KEYS.NOS, JSON.stringify(list));
                 window.Utils.uploadToCloud(true, 'nos');
             },
-            deleteNOS: (id) => {
-                window.Utils.deleteFromCloud('nos', id);
+            deleteNOS: async (id) => {
+                // 1. Find and delete associated PCs
+                const allPCs = window.Utils.getPCs();
+                const nosPCs = allPCs.filter(p => p.nosId === id);
+
+                for (const pc of nosPCs) {
+                    await window.Utils.deleteFromCloud('pcs', pc.id);
+                }
+
+                // Remove PCs from local
+                const remainingPCs = allPCs.filter(p => p.nosId !== id);
+                localStorage.setItem(DB_KEYS.PC, JSON.stringify(remainingPCs));
+
+                // 2. Delete NOS from cloud
+                await window.Utils.deleteFromCloud('nos', id);
+
+                // 3. Remove NOS from local
                 let list = window.Utils.getNOS().filter(n => n.id !== id);
                 localStorage.setItem(DB_KEYS.NOS, JSON.stringify(list));
             },
@@ -1054,29 +1091,24 @@
                 return notification;
             },
 
-            // v48: WhatsApp Sender Utility
+            // v50: WhatsApp Sender Utility (Consolidated)
             sendWhatsAppAlert: async (notification) => {
-                if (!notification || !notification.actionData) return;
+                if (!notification) return;
 
-                // Get Admin Phone (You might want to make this configurable later)
-                // For now, hardcoded or prompts are tricky for auto-alerts.
-                // We'll require an Admin Setting for "Alert Phone Number".
-                // Fallback to a default if not set.
-                let adminPhone = localStorage.getItem('admin_whatsapp_phone');
-                if (!adminPhone) {
-                    // console.warn("No Admin WhatsApp Phone set. Skipping alert.");
-                    // return;
-                    adminPhone = '917981927566'; // Default/Fallback
-                }
+                let adminPhone = localStorage.getItem('admin_whatsapp_phone') || '917981927566';
+                // Strip '+' if present for Gupshup compatibility
+                adminPhone = adminPhone.replace(/\+/g, '').trim();
 
-                const msg = `🔔 *Portel Alert*: ${notification.message}\nBatch: ${notification.batchName}`;
+                const msg = `🔔 *Exam Portal Alert*\n\n${notification.message}\n\nBatch: ${notification.batchName || 'N/A'}\nExam: ${notification.examType || 'N/A'}\n\n🔗 Login: https://exam-portel.vercel.app`;
+
+                console.log(`[WhatsApp] Attempting auto-alert to ${adminPhone}...`);
 
                 try {
                     const res = await fetch('/api/send-whatsapp', {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
-                            'x-api-key': 'portel_secure_key_2025' // Authorization
+                            'x-api-key': 'portel_secure_key_2025'
                         },
                         body: JSON.stringify({
                             phone: adminPhone,
@@ -1084,7 +1116,8 @@
                         })
                     });
                     const data = await res.json();
-                    console.log("[WhatsApp] Auto-Alert Sent:", data);
+                    console.log("[WhatsApp] Auto-Alert Response:", data);
+                    return data;
                 } catch (e) {
                     console.error("[WhatsApp] Auto-Alert Failed:", e);
                 }
@@ -1380,7 +1413,7 @@
                     else list.push(response);
 
                     localStorage.setItem(DB_KEYS.RESPONSES, JSON.stringify(list));
-                    window.Utils.uploadToCloud(true); // Trigger sync for responses
+                    window.Utils.uploadToCloud(true, 'responses'); // v53: Targeted sync (was global)
                 } catch (e) {
                     console.error("Storage Error", e);
                     // Fallback to alert if IndexedDB fails or something else is wrong
@@ -1687,7 +1720,7 @@
                                     <div className={`w-2 h-2 rounded-full ${navigator.onLine ? 'bg-green-500' : 'bg-red-500'}`}></div>
                                     {navigator.onLine ? "Cloud Connected" : "Offline Mode"}
                                 </span>
-                                <span>v50</span>
+                                <span>v57</span>
                             </div>
                             {error && <p className="text-red-500 text-sm text-center bg-red-50 p-2 rounded">{error}</p>}
                             <div className="flex gap-2">
@@ -1711,7 +1744,7 @@
                             </div>
                             <div className="text-center text-xs text-gray-400 mt-4 space-y-1">
                                 <p>Demo: admin/admin</p>
-                                <p className="text-gray-400 text-[10px] mt-2">v50 (5s Video Sync)</p>
+                                <p className="text-gray-400 text-[10px] mt-2">v57 (Customizable Photo Capture)</p>
                             </div>
                         </form>
                     </div>
@@ -1734,10 +1767,10 @@
                 <div className="w-64 bg-slate-800 text-white min-h-screen flex flex-col">
                     <div className="p-6 border-b border-slate-700">
                         <h1 className="text-xl font-bold">NSXpertise</h1>
-                        <p className="text-xs text-slate-400 mt-1">v50</p>
+                        <p className="text-xs text-slate-400 mt-1">v57</p>
                         <div className="flex flex-col gap-1 mt-3">
                             <button
-                                onClick={() => { if (confirm('Clear cache for v50?')) { localStorage.clear(); location.reload(true); } }}
+                                onClick={() => { if (confirm('Clear cache for v57?')) { localStorage.clear(); location.reload(true); } }}
                                 className="text-[9px] bg-slate-700 hover:bg-red-600 px-2 py-1 rounded transition-colors text-slate-300 font-bold"
                             >
                                 FORCE UPDATE / CLEAR CACHE
@@ -1745,7 +1778,7 @@
                             <button
                                 onClick={() => {
                                     const logs = window.__syncLogs || [];
-                                    alert("--- SYNC LOGS (v50) ---\n\n" + (logs.length ? logs.join('\n') : "No errors logged."));
+                                    alert("--- SYNC LOGS (v57) ---\n\n" + (logs.length ? logs.join('\n') : "No errors logged."));
                                 }}
                                 className="text-[9px] bg-slate-700 hover:bg-indigo-600 px-2 py-1 rounded transition-colors text-slate-300 font-bold"
                             >
@@ -1775,6 +1808,18 @@
                             >
                                 TEST WHATSAPP
                             </button>
+                            <button
+                                onClick={() => {
+                                    if (window.Utils.testScheduler) window.Utils.testScheduler();
+                                    else alert("Scheduler logic not ready. Please refresh.");
+                                }}
+                                className="text-[9px] bg-red-700 hover:bg-red-800 px-2 py-1 rounded transition-colors text-white font-bold"
+                            >
+                                DEBUG: TEST SCHEDULE
+                            </button>
+                            <div id="scheduler-heartbeat" className="text-[8px] text-slate-500 font-mono text-center">
+                                Scheduler: Init...
+                            </div>
                         </div>
                     </div>
                     <nav className="flex-1 p-4 space-y-1">
@@ -2693,7 +2738,7 @@
                                             <button onClick={() => handleEdit(qp)} className="bg-cyan-700 text-white p-1 rounded hover:bg-cyan-800" title="Edit QP">
                                                 <Icons.Edit3 />
                                             </button>
-                                            <button onClick={() => { if (confirm('Delete?')) { window.Utils.deleteQP(qp.id); setQPList(window.Utils.getQPs()); } }}
+                                            <button onClick={async () => { if (confirm('Delete?')) { await window.Utils.deleteQP(qp.id); setQPList(window.Utils.getQPs()); } }}
                                                 className="text-red-600 p-1 hover:bg-red-50 rounded"><Icons.Trash2 /></button>
                                         </td>
                                     </tr>
@@ -3198,7 +3243,7 @@
                                                     <button className="bg-cyan-700 text-white p-2 rounded hover:bg-cyan-800">
                                                         <Icons.Edit3 className="w-4 h-4" />
                                                     </button>
-                                                    <button onClick={() => { if (confirm('Delete?')) { window.Utils.deleteNOS(nos.id); setNOSList(window.Utils.getNOS()); } }}
+                                                    <button onClick={async () => { if (confirm('Delete?')) { await window.Utils.deleteNOS(nos.id); setNOSList(window.Utils.getNOS()); } }}
                                                         className="bg-cyan-700 text-white p-2 rounded hover:bg-cyan-800"><Icons.Trash2 className="w-4 h-4" /></button>
                                                     <button onClick={() => openPCModal(nos)} className="bg-red-500 text-white px-3 py-1 rounded flex items-center gap-1 hover:bg-red-600 text-xs font-bold">
                                                         <Icons.Plus className="w-3 h-3" /> PC's
@@ -3465,6 +3510,8 @@
             const [qpName, setQPName] = useState('');
             const [uploadPaperType, setUploadPaperType] = useState('THEORY'); // Default to Theory
             const [selectedQP, setSelectedQP] = useState(null);
+            const [isGeneratingAI, setIsGeneratingAI] = useState(false);
+            const [aiTotalQuestions, setAiTotalQuestions] = useState(0);
 
             // New State for Filters
             const [sscList, setSSCList] = useState([]);
@@ -3707,6 +3754,79 @@
                 alert(`Success! Generated ${generatedQuestions.length} questions with Total Marks: ${totalMarks}`);
             };
 
+            const handleAIGenerate = async () => {
+                if (!selectedSSC || !filterQPId) return alert("Please select a Sector and Qualification Pack first.");
+
+                const qpDef = masterQPList.find(q => q.id === filterQPId);
+                if (!qpDef) return alert("Invalid QP selected.");
+
+                // Fetch PCs for this QP
+                const allNOS = window.Utils.getNOS();
+                const allPCs = window.Utils.getPCs();
+                const qpNOS = allNOS.filter(n => n.qpId === filterQPId);
+                const qpPCs = allPCs.filter(p => qpNOS.some(n => n.id === p.nosId));
+
+                if (qpPCs.length === 0) return alert("No PCs found. Please add NOS/PCs first.");
+
+                const pcsForAI = qpPCs.map(p => ({
+                    id: p.id,
+                    code: p.code,
+                    name: p.name,
+                    marks: parseFloat(p.theoryMarks || 0)
+                })).filter(p => p.marks > 0);
+
+                if (pcsForAI.length === 0) return alert("No Theory marks defined in PCs for this QP.");
+
+                if (!confirm(`Generate ${aiTotalQuestions || pcsForAI.length} AI Theory Questions for ${qpDef.code} using Gemini?\nThis will take a few seconds.`)) return;
+
+                setIsGeneratingAI(true);
+
+                try {
+                    const response = await fetch(`${API_BASE}/generate-questions-ai`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'x-api-key': 'portel_secure_key_2025'
+                        },
+                        body: JSON.stringify({
+                            qpName: qpDef.name,
+                            qpCode: qpDef.code,
+                            pcs: pcsForAI,
+                            totalQuestions: aiTotalQuestions || pcsForAI.length
+                        })
+                    });
+
+                    if (!response.ok) {
+                        const errorData = await response.json();
+                        throw new Error(errorData.error || 'AI Generation Failed');
+                    }
+
+                    const { questions } = await response.json();
+
+                    const newQP = {
+                        id: window.Utils.generateId(),
+                        qpName: `${qpDef.name} - THEORY (AI Generated ${new Date().toLocaleDateString()})`,
+                        questions: questions,
+                        totalMarks: questions.reduce((sum, q) => sum + q.totalMarks, 0),
+                        totalTime: 60,
+                        createdAt: new Date().toISOString(),
+                        sscId: selectedSSC,
+                        qpId: filterQPId,
+                        paperType: 'THEORY'
+                    };
+
+                    window.Utils.saveQuestionPaper(newQP);
+                    setQPList(window.Utils.getQuestionPapers());
+                    alert(`Success! Generated ${questions.length} questions via AI.`);
+
+                } catch (e) {
+                    console.error("[AI Client] Error:", e);
+                    alert("AI Generation Error: " + e.message);
+                } finally {
+                    setIsGeneratingAI(false);
+                }
+            };
+
             return (
                 <div className="animate-fade-in text-sm">
                     {/* Breadcrumb */}
@@ -3736,6 +3856,24 @@
                                     <option key={q.id} value={q.id}>{q.name}</option>
                                 ))}
                             </select>
+
+                            {filterQPId && (
+                                <>
+                                    <label className="font-bold text-gray-700">AI Total Questions:</label>
+                                    <div className="flex items-center gap-4">
+                                        <input
+                                            type="number"
+                                            className="w-24 p-2 border border-gray-300 rounded text-sm outline-none focus:border-blue-500 transition-all text-gray-600"
+                                            value={aiTotalQuestions || ''}
+                                            placeholder={masterQPList.find(q => q.id === filterQPId) ?
+                                                window.Utils.getPCsByNOS(window.Utils.getNOSByQP(filterQPId)[0]?.id).length : '...'
+                                            }
+                                            onChange={e => setAiTotalQuestions(parseInt(e.target.value))}
+                                        />
+                                        <span className="text-xs text-gray-400 italic">Leaves blank to use 1:1 PC mapping (Default)</span>
+                                    </div>
+                                </>
+                            )}
                         </div>
                     </div>
 
@@ -3746,9 +3884,18 @@
                         </div>
                         {selectedSSC && filterQPId && (
                             <div className="flex gap-2">
+                                <button onClick={handleAIGenerate} disabled={isGeneratingAI}
+                                    className={`${isGeneratingAI ? 'bg-indigo-300' : 'bg-indigo-600 hover:bg-indigo-700'} text-white px-6 py-2 rounded-lg font-medium shadow-sm transition-colors flex items-center gap-2`}>
+                                    {isGeneratingAI ? (
+                                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                                    ) : (
+                                        <Icons.Cpu className="w-4 h-4" />
+                                    )}
+                                    {isGeneratingAI ? 'Generating via AI...' : 'AI Auto-Generate (Theory)'}
+                                </button>
                                 <button onClick={handleAutoGenerate}
                                     className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2 rounded-lg font-medium shadow-sm transition-colors flex items-center gap-2">
-                                    <Icons.Cpu className="w-4 h-4" /> Auto-Generate
+                                    <Icons.Cpu className="w-4 h-4" /> Template Auto-Gen
                                 </button>
                                 <button onClick={() => setShowUploadModal(true)}
                                     className="bg-red-500 hover:bg-red-600 text-white px-6 py-2 rounded-lg font-medium shadow-sm transition-colors flex items-center gap-2">
@@ -4593,10 +4740,10 @@
                     const existingStudents = window.Utils.getStudentsByBatch(selectedBatch.id);
                     let currentCount = existingStudents.length;
 
-                    // DEBUG: Show detected keys
-                    if (rows.length > 0) {
-                        alert("Debug: Detected Excel Columns: " + Object.keys(rows[0]).join(", "));
-                    }
+                    // DEBUG: Show detected keys (Removed for v53)
+                    // if (rows.length > 0) {
+                    //     alert("Debug: Detected Excel Columns: " + Object.keys(rows[0]).join(", "));
+                    // }
 
                     rows.forEach(row => {
                         // Flexible matching for keys
@@ -4844,7 +4991,7 @@
                             {/* Toolbar */}
                             <div className="flex justify-between items-center mt-4 text-xs text-green-600 font-bold px-1">
                                 <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-500"></span> Cloud Connected</span>
-                                <span className="text-gray-400 font-normal">v50</span>
+                                <span className="text-gray-400 font-normal">v57</span>
                             </div>
                             <div className="flex justify-between items-center mb-4">
                                 <div className="flex items-center gap-2 text-gray-700 font-medium">
@@ -7264,60 +7411,6 @@
             const [stats, setStats] = useState({ batches: 0, students: 0, qps: 0, assessors: 0 });
             const [recentBatches, setRecentBatches] = useState([]);
 
-            // v48: Scheduled Notification Poller (Dynamic End Time)
-            useEffect(() => {
-                const checkScheduledAlerts = () => {
-                    const batches = window.Utils.getBatches();
-                    const now = new Date();
-                    const todayStr = now.toISOString().split('T')[0];
-                    const currentTimeStr = now.toTimeString().slice(0, 5); // HH:MM
-
-                    batches.forEach(batch => {
-                        // 1. Check Date
-                        if (batch.endDate === todayStr) {
-                            // 2. Check Time (Trigger if current time >= batch end time)
-                            if (batch.endTime && currentTimeStr >= batch.endTime) {
-                                const storageKey = `scheduled_msg_${batch.id}_${todayStr}`;
-
-                                // 3. Check if already alerted
-                                if (!localStorage.getItem(storageKey)) {
-                                    console.log(`[Scheduler] Auto-Triggering WhatsApp for Batch: ${batch.name}`);
-
-                                    const notification = {
-                                        type: 'ALL_COMPLETED',
-                                        message: `Batch "${batch.name}" ended. Auto-sending WhatsApp report...`,
-                                        batchName: batch.name,
-                                        batchId: batch.id,
-                                        examType: 'Batch End'
-                                    };
-
-                                    // Create UI Notification
-                                    window.Utils.createNotification(notification);
-
-                                    // AUTO-SEND WHATSAPP (No Manual Click)
-                                    if (window.Utils.sendWhatsAppAlert) {
-                                        window.Utils.sendWhatsAppAlert(notification).then(res => {
-                                            console.log("Auto-WhatsApp Result:", res);
-                                            // Optional: Update notification to say "Sent" if we had state here
-                                        }).catch(err => {
-                                            console.error("Auto-WhatsApp Failed:", err);
-                                        });
-                                    }
-
-                                    // Mark as sent
-                                    localStorage.setItem(storageKey, 'true');
-                                }
-                            }
-                        }
-                    });
-                };
-
-                const interval = setInterval(checkScheduledAlerts, 50000); // Check every 50s
-                checkScheduledAlerts(); // Initial check
-
-                return () => clearInterval(interval);
-            }, []);
-
             useEffect(() => {
                 const loadStats = () => {
                     const batches = window.Utils.getBatches();
@@ -7945,6 +8038,8 @@
                 else window.VideoDB.init().catch(e => alert("CRITICAL: Video Storage Init Failed: " + e.message));
             }, []);
             const [examMode, setExamMode] = useState(null); // 'Theory', 'Practical', 'VivaWait'
+            const [captureImage, setCaptureImage] = useState(true); // v57
+            const [cameraInterval, setCameraInterval] = useState('60'); // v57
             const [questions, setQuestions] = useState([]);
             const [currentQ, setCurrentQ] = useState(0);
             const [answers, setAnswers] = useState({});
@@ -8163,12 +8258,15 @@
                 }
             };
 
-            // 60-Second Auto-Capture Loop (Photos)
+            // v57: Customizable Auto-Capture Loop (Photos)
             useEffect(() => {
-                if (!examMode || isLocked) {
+                if (!examMode || isLocked || !captureImage) {
                     if (autoCaptureInterval.current) clearInterval(autoCaptureInterval.current);
                     return;
                 }
+
+                const intervalMs = (parseInt(cameraInterval) || 60) * 1000;
+                console.log(`AutoCapture Loop Started: ${intervalMs}ms`);
 
                 autoCaptureInterval.current = setInterval(() => {
                     const video = videoRef.current;
@@ -8184,10 +8282,10 @@
                             evidence: [{ img, time: new Date().toISOString(), type: 'AUTO_CAPTURE_PHOTO' }]
                         });
                     }
-                }, 60000); // v19.0.21: Every 60 Seconds (As requested)
+                }, intervalMs);
 
                 return () => clearInterval(autoCaptureInterval.current);
-            }, [examMode, isLocked, user.id]);
+            }, [examMode, isLocked, user.id, captureImage, cameraInterval]);
 
             // SEGMENTED RECORDING LOGIC (StudentPortal)
             useEffect(() => {
@@ -8215,7 +8313,7 @@
                     if (!stream) return;
 
                     let localChunks = [];
-                    let options = { mimeType: 'video/webm;codecs=vp8', videoBitsPerSecond: 300000 };
+                    let options = { mimeType: 'video/webm;codecs=vp8', videoBitsPerSecond: 150000 }; // v55: Reduced bitrate for COST SAVING (was 300k)
                     if (!MediaRecorder.isTypeSupported(options.mimeType)) options = { mimeType: 'video/mp4' };
                     if (!MediaRecorder.isTypeSupported(options.mimeType)) options = {};
 
@@ -8273,7 +8371,7 @@
                         mediaRecorderRef.current.stop();
                         setTimeout(startSegment, 200); // Start next part
                     }
-                }, 5000); // Changed from 60000 to 5000 (5 seconds)
+                }, 30000); // v55: 30-Second Segment Rotation (Reduced from 5s to save on API Request Costs)
 
                 return () => {
                     if (window.studentRecordingInterval) clearInterval(window.studentRecordingInterval);
@@ -8621,6 +8719,13 @@
                     // v30.7: Explicit Recording Start logic for BOTH modes
                     setQuestions(qp.questions || []);
                     setTimeLeft((qp.duration || 60) * 60);
+
+                    // v57: Load Batch Capture Settings
+                    if (batch) {
+                        setCaptureImage(batch.captureImage !== false);
+                        setCameraInterval(batch.cameraInterval || '60');
+                    }
+
                     setExamMode(startMode);
                     setPendingExamMode(null); // Clear pending mode after start
                     setVerificationStep(null); // Ensure modal is closed
@@ -9445,47 +9550,6 @@
                 try {
                     const saved = localStorage.getItem('se_user');
                     if (saved) setUser(JSON.parse(saved));
-
-                    // Extend window.Utils with notification functions
-                    window.Utils = {
-                        ...window.Utils,
-                        getNotifications: () => {
-                            const stored = localStorage.getItem('notifications');
-                            return stored ? JSON.parse(stored) : [];
-                        },
-
-                        // v46: WhatsApp Integration
-                        sendWhatsAppAlert: async (notification) => {
-                            const ADMIN_PHONE = '+917981927566'; // Admin WhatsApp number
-
-                            const message = `🔔 *Exam Portal Alert*\n\n${notification.message}\n\nBatch: ${notification.batchName}\nExam: ${notification.examType}\n\n🔗 Login: https://exam-portel.vercel.app`;
-
-                            try {
-                                const response = await fetch('/api/send-whatsapp', {
-                                    method: 'POST',
-                                    headers: { 'Content-Type': 'application/json' },
-                                    body: JSON.stringify({
-                                        phone: ADMIN_PHONE,
-                                        message: message
-                                    })
-                                });
-
-                                const data = await response.json();
-
-                                if (response.ok) {
-                                    console.log('✅ WhatsApp notification sent successfully');
-                                    return { success: true, data };
-                                } else {
-                                    console.warn('⚠️ WhatsApp send failed:', data);
-                                    return { success: false, error: data };
-                                }
-                            } catch (error) {
-                                console.warn('⚠️ WhatsApp API error:', error.message);
-                                // Don't break the app if WhatsApp fails
-                                return { success: false, error: error.message };
-                            }
-                        },
-                    };
                 } catch (e) { console.error(e); }
             }, []);
 
@@ -9506,6 +9570,74 @@
                 }, 15000);
 
                 return () => clearInterval(intervalId);
+            }, [user]);
+
+            // v52: Global Scheduled Notification Poller (Refactored & Visible)
+            React.useEffect(() => {
+                if (!user) return;
+
+                const updateStatus = (msg) => {
+                    const el = document.getElementById('scheduler-heartbeat');
+                    if (el) el.innerText = `Scheduler: ${msg} (${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })})`;
+                };
+
+                if (user.role !== 'admin') {
+                    updateStatus("Inactive (Non-Admin)");
+                    return;
+                }
+
+                const checkScheduledAlerts = () => {
+                    if (!window.Utils.getBatches) return;
+                    const batches = window.Utils.getBatches();
+                    const now = new Date();
+
+                    const todayStr = now.getFullYear() + '-' +
+                        String(now.getMonth() + 1).padStart(2, '0') + '-' +
+                        String(now.getDate()).padStart(2, '0');
+
+                    const currentMins = now.getHours() * 60 + now.getMinutes();
+
+                    updateStatus(`v52 Checking ${batches.length} batches...`);
+
+                    let findings = [];
+                    batches.forEach(batch => {
+                        if (batch.endDate === todayStr && batch.endTime) {
+                            const [bH, bM] = batch.endTime.split(':').map(Number);
+                            const batchMins = bH * 60 + bM;
+
+                            findings.push(`${batch.name}: ${batch.endTime} (Left: ${batchMins - currentMins}m)`);
+
+                            if (currentMins >= batchMins) {
+                                const storageKey = `scheduled_msg_${batch.id}_${todayStr}`;
+                                if (!localStorage.getItem(storageKey)) {
+                                    console.log(`[Scheduler] !!! TRIGGERED !!! Batch: ${batch.name} at ${batch.endTime}`);
+
+                                    window.Utils.createNotification('ALL_COMPLETED', {
+                                        batchId: batch.id,
+                                        batchName: batch.name,
+                                        examType: 'Batch End',
+                                        message: `✅ Batch "${batch.name}" end time (${batch.endTime}) reached. Reporting...`,
+                                        actionData: { batchId: batch.id, examType: 'Batch End' }
+                                    });
+
+                                    localStorage.setItem(storageKey, 'true');
+                                }
+                            }
+                        }
+                    });
+
+                    window.Utils.lastFindings = findings; // For debug button
+                };
+
+                window.Utils.testScheduler = () => {
+                    checkScheduledAlerts();
+                    alert("Scheduler Debug:\n\nToday: " + (new Date().toISOString().split('T')[0]) +
+                        "\nBatches found: " + (window.Utils.lastFindings ? window.Utils.lastFindings.join('\n') : "None"));
+                };
+
+                const interval = setInterval(checkScheduledAlerts, 20000); // Check every 20s
+                checkScheduledAlerts();
+                return () => clearInterval(interval);
             }, [user]);
 
             const handleLogin = (u) => {

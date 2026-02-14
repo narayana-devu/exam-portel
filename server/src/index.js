@@ -7,6 +7,7 @@ const { Server } = require("socket.io");
 const https = require('https');
 const querystring = require('querystring');
 const sqlite3 = require('sqlite3').verbose();
+const { GoogleGenerativeAI } = require("@google/generative-ai");
 
 // Manual .env parser (since dotenv is not installed and npm is blocked)
 if (fs.existsSync(path.join(__dirname, '../../.env'))) {
@@ -22,6 +23,7 @@ if (fs.existsSync(path.join(__dirname, '../../.env'))) {
 
 const app = express();
 const PORT = process.env.PORT || 5000;
+const API_VERSION = '7.0.0'; // v70: AI Question Generation + Custom Distribution
 
 app.use(cors({
     origin: '*',
@@ -51,6 +53,15 @@ if (process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY && proces
     console.log("S3 Enabled: " + process.env.BUCKET_NAME);
 } else {
     console.log("S3 Disabled (Missing valid AWS Env Vars). Using Local Disk.");
+}
+
+// AI CONFIGURATION
+let genAI = null;
+if (process.env.GEMINI_API_KEY) {
+    genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+    console.log("[AI] Gemini API Key found. AI Generation enabled.");
+} else {
+    console.log("[AI] Gemini API Key MISSING. AI Generation disabled.");
 }
 
 const uploadToS3 = async (fileName, fileContent, contentType = 'application/octet-stream') => {
@@ -140,7 +151,7 @@ class DatabaseAdapter {
         this.type = this.useS3 ? 's3' : (process.env.DATABASE_URL ? 'postgres' : 'sqlite');
 
         console.log("========================================");
-        console.log("V30 DEPLOYMENT ACTIVE - CLOUD_FORCE_BACKUP");
+        console.log("V70 DEPLOYMENT ACTIVE - AI_QUESTION_GEN");
         console.log(`DATABASE ADAPTER: ${this.type.toUpperCase()}`);
         console.log("========================================");
 
@@ -642,11 +653,13 @@ app.get('/api/media-stream', (req, res) => {
 // Removed duplicate health check from bottom
 
 
-// WHATSAPP API PROXY
-app.post('/api/send-whatsapp', async (req, res) => {
+// WHATSAPP API PROXY (v54: Added Flexibility & Better Logging)
+app.post('/api/send-whatsapp', authMiddleware, async (req, res) => {
     const { phone, message } = req.body;
     const apiKey = process.env.GUPSHUP_API_KEY;
-    const appName = process.env.GUPSHUP_APP_NAME || 'TimeCheck'; // Default or Env
+    const appName = process.env.GUPSHUP_APP_NAME || 'exammessage';
+    const sourceNumber = process.env.GUPSHUP_SOURCE_PHONE || '917834811114'; // Default to Sandbox
+    const apiPath = process.env.GUPSHUP_API_PATH || '/wa/api/v1/msg'; // Default to Sandbox
 
     if (!apiKey) {
         console.error("WhatsApp Error: Missing GUPSHUP_API_KEY");
@@ -658,26 +671,25 @@ app.post('/api/send-whatsapp', async (req, res) => {
     }
 
     // Prepare Gupshup Data
-    // For Sandbox/ACP, 'source' is often the phone number, and 'src.name' is the app name.
     const postData = querystring.stringify({
         'channel': 'whatsapp',
-        'source': '917834811114', // Sandbox Phone Number
-        'destination': phone,
+        'source': sourceNumber,
+        'destination': phone.replace(/\+/g, '').trim(),
         'message': JSON.stringify({
             'type': 'text',
             'text': message
         }),
-        'src.name': appName // 'exammessage'
+        'src.name': appName
     });
 
     const options = {
         hostname: 'api.gupshup.io',
         port: 443,
-        path: '/wa/api/v1/msg', // Match Sandbox screenshot
+        path: apiPath,
         method: 'POST',
         headers: {
             'Content-Type': 'application/x-www-form-urlencoded',
-            'apikey': apiKey, // Match Sandbox screenshot
+            'apikey': apiKey,
             'Content-Length': postData.length
         }
     };
@@ -686,14 +698,24 @@ app.post('/api/send-whatsapp', async (req, res) => {
         let data = '';
         apiRes.on('data', (chunk) => data += chunk);
         apiRes.on('end', () => {
+            console.log(`[WhatsApp] Gupshup Response Code: ${apiRes.statusCode}`);
+            console.log(`[WhatsApp] Gupshup Response Data: ${data}`);
+
             if (apiRes.statusCode >= 200 && apiRes.statusCode < 300) {
                 try {
-                    res.json({ success: true, data: JSON.parse(data || '{}') });
+                    const parsed = JSON.parse(data || '{}');
+                    res.json({ success: true, api: apiPath, source: sourceNumber, data: parsed });
                 } catch (e) {
-                    res.json({ success: true, raw: data });
+                    res.json({ success: true, api: apiPath, source: sourceNumber, raw: data });
                 }
             } else {
-                res.status(apiRes.statusCode).json({ error: data });
+                console.error(`[WhatsApp] Gupshup API Fail: ${apiRes.statusCode} - ${data}`);
+                res.status(apiRes.statusCode).json({
+                    error: 'Gupshup API rejected the message',
+                    statusCode: apiRes.statusCode,
+                    details: data,
+                    config: { apiPath, sourceNumber, appName }
+                });
             }
         });
     });
@@ -703,8 +725,163 @@ app.post('/api/send-whatsapp', async (req, res) => {
         res.status(500).json({ error: e.message });
     });
 
+    console.log(`[WhatsApp] Sending to ${phone} via ${apiPath} (Source: ${sourceNumber})...`);
     apiReq.write(postData);
     apiReq.end();
+});
+
+// --- STABILITY: AUTO-CLEANUP TASK (v56) ---
+// Deletes responses and chunks older than 30 days to save costs
+const runCleanup = async () => {
+    console.log("[Cleanup] Starting 30-day maintenance task...");
+    const thirtyDaysAgo = Date.now() - (30 * 24 * 60 * 60 * 1000);
+    let deletedFiles = 0;
+    let deletedRecords = 0;
+
+    const processTable = async (tableName) => {
+        return new Promise((resolve) => {
+            dbAdapter.getAll(tableName, async (err, rows) => {
+                if (err || !rows) return resolve();
+
+                for (let row of rows) {
+                    try {
+                        const data = JSON.parse(row.data);
+                        const timestamp = data.timestamp || data.uploadedAt || (data.id && !isNaN(data.id.split('_')[1]) ? parseInt(data.id.split('_')[1]) : null);
+
+                        if (timestamp && timestamp < thirtyDaysAgo) {
+                            // 1. Find S3 Keys to delete
+                            const keysToDelete = [];
+                            if (data.evidence && Array.isArray(data.evidence)) {
+                                data.evidence.forEach(ev => {
+                                    if (ev.url && ev.url.includes(process.env.BUCKET_NAME)) {
+                                        try {
+                                            const urlObj = new URL(ev.url);
+                                            keysToDelete.push(decodeURIComponent(urlObj.pathname.substring(1)));
+                                        } catch (e) { }
+                                    } else if (ev.storage === 's3' && ev.img) {
+                                        keysToDelete.push(ev.img);
+                                    }
+                                });
+                            }
+                            if (data.storage === 's3' && data.data && typeof data.data === 'string' && data.data.startsWith('http')) {
+                                try {
+                                    const urlObj = new URL(data.data);
+                                    keysToDelete.push(decodeURIComponent(urlObj.pathname.substring(1)));
+                                } catch (e) { }
+                            }
+
+                            // 2. Delete from S3
+                            if (s3 && keysToDelete.length > 0) {
+                                for (let key of keysToDelete) {
+                                    try {
+                                        await s3.deleteObject({ Bucket: process.env.BUCKET_NAME, Key: key }).promise();
+                                        deletedFiles++;
+                                    } catch (e) { console.error(`[Cleanup] S3 Delete Failed: ${key}`, e.message); }
+                                }
+                            }
+
+                            // 3. Delete from DB
+                            await new Promise(res => dbAdapter.delete(tableName, data.id, res));
+                            deletedRecords++;
+                        }
+                    } catch (e) { }
+                }
+                resolve();
+            });
+        });
+    };
+
+    await processTable('responses');
+    await processTable('synced_chunks');
+
+    console.log(`[Cleanup] Completed. Removed ${deletedRecords} records and ${deletedFiles} S3 objects.`);
+    return { deletedRecords, deletedFiles };
+};
+
+// Manual Cleanup Trigger (Admin Only)
+app.post('/api/system/cleanup', authMiddleware, async (req, res) => {
+    try {
+        const result = await runCleanup();
+        res.json({ success: true, ...result });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// Schedule cleanup every 24 hours
+setInterval(runCleanup, 24 * 60 * 60 * 1000);
+// Run once on startup after a short delay
+setTimeout(runCleanup, 10000);
+
+// AI Question Generation Route
+app.post('/api/generate-questions-ai', authMiddleware, async (req, res) => {
+    try {
+        const { qpName, qpCode, pcs, totalQuestions } = req.body;
+
+        if (!genAI) {
+            return res.status(400).json({ error: 'AI Generation is disabled. Please add GEMINI_API_KEY to your .env file.' });
+        }
+
+        if (!pcs || pcs.length === 0) {
+            return res.status(400).json({ error: 'No Performance Criteria provided for generation.' });
+        }
+
+        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+
+        const prompt = `
+            You are an expert educational assessor. Generate a "Theory" exam paper for the Qualification Pack: "${qpName}" (Code: ${qpCode}).
+            
+            TARGET QUESTION COUNT: ${totalQuestions || pcs.length}
+            TOTAL PCs TO COVER: ${pcs.length}
+            
+            PCs AND THEIR TOTAL MARKS:
+            ${pcs.map(p => `- PC ID: ${p.id}, Code: ${p.code}, Name: "${p.name}", Marks: ${p.marks}`).join('\n')}
+            
+            STRICT RULES FOR DISTRIBUTION & COVERAGE:
+            1. EVERY SINGLE PC must be covered at least once.
+            2. If TARGET QUESTION COUNT > PC COUNT:
+               - Distribute the questions across PCs. For example, if there are 5 PCs and you want 10 questions, each PC gets 2 questions.
+               - DIVIDE the PC's total marks equally among the questions assigned to it. If PC A has 10 marks and gets 2 questions, each question is 5 marks.
+            3. If TARGET QUESTION COUNT < PC COUNT:
+               - Group multiple PCs into a single question. 
+               - The marks for that question must be the SUM of the marks of all PCs it covers.
+            4. If TARGET QUESTION COUNT == PC COUNT:
+               - One question per PC. Marks match PC marks exactly.
+
+            OUTPUT REQUIREMENTS:
+            - Output MUST be a VALID JSON ARRAY of objects.
+            - Each search object:
+               - question: Clear, professional theory question (MCQ preferred or Subjective).
+               - questionType: "MCQ" or "Subjective".
+               - options: Array of 4 strings for MCQ, or [] for Subjective.
+               - correctAnswer: Correct option string or model answer.
+               - totalMarks: Marks for this specific question (calculated based on the distribution rules above).
+               - pcMapping: Object mapping PC IDs to their mark contribution in this question. 
+                 Example if covering 2 PCs: { "pc_id_1": 5, "pc_id_2": 5 }. 
+                 Example if 1 PC: { "pc_id_1": 10 }.
+
+            Do not include any markdown formatting, preamble, or explanation. ONLY THE JSON ARRAY.
+        `;
+
+        const result = await model.generateContent(prompt);
+        const response = await result.response;
+        let text = response.text();
+
+        // Clean up markdown if AI includes it
+        text = text.replace(/```json/g, '').replace(/```/g, '').trim();
+
+        try {
+            const questions = JSON.parse(text);
+            res.json({ questions });
+        } catch (parseError) {
+            console.error("[AI] Parse Error:", text);
+            res.status(500).json({ error: 'Failed to parse AI response into valid JSON.', raw: text });
+        }
+
+    } catch (e) {
+        console.error("[AI] Generation Error:", e);
+        res.status(500).json({ error: e.message });
+    }
 });
 
 // Serve Client Static Files
