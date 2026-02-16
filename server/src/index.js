@@ -23,7 +23,7 @@ if (fs.existsSync(path.join(__dirname, '../../.env'))) {
 
 const app = express();
 const PORT = process.env.PORT || 5000;
-const API_VERSION = '7.0.0'; // v70: AI Question Generation + Custom Distribution
+const API_VERSION = '7.5.0'; // v75: Video Recording Improvements
 
 app.use(cors({
     origin: '*',
@@ -151,7 +151,7 @@ class DatabaseAdapter {
         this.type = this.useS3 ? 's3' : (process.env.DATABASE_URL ? 'postgres' : 'sqlite');
 
         console.log("========================================");
-        console.log("V70 DEPLOYMENT ACTIVE - AI_QUESTION_GEN");
+        console.log("V75 DEPLOYMENT ACTIVE - Video Recording Improvements");
         console.log(`DATABASE ADAPTER: ${this.type.toUpperCase()}`);
         console.log("========================================");
 

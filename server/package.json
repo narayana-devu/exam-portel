@@ -1,6 +1,6 @@
 {
     "name": "exam-system-server",
-    "version": "5.2.0",
+    "version": "7.5.0",
     "description": "Backend for Online Exam System",
     "main": "src/index.js",
     "engines": {

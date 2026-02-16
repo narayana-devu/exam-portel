@@ -82,7 +82,7 @@
             alert(report);
             return false;
         };
-        console.log("v70 DEPLOYMENT ACTIVE - AI Question Generation + Custom Distribution");
+        console.log("v75 DEPLOYMENT ACTIVE - Video Recording Improvements");
 
         // DATA LAYER
         const DB_KEYS = {
@@ -8078,6 +8078,7 @@
             const [isRecording, setIsRecording] = useState(false); // UI Indicator
             const [isSubmitting, setIsSubmitting] = useState(false);
             const isSubmittingRef = useRef(false);
+            const startTimeRef = useRef(null);
             useEffect(() => { isSubmittingRef.current = isSubmitting; }, [isSubmitting]);
 
             const [streamActive, setStreamActive] = useState(false);
@@ -8730,6 +8731,7 @@
                     setPendingExamMode(null); // Clear pending mode after start
                     setVerificationStep(null); // Ensure modal is closed
                     setWebcamActive(true); // Ensure webcam state is active for proctoring loops
+                    startTimeRef.current = Date.now();
 
                     if (startMode === 'Practical') {
                         // COMPOSITE RECORDING: Screen + Webcam
@@ -8824,6 +8826,9 @@
                 if (mediaStream) {
                     mediaStream.getTracks().forEach(track => track.stop());
                 }
+                if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+                    mediaRecorderRef.current.stop();
+                }
                 if (compositeReqRef.current) {
                     cancelAnimationFrame(compositeReqRef.current);
                     compositeReqRef.current = null;
@@ -8900,15 +8905,17 @@
 
                     // v45: CRITICAL - Stop Recording and Release Camera BEFORE Upload
                     try {
-                        // Stop the MediaRecorder
-                        if (window.studentRecordingInterval) {
-                            clearInterval(window.studentRecordingInterval);
-                            console.log("[Submit] Stopped recording interval");
-                        }
-
+                        // Stop the MediaRecorder and wait for the final business.
                         if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
-                            mediaRecorderRef.current.stop();
-                            console.log("[Submit] Stopped MediaRecorder");
+                            await new Promise((resolve) => {
+                                const originalOnStop = mediaRecorderRef.current.onstop;
+                                mediaRecorderRef.current.onstop = async (e) => {
+                                    if (originalOnStop) await originalOnStop(e);
+                                    resolve();
+                                };
+                                mediaRecorderRef.current.stop();
+                                console.log("[Submit] Stopped MediaRecorder and waiting for final segment...");
+                            });
                         }
 
                         // Release camera stream
@@ -8919,8 +8926,8 @@
                             });
                         }
 
-                        // Give it a moment to finalize last segment
-                        await new Promise(r => setTimeout(r, 500));
+                        // Small buffer for async DB writes
+                        await new Promise(r => setTimeout(r, 800));
                     } catch (cleanupErr) {
                         console.error("[Submit] Cleanup error:", cleanupErr);
                     }
@@ -8928,7 +8935,8 @@
                     // AUTO-UPLOAD: Attempt to sync immediately (Scoped to Current Student)
                     try {
                         const statusBtn = document.getElementById('sync-status-text');
-                        if (statusBtn) statusBtn.innerText = "Uploading Answer...";
+                        const durationSec = startTimeRef.current ? Math.floor((Date.now() - startTimeRef.current) / 1000) : 0;
+                        respObj.durationSec = durationSec;
 
                         await window.Utils.saveResponse(respObj);
 
@@ -8944,12 +8952,7 @@
                         // SUMMARY POPUP (User Request)
                         const totalPhotos = finalEvidence.filter(e => e.type && (e.type.includes('PHOTO') || e.type.includes('MANUAL'))).length;
 
-                        // Improved Video Calculation: Count segments * 30s + any remaining manual clips
-                        // Since we use 30s fixed segments now, count filtering by 'VIDEO' or 'SEGMENT'
-                        const videoSegments = finalEvidence.filter(e => e.type && (e.type.includes('VIDEO') || e.isSegment)).length;
-                        const totalVideoSec = videoSegments * 30;
-
-                        alert(`Exam Submitted Successfully!\n\nSummary: \n - Video Uploaded: ~${totalVideoSec} Seconds\n - Photos Uploaded: ${totalPhotos} `);
+                        alert(`Exam Submitted Successfully!\n\nSummary: \n - Total Duration: ${durationSec} Seconds\n - Photos Uploaded: ${totalPhotos} `);
 
                         endExam();
 
