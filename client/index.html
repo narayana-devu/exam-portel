@@ -1296,8 +1296,7 @@
                         }
                     }
 
-                    const allResponses = window.Utils.getResponses();
-                    const verifications = allResponses.filter(r => r.examType === 'Verification');
+                    const verifications = allResponses.filter(r => r.examType.toUpperCase() === 'VERIFICATION');
 
                     // Create a map of student IDs to their verification data
                     const verificationMap = {};
@@ -1594,17 +1593,26 @@
         // v26: Helper Component for Verification (Global Scope)
         const VideoPreview = ({ onCapture, instructions }) => {
             const vRef = React.useRef(null);
+            const streamRef = React.useRef(null); // v76: Use ref for track cleanup safety
             const [stream, setStream] = React.useState(null);
 
             React.useEffect(() => {
+                let currentStream = null;
                 navigator.mediaDevices.getUserMedia({ video: true, audio: false })
                     .then(s => {
+                        currentStream = s;
+                        streamRef.current = s;
                         setStream(s);
                         if (vRef.current) vRef.current.srcObject = s;
                     })
                     .catch(e => alert("Camera Access Required: " + e.message));
+
                 return () => {
-                    if (stream) stream.getTracks().forEach(t => t.stop());
+                    if (streamRef.current) {
+                        console.log("[VideoPreview] Stopping Tracks...");
+                        streamRef.current.getTracks().forEach(t => t.stop());
+                        streamRef.current = null;
+                    }
                 };
             }, []);
 
@@ -6344,6 +6352,7 @@
             const [sourceType, setSourceType] = React.useState(null); // 'Local' | 'Cloud'
             const [isLoading, setIsLoading] = React.useState(true);
             const [isError, setIsError] = React.useState(false);
+            const videoRef = React.useRef(null); // Ref for the video element
 
             React.useEffect(() => {
                 let active = true;
@@ -6433,13 +6442,39 @@
                     clearTimeout(timeout);
                 };
                 load();
-                return () => { active = false; };
+                return () => {
+                    active = false;
+                    // Revoke Object URL when component unmounts or src changes
+                    if (src && src.startsWith('blob:')) {
+                        URL.revokeObjectURL(src);
+                    }
+                };
             }, [index, parts]);
+
+            // Stop video and revoke URL when src changes
+            React.useEffect(() => {
+                const currentVideoRef = videoRef.current;
+                const oldSrc = currentVideoRef?.src;
+
+                if (currentVideoRef) {
+                    currentVideoRef.pause();
+                    currentVideoRef.removeAttribute('src'); // Clear src to stop loading
+                    currentVideoRef.load(); // Reload to apply changes
+                }
+
+                return () => {
+                    if (oldSrc && oldSrc.startsWith('blob:')) {
+                        URL.revokeObjectURL(oldSrc);
+                    }
+                };
+            }, [src]);
+
 
             return (
                 <div className="relative bg-black w-full h-32 group-hover:h-auto min-h-[128px]">
                     {src ? (
                         <video
+                            ref={videoRef}
                             src={src}
                             controls
                             autoPlay
@@ -6517,7 +6552,13 @@
 
             useEffect(() => {
                 loadStudentResponse(student);
-                return () => stopCam(); // Cleanup on unmount
+                return () => {
+                    // Stop all tracks on unmount
+                    if (mediaStreamRef.current) {
+                        mediaStreamRef.current.getTracks().forEach(track => track.stop());
+                        mediaStreamRef.current = null;
+                    }
+                };
             }, [student, examType]);
 
             // Fix: Attach stream to video element when it becomes active (Ref is available)
@@ -6537,7 +6578,7 @@
                 const allStudentResponses = responses.filter(r => r.studentId === s.id);
 
                 // 1. Find the specific response for this exam type (for answers/grades)
-                targetResp = allStudentResponses.find(r => r.examType === examType);
+                targetResp = allStudentResponses.find(r => r.studentId === s.id && r.examType === examType);
 
                 // 2. Gather Evidence:
                 // If it's the specific exam, get its evidence.
@@ -6568,7 +6609,7 @@
                 // v45: FIX - Only include VERIFICATION evidence in Photo tab
                 // This prevents verification selfies/IDs from appearing in Theory/Practical/Viva tabs
                 if (examType === 'Photo') {
-                    const verifResp = allStudentResponses.find(r => r.examType === 'VERIFICATION');
+                    const verifResp = allStudentResponses.find(r => r.examType.toUpperCase() === 'VERIFICATION'); // Case-insensitive check
                     if (verifResp) {
                         if (verifResp.answers) setVerificationInfo(verifResp.answers); // Load Father/Aadhar
                         if (verifResp.evidence) {
@@ -6915,7 +6956,7 @@
                                         <div className="relative bg-black rounded overflow-hidden aspect-video shadow-2xl border border-gray-700">
                                             <video ref={videoRef} autoPlay muted playsInline className="w-full h-full object-cover"></video>
                                             {isRecording && (
-                                                <div className="absolute top-4 right-4 animate-pulse flex items-center gap-2 bg-red-600/90 backdrop-blur text-white px-3 py-1 rounded-full text-xs font-bold ring-2 ring-red-500/50">
+                                                <div className="absolute top-4 right-4 animate-pulse flex items-center gap-2 bg-red-600/90 backdrop-blur text-white px-3 py-1 rounded-full text-xs font-bold ring-2 ring-500/50">
                                                     <span className="w-2 h-2 rounded-full bg-white"></span> RECORDING
                                                 </div>
                                             )}
@@ -8198,9 +8239,6 @@
                 return () => window.removeEventListener('cloud-sync-complete', refresh);
             }, []);
 
-            // Cleanup Polling (Deleted)
-
-
             // No need for syncing effect that clears on null
 
             // Load Model
@@ -8292,10 +8330,10 @@
             useEffect(() => {
                 // v42: Strict Recording - Only for Theory/Practical (Not Viva/Assessors)
                 const isStudentExam = examMode === 'Theory' || examMode === 'Practical';
-                const shouldRecord = isStudentExam && !isLocked && !isSubmitting && webcamActive;
+                const shouldRecord = isStudentExam && !isLocked && webcamActive; // v76: Removed !isSubmitting here. Stop is now strictly controlled by submitExam.
 
                 if (!shouldRecord) {
-                    if (mediaStream && mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+                    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
                         console.log("[Record] Stopping recording (Condition changed)");
                         mediaRecorderRef.current.stop();
                     }
@@ -8845,123 +8883,93 @@
                 if (isSubmitting) return;
                 setIsSubmitting(true);
 
-                // Capture final image (Safe Mode)
-                let finalPhoto = null;
                 try {
-                    const v = videoRef.current;
-                    if (v && v.readyState === 4) { // HAVE_ENOUGH_DATA
-                        const c = document.createElement('canvas'); c.width = 300; c.height = 200;
-                        c.getContext('2d').drawImage(v, 0, 0, 300, 200);
-                        finalPhoto = { img: c.toDataURL(), time: new Date().toISOString(), type: 'SUBMISSION' };
+                    // v76: STOP RECORDING EXPLICITLY & WAIT for final segment to save to VideoDB
+                    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+                        console.log("[Submit] Finalizing last segment...");
+
+                        await new Promise((resolve) => {
+                            const originalOnStop = mediaRecorderRef.current.onstop;
+                            mediaRecorderRef.current.onstop = async (e) => {
+                                if (originalOnStop) await originalOnStop(e);
+                                resolve();
+                            };
+                            mediaRecorderRef.current.stop();
+                        });
+
+                        setIsRecording(false);
+                        if (window.studentRecordingInterval) clearInterval(window.studentRecordingInterval);
+
+                        // Small buffer for async DB writes in onstop
+                        await new Promise(r => setTimeout(r, 1000));
                     }
-                } catch (e) {
-                    console.error("Final Capture Failed", e);
-                }
 
-                // STOP RECORDING EXPLICITLY & WAIT
-                // STOP RECORDING EXPLICITLY & WAIT (v42)
-                if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
-                    console.log("[Submit] Finalizing last segment...");
+                    // Release camera stream
+                    if (mediaStream) {
+                        mediaStream.getTracks().forEach(track => track.stop());
+                        console.log("[Submit] Released camera tracks");
+                    }
 
-                    const originalOnStop = mediaRecorderRef.current.onstop;
+                    // 1. Capture final submission photo (Safe Mode)
+                    let finalPhoto = null;
+                    try {
+                        const v = videoRef.current;
+                        if (v && v.readyState === 4) {
+                            const c = document.createElement('canvas'); c.width = 320; c.height = 240;
+                            c.getContext('2d').drawImage(v, 0, 0, 320, 240);
+                            finalPhoto = { img: c.toDataURL(), time: new Date().toISOString(), type: 'SUBMISSION_PHOTO' };
+                        }
+                    } catch (e) { console.error("Final Photo Failed", e); }
 
-                    setIsRecording(false);
-
-                    if (window.studentRecordingInterval) clearInterval(window.studentRecordingInterval);
-
-                    // RE-FETCH EVIDENCE (Includes the just-saved video)
-                    // We need to re-fetch because saveResponse updates LocalStorage
-                    const updatedRespForUpload = window.Utils.getResponses().find(r => r.studentId === user.id && r.examType === examMode);
-                    const finalEvidence = updatedRespForUpload?.evidence || []; // Use updated evidence list
-
-                    // Add Final Photo
+                    // 2. NOW FETCH EVIDENCE (Will include the last segment and potentially the photo)
+                    const currentResponses = window.Utils.getResponses();
+                    const existingResp = currentResponses.find(r => r.studentId === user.id && r.examType === examMode);
+                    const finalEvidence = existingResp ? [...(existingResp.evidence || [])] : [];
                     if (finalPhoto) finalEvidence.push(finalPhoto);
 
-                    // Calculate Auto-Grades (Initial System Grading)
+                    // 3. Calculate Auto-Grades
                     const autoGrades = {};
                     questions.forEach((q, idx) => {
                         if (q.questionType !== 'CODING' && q.questionType !== 'PRACTICAL' && q.questionType !== 'VIVA') {
-                            // Exact String Match (Case-Insensitive Trimmed)
                             const studentAns = String(answers[idx] || '').trim().toLowerCase();
                             const correctAns = String(q.correctAnswer || '').trim().toLowerCase();
-                            if (studentAns && studentAns === correctAns) {
-                                autoGrades[idx] = q.totalMarks;
-                            } else {
-                                autoGrades[idx] = 0;
-                            }
-                        } else {
-                            // For Coding/Practical, leave as 0 or undefined for Manual Grading
-                            autoGrades[idx] = 0;
-                        }
+                            if (studentAns && studentAns === correctAns) autoGrades[idx] = q.totalMarks;
+                            else autoGrades[idx] = 0;
+                        } else autoGrades[idx] = 0;
                     });
 
+                    // 4. Construct Final Response
+                    const durationSec = startTimeRef.current ? Math.floor((Date.now() - startTimeRef.current) / 1000) : 0;
                     const respObj = {
                         studentId: user.id,
                         examType: examMode,
                         answers,
-                        assessorMarks: autoGrades, // Pre-fill with system grades
-                        evidence: finalEvidence
+                        assessorMarks: autoGrades,
+                        evidence: finalEvidence,
+                        durationSec: durationSec,
+                        submittedAt: new Date().toISOString()
                     };
 
-                    // v45: CRITICAL - Stop Recording and Release Camera BEFORE Upload
-                    try {
-                        // Stop the MediaRecorder and wait for the final business.
-                        if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
-                            await new Promise((resolve) => {
-                                const originalOnStop = mediaRecorderRef.current.onstop;
-                                mediaRecorderRef.current.onstop = async (e) => {
-                                    if (originalOnStop) await originalOnStop(e);
-                                    resolve();
-                                };
-                                mediaRecorderRef.current.stop();
-                                console.log("[Submit] Stopped MediaRecorder and waiting for final segment...");
-                            });
-                        }
+                    // 5. Save and Sync
+                    await window.Utils.saveResponse(respObj);
 
-                        // Release camera stream
-                        if (mediaStream) {
-                            mediaStream.getTracks().forEach(track => {
-                                track.stop();
-                                console.log("[Submit] Released camera track");
-                            });
-                        }
+                    // Give extra moment before sync to ensure everything is flushed
+                    await new Promise(r => setTimeout(r, 1000));
 
-                        // Small buffer for async DB writes
-                        await new Promise(r => setTimeout(r, 800));
-                    } catch (cleanupErr) {
-                        console.error("[Submit] Cleanup error:", cleanupErr);
-                    }
+                    // Scoped upload (Critical for reliability)
+                    const filterByStudent = (item) => String(item.studentId || '').trim() === String(user.id || '').trim();
+                    await window.Utils.uploadToCloud(false, 'responses', filterByStudent);
 
-                    // AUTO-UPLOAD: Attempt to sync immediately (Scoped to Current Student)
-                    try {
-                        const statusBtn = document.getElementById('sync-status-text');
-                        const durationSec = startTimeRef.current ? Math.floor((Date.now() - startTimeRef.current) / 1000) : 0;
-                        respObj.durationSec = durationSec;
+                    const totalPhotos = finalEvidence.filter(e => e.type && (e.type.includes('PHOTO') || e.type.includes('MANUAL') || e.type.includes('SNAPSHOT'))).length;
+                    alert(`Exam Submitted Successfully!\n\nSummary: \n - Duration: ${durationSec}s\n - Evidence Items: ${finalEvidence.length}\n - Photos: ${totalPhotos}`);
 
-                        await window.Utils.saveResponse(respObj);
+                    endExam();
 
-                        // Wait for local video save (give it a moment to finish async IndexedDB writes)
-                        await new Promise(r => setTimeout(r, 1000));
-
-                        // Trigger Visible Sync (Only Responses & Only This Student)
-                        // Robust Check: String convert and Force Full Sync (Visible Errors) to ensure evidence is safely in cloud
-                        // Pass 'false' for silent to enable alerts if something goes wrong
-                        const filterByStudent = (item) => String(item.studentId || '').trim() === String(user.id || '').trim();
-                        await window.Utils.uploadToCloud(false, 'responses', filterByStudent);
-
-                        // SUMMARY POPUP (User Request)
-                        const totalPhotos = finalEvidence.filter(e => e.type && (e.type.includes('PHOTO') || e.type.includes('MANUAL'))).length;
-
-                        alert(`Exam Submitted Successfully!\n\nSummary: \n - Total Duration: ${durationSec} Seconds\n - Photos Uploaded: ${totalPhotos} `);
-
-                        endExam();
-
-                    } catch (e) {
-                        console.error("Submit Sync Failed", e);
-                        alert("Submitted to LOCAL STORAGE. Cloud Sync Failed (" + e.message + "). The system will retry automatically when online.");
-                        endExam();
-                    }
-                };
+                } catch (e) {
+                    console.error("Submit Failed", e);
+                    alert("Submission error: " + e.message + ". Data saved locally.");
+                    endExam();
+                }
             };
 
 
@@ -9169,10 +9177,10 @@
                                 "Cloud Batch IDs": cloudBatches.map(b => b.id).join(", "),
                                 "Cloud Student's BatchID": cloudStudent ? cloudStudent.batchId : "N/A",
                                 "Browser Online": navigator.onLine,
-                                "App Version": "v43"
+                                "App Version": "v76"
                             };
                             console.table(diag);
-                            const msg = "--- STUDENT DIAGNOSTICS (v43) ---\n\n" +
+                            const msg = "--- STUDENT DIAGNOSTICS (v76) ---\n\n" +
                                 Object.entries(diag).map(([k, v]) => `${k}: ${JSON.stringify(v)}`).join("\n") +
                                 "\n\nActions:\n1. If Target Batch Found is NO -> Admin must Save it.\n2. If Cloud Student ID is different -> Mismatch!";
                             if (confirm(msg)) {

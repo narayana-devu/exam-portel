@@ -23,7 +23,7 @@ if (fs.existsSync(path.join(__dirname, '../../.env'))) {
 
 const app = express();
 const PORT = process.env.PORT || 5000;
-const API_VERSION = '7.5.0'; // v75: Video Recording Improvements
+const API_VERSION = '7.6.0'; // v76: S3 Architecture Refactor (Individual Files)
 
 app.use(cors({
     origin: '*',
@@ -74,11 +74,15 @@ const uploadToS3 = async (fileName, fileContent, contentType = 'application/octe
         ContentType: contentType
     };
     try {
+        console.log(`[S3] Uploading: ${fileName} (${fileContent.length} bytes)`);
         const data = await s3.upload(params).promise();
         return data.Location;
     } catch (e) {
         console.error("S3 Upload Error [CRITICAL]:", e.message);
-        return null; // The endpoint will handle the null
+        if (e.code === 'AccessDenied') {
+            console.error("[S3] Access Denied! Check Bucket Policies and Block Public Access settings.");
+        }
+        return null;
     }
 };
 
@@ -207,9 +211,36 @@ class DatabaseAdapter {
 
     getAll(table, callback) {
         if (this.type === 's3') {
-            this.s3Read(table)
-                .then(items => callback(null, items.map(item => ({ data: JSON.stringify(item) })))) // mimic DB row format {data: ...}
-                .catch(err => callback(err, null));
+            (async () => {
+                try {
+                    const list = await s3.listObjectsV2({
+                        Bucket: process.env.BUCKET_NAME,
+                        Prefix: `db/${table}/`
+                    }).promise();
+
+                    if (!list.Contents || list.Contents.length === 0) {
+                        // v76: Fallback to legacy single-file read if folder is empty
+                        try {
+                            const legacyData = await this.s3Read(table);
+                            return callback(null, legacyData.map(item => ({ data: JSON.stringify(item) })));
+                        } catch (e) {
+                            return callback(null, []);
+                        }
+                    }
+
+                    // Fetch all objects in the folder
+                    const fetchPromises = list.Contents
+                        .filter(obj => obj.Key.endsWith('.json'))
+                        .map(obj => s3.getObject({ Bucket: process.env.BUCKET_NAME, Key: obj.Key }).promise());
+
+                    const results = await Promise.all(fetchPromises);
+                    const items = results.map(res => ({ data: res.Body.toString('utf-8') }));
+                    callback(null, items);
+                } catch (e) {
+                    console.error(`[S3-DB] getAll Error (${table}):`, e);
+                    callback(e, null);
+                }
+            })();
         } else if (this.type === 'postgres') {
             this.pool.query(`SELECT data FROM ${table}`, (err, res) => callback(err, res ? res.rows : []));
         } else {
@@ -218,14 +249,18 @@ class DatabaseAdapter {
     }
 
     upsert(table, id, dataStr, callback) {
-        const item = JSON.parse(dataStr);
         if (this.type === 's3') {
-            this.s3Read(table).then(items => {
-                const idx = items.findIndex(i => i.id === id);
-                if (idx >= 0) items[idx] = item;
-                else items.push(item);
-                return this.s3Write(table, items);
-            }).then(() => callback(null)).catch(e => callback(e));
+            s3.putObject({
+                Bucket: process.env.BUCKET_NAME,
+                Key: `db/${table}/${id}.json`,
+                Body: dataStr,
+                ContentType: 'application/json'
+            }).promise()
+                .then(() => callback(null))
+                .catch(e => {
+                    console.error(`[S3-DB] Upsert Error (${table}/${id}):`, e);
+                    callback(e);
+                });
         } else if (this.type === 'postgres') {
             const query = `INSERT INTO ${table} (id, data) VALUES ($1, $2) ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data`;
             this.pool.query(query, [id, dataStr], callback);
@@ -236,10 +271,15 @@ class DatabaseAdapter {
 
     delete(table, id, callback) {
         if (this.type === 's3') {
-            this.s3Read(table).then(items => {
-                const newItems = items.filter(i => i.id !== id);
-                return this.s3Write(table, newItems);
-            }).then(() => callback(null)).catch(e => callback(e));
+            s3.deleteObject({
+                Bucket: process.env.BUCKET_NAME,
+                Key: `db/${table}/${id}.json`
+            }).promise()
+                .then(() => callback(null))
+                .catch(e => {
+                    console.error(`[S3-DB] Delete Error (${table}/${id}):`, e.message);
+                    callback(e);
+                });
         } else if (this.type === 'postgres') {
             this.pool.query(`DELETE FROM ${table} WHERE id = $1`, [id], callback);
         } else {
@@ -249,15 +289,24 @@ class DatabaseAdapter {
 
     sync(table, newItems, callback) {
         if (this.type === 's3') {
-            this.s3Read(table).then(existingItems => {
-                // Upsert Logic (Merge)
-                newItems.forEach(newItem => {
-                    const idx = existingItems.findIndex(i => i.id === newItem.id);
-                    if (idx >= 0) existingItems[idx] = newItem;
-                    else existingItems.push(newItem);
-                });
-                return this.s3Write(table, existingItems);
-            }).then(() => callback(null)).catch(e => callback(e));
+            (async () => {
+                try {
+                    // v76: Parallel individual upserts
+                    const promises = newItems.map(item =>
+                        s3.putObject({
+                            Bucket: process.env.BUCKET_NAME,
+                            Key: `db/${table}/${item.id}.json`,
+                            Body: JSON.stringify(item),
+                            ContentType: 'application/json'
+                        }).promise()
+                    );
+                    await Promise.all(promises);
+                    callback(null);
+                } catch (e) {
+                    console.error(`[S3-DB] Sync Error (${table}):`, e);
+                    callback(e);
+                }
+            })();
         } else if (this.type === 'postgres') {
             // (Keep existing Postgres Sync Logic)
             (async () => {
@@ -281,9 +330,28 @@ class DatabaseAdapter {
 
     wipe(table, callback) {
         if (this.type === 's3') {
-            this.s3Write(table, [])
-                .then(() => callback(null))
-                .catch(e => callback(e));
+            (async () => {
+                try {
+                    const list = await s3.listObjectsV2({
+                        Bucket: process.env.BUCKET_NAME,
+                        Prefix: `db/${table}/`
+                    }).promise();
+
+                    if (list.Contents && list.Contents.length > 0) {
+                        const deleteParams = {
+                            Bucket: process.env.BUCKET_NAME,
+                            Delete: { Objects: list.Contents.map(obj => ({ Key: obj.Key })) }
+                        };
+                        await s3.deleteObjects(deleteParams).promise();
+                    }
+                    // Also clear legacy monolithic file if exists
+                    await s3.deleteObject({ Bucket: process.env.BUCKET_NAME, Key: `db/${table}.json` }).promise().catch(() => { });
+                    callback(null);
+                } catch (e) {
+                    console.error(`[S3-DB] Wipe Error (${table}):`, e);
+                    callback(e);
+                }
+            })();
         } else if (this.type === 'postgres') {
             this.pool.query(`DELETE FROM ${table}`, (err) => callback(err));
         } else {
