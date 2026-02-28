@@ -9568,14 +9568,15 @@
 
         // MAIN APP
         const App = () => {
-            const [user, setUser] = React.useState(null);
-
-            React.useEffect(() => {
+            const [user, setUser] = React.useState(() => {
                 try {
                     const saved = localStorage.getItem('se_user');
-                    if (saved) setUser(JSON.parse(saved));
-                } catch (e) { console.error(e); }
-            }, []);
+                    return saved ? JSON.parse(saved) : null;
+                } catch (e) {
+                    console.error("Auth Load Error:", e);
+                    return null;
+                }
+            });
 
             React.useEffect(() => {
                 if (!user) return;
