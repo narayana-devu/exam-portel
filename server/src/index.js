@@ -109,7 +109,6 @@ const authMiddleware = (req, res, next) => {
 };
 
 // Public Health Check (Must be before Auth Middleware)
-// Public Health Check (Must be before Auth Middleware)
 app.get('/health', (req, res) => {
     res.json({ status: 'ok', time: new Date().toISOString() });
 });
