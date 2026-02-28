@@ -1588,6 +1588,21 @@
         };
     </script>
 
+    <script>
+        // v80: Global Error Feedback (As requested: Catch errors before Babel/React)
+        window.onerror = function (msg, url, line, col, error) {
+            const errStr = `[JS ERROR] ${msg}\nAt: ${url}:${line}:${col}\n\nStack:\n${error?.stack || 'N/A'}`;
+            console.error(errStr);
+            alert("--- PLATFORM CRASH ---\n\n" + errStr);
+            return false;
+        };
+        window.onunhandledrejection = function (event) {
+            const errStr = `[ASYNC ERROR] ${event.reason}`;
+            console.error(errStr);
+            alert("--- ASYNC ERROR ---\n\n" + errStr);
+        };
+    </script>
+
     <script type="text/babel">
         const { useState, useEffect, useRef } = React;
         const { createRoot } = ReactDOM;
@@ -1687,7 +1702,17 @@
             MonitorSmartphone: ({ className }) => <LucideIcon name="monitor-smartphone" className={className || "w-5 h-5"} />,
             Wifi: ({ className }) => <LucideIcon name="wifi" className={className || "w-5 h-5"} />,
             ShieldAlert: ({ className }) => <LucideIcon name="shield-alert" className={className || "w-5 h-5"} />,
-            PlayCircle: ({ className }) => <LucideIcon name="play-circle" className={className || "w-5 h-5"} />
+            PlayCircle: ({ className }) => <LucideIcon name="play-circle" className={className || "w-5 h-5"} />,
+            Mic: ({ className }) => <LucideIcon name="mic" className={className || "w-5 h-5"} />,
+            MonitorUp: ({ className }) => <LucideIcon name="monitor-up" className={className || "w-5 h-5"} />,
+            GraduationCap: ({ className }) => <LucideIcon name="graduation-cap" className={className || "w-5 h-5"} />,
+            Clock: ({ className }) => <LucideIcon name="clock" className={className || "w-5 h-5"} />,
+            ArrowLeft: ({ className }) => <LucideIcon name="arrow-left" className={className || "w-5 h-5"} />,
+            ArrowRightCircle: ({ className }) => <LucideIcon name="arrow-right-circle" className={className || "w-5 h-5"} />,
+            Send: ({ className }) => <LucideIcon name="send" className={className || "w-5 h-5"} />,
+            Edit: ({ className }) => <LucideIcon name="edit-3" className={className || "w-4 h-4"} />,
+            Trash: ({ className }) => <LucideIcon name="trash-2" className={className || "w-4 h-4"} />,
+            PlusCircle: ({ className }) => <LucideIcon name="plus-circle" className={className || "w-5 h-5"} />
         };
         class ErrorBoundary extends React.Component {
             constructor(props) { super(props); this.state = { hasError: false, error: null }; }
@@ -10130,7 +10155,7 @@
 
         const container = document.getElementById('root');
         const root = ReactDOM.createRoot(container);
-        root.render(<App />);
+        root.render(<ErrorBoundary><App /></ErrorBoundary>);
     </script>
 
 </body>
