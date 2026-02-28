@@ -8479,6 +8479,9 @@
                         alert("Camera/Audio Access Denied! Please allow access to proceed.");
                     });
                 }
+                return () => {
+                    if (compositeReqRef.current) cancelAnimationFrame(compositeReqRef.current);
+                };
             }, [webcamActive, examMode, mediaStream]);
 
             // Security: Block Right Click, Copy, Paste
@@ -8884,18 +8887,36 @@
                 setIsSubmitting(true);
 
                 try {
+                    // 1. Capture final submission photo (Safe Mode) - MUST BE BEFORE RELEASING TRACKS
+                    let finalPhoto = null;
+                    try {
+                        const v = videoRef.current;
+                        if (v && v.readyState === 4) {
+                            const c = document.createElement('canvas'); c.width = 320; c.height = 240;
+                            c.getContext('2d').drawImage(v, 0, 0, 320, 240);
+                            finalPhoto = { img: c.toDataURL(), time: new Date().toISOString(), type: 'SUBMISSION_PHOTO' };
+                            console.log("[Submit] Final photo captured");
+                        }
+                    } catch (e) { console.error("Final Photo Failed", e); }
+
                     // v76: STOP RECORDING EXPLICITLY & WAIT for final segment to save to VideoDB
                     if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
                         console.log("[Submit] Finalizing last segment...");
 
-                        await new Promise((resolve) => {
-                            const originalOnStop = mediaRecorderRef.current.onstop;
-                            mediaRecorderRef.current.onstop = async (e) => {
-                                if (originalOnStop) await originalOnStop(e);
+                        await Promise.race([
+                            new Promise((resolve) => {
+                                const originalOnStop = mediaRecorderRef.current.onstop;
+                                mediaRecorderRef.current.onstop = async (e) => {
+                                    if (originalOnStop) await originalOnStop(e);
+                                    resolve();
+                                };
+                                mediaRecorderRef.current.stop();
+                            }),
+                            new Promise(resolve => setTimeout(() => {
+                                console.warn("[Submit] Recording stop timeout - proceeding anyway");
                                 resolve();
-                            };
-                            mediaRecorderRef.current.stop();
-                        });
+                            }, 5000)) // 5s Safety Timeout
+                        ]);
 
                         setIsRecording(false);
                         if (window.studentRecordingInterval) clearInterval(window.studentRecordingInterval);
@@ -8906,20 +8927,12 @@
 
                     // Release camera stream
                     if (mediaStream) {
-                        mediaStream.getTracks().forEach(track => track.stop());
-                        console.log("[Submit] Released camera tracks");
+                        mediaStream.getTracks().forEach(track => {
+                            track.stop();
+                            console.log(`[Submit] Stopped track: ${track.kind}`);
+                        });
+                        setMediaStream(null);
                     }
-
-                    // 1. Capture final submission photo (Safe Mode)
-                    let finalPhoto = null;
-                    try {
-                        const v = videoRef.current;
-                        if (v && v.readyState === 4) {
-                            const c = document.createElement('canvas'); c.width = 320; c.height = 240;
-                            c.getContext('2d').drawImage(v, 0, 0, 320, 240);
-                            finalPhoto = { img: c.toDataURL(), time: new Date().toISOString(), type: 'SUBMISSION_PHOTO' };
-                        }
-                    } catch (e) { console.error("Final Photo Failed", e); }
 
                     // 2. NOW FETCH EVIDENCE (Will include the last segment and potentially the photo)
                     const currentResponses = window.Utils.getResponses();
@@ -9152,9 +9165,9 @@
                             try {
                                 const [bRes, sRes] = await Promise.all([
                                     fetch(`${API_BASE}/batches`, {
-                                        headers: { 'x-api-key': 'portel_secure_key_2025' }
+                                        headers: { 'x-api-key': '{{API_KEY}}' }
                                     }),
-                                    fetch(`${API_BASE}/students`, { headers: { 'x-api-key': 'portel_secure_key_2025' } })
+                                    fetch(`${API_BASE}/students`, { headers: { 'x-api-key': '{{API_KEY}}' } })
                                 ]);
                                 if (bRes.ok) cloudBatches = await bRes.json();
                                 if (sRes.ok) {
@@ -9177,7 +9190,7 @@
                                 "Cloud Batch IDs": cloudBatches.map(b => b.id).join(", "),
                                 "Cloud Student's BatchID": cloudStudent ? cloudStudent.batchId : "N/A",
                                 "Browser Online": navigator.onLine,
-                                "App Version": "v76"
+                                "App Version": "v76.1"
                             };
                             console.table(diag);
                             const msg = "--- STUDENT DIAGNOSTICS (v76) ---\n\n" +

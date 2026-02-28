@@ -23,7 +23,7 @@ if (fs.existsSync(path.join(__dirname, '../../.env'))) {
 
 const app = express();
 const PORT = process.env.PORT || 5000;
-const API_VERSION = '7.6.0'; // v76: S3 Architecture Refactor (Individual Files)
+const API_VERSION = '7.6.1'; // v76.1: Robustness Fixes (S3 Pagination, Resource Cleanup)
 
 app.use(cors({
     origin: '*',
@@ -213,12 +213,23 @@ class DatabaseAdapter {
         if (this.type === 's3') {
             (async () => {
                 try {
-                    const list = await s3.listObjectsV2({
-                        Bucket: process.env.BUCKET_NAME,
-                        Prefix: `db/${table}/`
-                    }).promise();
+                    let allObjects = [];
+                    let continuationToken = null;
 
-                    if (!list.Contents || list.Contents.length === 0) {
+                    do {
+                        const list = await s3.listObjectsV2({
+                            Bucket: process.env.BUCKET_NAME,
+                            Prefix: `db/${table}/`,
+                            ContinuationToken: continuationToken
+                        }).promise();
+
+                        if (list.Contents) {
+                            allObjects = allObjects.concat(list.Contents);
+                        }
+                        continuationToken = list.NextContinuationToken;
+                    } while (continuationToken);
+
+                    if (allObjects.length === 0) {
                         // v76: Fallback to legacy single-file read if folder is empty
                         try {
                             const legacyData = await this.s3Read(table);
@@ -228,13 +239,19 @@ class DatabaseAdapter {
                         }
                     }
 
-                    // Fetch all objects in the folder
-                    const fetchPromises = list.Contents
-                        .filter(obj => obj.Key.endsWith('.json'))
-                        .map(obj => s3.getObject({ Bucket: process.env.BUCKET_NAME, Key: obj.Key }).promise());
+                    // Fetch all objects in the folder (Batching to avoid 429/Timeout if too many)
+                    const items = [];
+                    const batchSize = 20;
+                    for (let i = 0; i < allObjects.length; i += batchSize) {
+                        const batch = allObjects.slice(i, i + batchSize);
+                        const fetchPromises = batch
+                            .filter(obj => obj.Key.endsWith('.json'))
+                            .map(obj => s3.getObject({ Bucket: process.env.BUCKET_NAME, Key: obj.Key }).promise());
 
-                    const results = await Promise.all(fetchPromises);
-                    const items = results.map(res => ({ data: res.Body.toString('utf-8') }));
+                        const results = await Promise.all(fetchPromises);
+                        results.forEach(res => items.push({ data: res.Body.toString('utf-8') }));
+                    }
+
                     callback(null, items);
                 } catch (e) {
                     console.error(`[S3-DB] getAll Error (${table}):`, e);
@@ -332,18 +349,24 @@ class DatabaseAdapter {
         if (this.type === 's3') {
             (async () => {
                 try {
-                    const list = await s3.listObjectsV2({
-                        Bucket: process.env.BUCKET_NAME,
-                        Prefix: `db/${table}/`
-                    }).promise();
-
-                    if (list.Contents && list.Contents.length > 0) {
-                        const deleteParams = {
+                    let continuationToken = null;
+                    do {
+                        const list = await s3.listObjectsV2({
                             Bucket: process.env.BUCKET_NAME,
-                            Delete: { Objects: list.Contents.map(obj => ({ Key: obj.Key })) }
-                        };
-                        await s3.deleteObjects(deleteParams).promise();
-                    }
+                            Prefix: `db/${table}/`,
+                            ContinuationToken: continuationToken
+                        }).promise();
+
+                        if (list.Contents && list.Contents.length > 0) {
+                            const deleteParams = {
+                                Bucket: process.env.BUCKET_NAME,
+                                Delete: { Objects: list.Contents.map(obj => ({ Key: obj.Key })) }
+                            };
+                            await s3.deleteObjects(deleteParams).promise();
+                        }
+                        continuationToken = list.NextContinuationToken;
+                    } while (continuationToken);
+
                     // Also clear legacy monolithic file if exists
                     await s3.deleteObject({ Bucket: process.env.BUCKET_NAME, Key: `db/${table}.json` }).promise().catch(() => { });
                     callback(null);
@@ -368,7 +391,7 @@ dbAdapter.init();
 // Let's protect it with the same auth to avoid leaking bucket name to public.
 app.get('/api/diagnostics', authMiddleware, (req, res) => {
     res.json({
-        version: 'v30',
+        version: API_VERSION,
         storage_type: dbAdapter.type,
         s3_enabled: !!s3,
         bucket_name: process.env.BUCKET_NAME || 'Not Set',
