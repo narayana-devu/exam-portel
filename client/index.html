@@ -4677,7 +4677,8 @@
                             <div>
                                 <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3 flex items-center justify-between sticky top-0 bg-white py-1 z-10">
                                     Completed <span className="bg-gray-100 text-green-600 px-2 py-0.5 rounded-full text-[10px]">{doneList.length}</span>
-                                  <div className="space-y-2 opacity-60 hover:opacity-100 transition-opacity">
+                                </h3>
+                                <div className="space-y-2 opacity-60 hover:opacity-100 transition-opacity">
                                     {doneList.map(s => (
                                         <div key={s.id} className="p-3 bg-gray-50 rounded-xl flex items-center gap-3 border border-gray-100 shadow-sm">
                                             <div className="w-8 h-8 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center text-xs font-bold border border-emerald-200">
@@ -4689,7 +4690,6 @@
                                             </div>
                                         </div>
                                     ))}
-                                 ))}
                                     {doneList.length === 0 && <p className="text-xs text-gray-600 italic text-center">No completed students yet.</p>}
                                 </div>
                             </div>
