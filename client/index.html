@@ -253,10 +253,11 @@
         }
 
         .glass-dark {
-            background: rgba(15, 23, 42, 0.8);
-            backdrop-filter: blur(12px) saturate(180%);
-            -webkit-backdrop-filter: blur(12px) saturate(180%);
-            border: 1px solid rgba(255, 255, 255, 0.1);
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(16px) saturate(180%);
+            -webkit-backdrop-filter: blur(16px) saturate(180%);
+            border: 1px solid rgba(0, 0, 0, 0.08);
+            box-shadow: 0 10px 40px -10px rgba(0, 0, 0, 0.1);
         }
 
         .premium-shadow {
@@ -2272,51 +2273,58 @@
                     </div>
 
                     {showModal && (
-                        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
-                            <div className="glass-dark rounded-[40px] p-10 w-full max-w-md border border-white/20 shadow-2xl animate-scale-in">
+                        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-fade-in text-gray-900">
+                            <div className="bg-white rounded-[40px] p-10 w-full max-w-md border border-gray-100 shadow-[0_32px_64px_-16px_rgba(0,0,0,0.25)] animate-scale-in relative overflow-hidden">
+                                {/* Decorative elements */}
+                                <div className="absolute top-0 left-0 w-full h-2 premium-gradient"></div>
+                                
                                 <div className="text-center mb-8">
-                                    <div className="w-16 h-16 bg-primary-500/20 rounded-3xl flex items-center justify-center mx-auto mb-4">
-                                        <Icons.Plus className="w-8 h-8 text-primary-700" />
+                                    <div className="w-20 h-20 bg-primary-50 rounded-[32px] flex items-center justify-center mx-auto mb-6 shadow-sm border border-primary-100/50">
+                                        <Icons.PlusCircle className="w-10 h-10 text-primary-600" />
                                     </div>
-                                    <h3 className="text-2xl font-black text-gray-900 tracking-tight">Add New <span className="text-primary-700">SSC</span></h3>
-                                    <p className="text-gray-700 font-bold text-[10px] uppercase tracking-widest mt-1">Sector Skill Council Registration</p>
+                                    <h3 className="text-3xl font-black text-gray-900 tracking-tight">Add New <span className="text-primary-600">SSC</span></h3>
+                                    <p className="text-gray-500 font-bold text-[11px] uppercase tracking-[0.2em] mt-2">Sector Skill Council Registration</p>
                                 </div>
 
-                                <form onSubmit={handleCreate} className="space-y-5">
-                                    <div className="space-y-2">
-                                        <label className="text-[10px] font-black text-gray-700 uppercase tracking-widest ml-4">Council Full Name</label>
-                                        <input
-                                            type="text"
-                                            required
-                                            className="w-full px-6 py-4 bg-white/5 border border-white/10 rounded-2xl text-gray-900 placeholder:text-gray-600 focus:bg-white/10 focus:border-primary-500/50 transition-all outline-none"
-                                            placeholder="e.g. Agriculture Skill Council of India"
-                                            value={newSSC.name}
-                                            onChange={e => setNewSSC({ ...newSSC, name: e.target.value })}
-                                        />
+                                <form onSubmit={handleCreate} className="space-y-6">
+                                    <div className="space-y-2.5">
+                                        <label className="text-[11px] font-black text-gray-700 uppercase tracking-widest ml-1">Council Full Name</label>
+                                        <div className="relative group">
+                                            <input
+                                                type="text"
+                                                required
+                                                className="w-full px-6 py-4.5 bg-gray-50 border-2 border-gray-100 rounded-2xl text-gray-900 placeholder:text-gray-400 focus:bg-white focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10 transition-all outline-none font-bold text-sm"
+                                                placeholder="e.g. Agriculture Skill Council of India"
+                                                value={newSSC.name}
+                                                onChange={e => setNewSSC({ ...newSSC, name: e.target.value })}
+                                            />
+                                        </div>
                                     </div>
-                                    <div className="space-y-2">
-                                        <label className="text-[10px] font-black text-gray-700 uppercase tracking-widest ml-4">Short Code / ID</label>
-                                        <input
-                                            type="text"
-                                            required
-                                            className="w-full px-6 py-4 bg-white/5 border border-white/10 rounded-2xl text-gray-900 placeholder:text-gray-600 focus:bg-white/10 focus:border-primary-500/50 transition-all outline-none"
-                                            placeholder="e.g. ASCI"
-                                            value={newSSC.code}
-                                            onChange={e => setNewSSC({ ...newSSC, code: e.target.value })}
-                                        />
+                                    <div className="space-y-2.5">
+                                        <label className="text-[11px] font-black text-gray-700 uppercase tracking-widest ml-1">Short Code / ID</label>
+                                        <div className="relative group">
+                                            <input
+                                                type="text"
+                                                required
+                                                className="w-full px-6 py-4.5 bg-gray-50 border-2 border-gray-100 rounded-2xl text-gray-900 placeholder:text-gray-400 focus:bg-white focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10 transition-all outline-none font-bold text-sm"
+                                                placeholder="e.g. ASCI"
+                                                value={newSSC.code}
+                                                onChange={e => setNewSSC({ ...newSSC, code: e.target.value })}
+                                            />
+                                        </div>
                                     </div>
 
-                                    <div className="flex gap-4 pt-6">
+                                    <div className="flex gap-4 pt-4">
                                         <button
                                             type="button"
                                             onClick={() => setShowModal(false)}
-                                            className="flex-1 px-6 py-4 bg-white/5 hover:bg-white/10 text-gray-900 rounded-2xl font-black text-[11px] uppercase tracking-widest transition-all"
+                                            className="flex-1 px-6 py-4.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-2xl font-black text-[12px] uppercase tracking-widest transition-all active:scale-95"
                                         >
                                             Cancel
                                         </button>
                                         <button
                                             type="submit"
-                                            className="flex-1 px-6 py-4 bg-primary-500 hover:bg-primary-600 text-gray-900 rounded-2xl font-black text-[11px] uppercase tracking-widest shadow-xl shadow-primary-500/20 active:scale-95 transition-all"
+                                            className="flex-1 px-6 py-4.5 bg-primary-600 hover:bg-primary-700 text-white rounded-2xl font-black text-[12px] uppercase tracking-widest shadow-xl shadow-primary-600/20 active:scale-95 transition-all"
                                         >
                                             Create SSC
                                         </button>
@@ -9128,20 +9136,20 @@
                         </div>
 
                         <div className="relative z-10 max-w-lg w-full">
-                            <div className="w-36 h-36 bg-secondary-800 rounded-4xl flex items-center justify-center mx-auto mb-10 border-2 border-primary-500 shadow-[0_0_40px_rgba(139,92,246,0.3)] animate-pulse relative">
-                                <Icons.Video className="w-16 h-16 text-primary-700" />
-                                <div className="absolute -top-2 -right-2 w-6 h-6 bg-rose-500 rounded-full border-4 border-secondary-900 animate-ping"></div>
+                            <div className="w-36 h-36 bg-primary-50 rounded-4xl flex items-center justify-center mx-auto mb-10 border-2 border-primary-100 shadow-[0_20px_40px_rgba(139,92,246,0.15)] animate-pulse relative">
+                                <Icons.Video className="w-16 h-16 text-primary-600" />
+                                <div className="absolute -top-2 -right-2 w-6 h-6 bg-rose-500 rounded-full border-4 border-white animate-ping"></div>
                             </div>
 
                             <h1 className="text-5xl font-extrabold mb-4 tracking-tighter text-gray-900">Live Lobby</h1>
-                            <p className="text-xl text-secondary-700 mb-10 font-medium">Please wait. The assessor will admit you to the assessment room shortly.</p>
+                            <p className="text-xl text-gray-600 mb-10 font-medium">Please wait. The assessor will admit you to the assessment room shortly.</p>
 
-                            <div className="glass-dark p-4 rounded-2xl mb-12 flex items-center justify-between border border-white/5">
+                            <div className="glass-dark p-4 rounded-2xl mb-12 flex items-center justify-between border border-gray-100/50">
                                 <div className="flex items-center gap-3">
                                     <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
-                                    <span className="text-xs font-bold text-secondary-700 uppercase tracking-widest">Connection Stable</span>
+                                    <span className="text-xs font-bold text-gray-600 uppercase tracking-widest">Connection Stable</span>
                                 </div>
-                                <div className="px-3 py-1 bg-white/5 rounded-lg font-mono text-[10px] text-secondary-800">
+                                <div className="px-3 py-1 bg-gray-50 border border-gray-100 rounded-lg font-mono text-[10px] text-gray-900">
                                     ROOM: {user.batchId?.slice(-6)}_{user.id?.slice(-4)}
                                 </div>
                             </div>
@@ -9159,10 +9167,10 @@
                 );
 
                 if (examMode === 'VivaLive') return (
-                    <div className="flex h-screen fixed inset-0 z-50 bg-secondary-950 flex-col animate-fade-in text-gray-900 selection:bg-primary-500/30">
+                    <div className="flex h-screen fixed inset-0 z-50 bg-gray-100 flex-col animate-fade-in text-gray-900 selection:bg-primary-500/30">
                         <div className="flex-1 relative flex flex-col md:flex-row p-4 gap-4 overflow-hidden">
                             {/* Main Remote View */}
-                            <div className="flex-[3] relative bg-secondary-900 rounded-3xl overflow-hidden shadow-2xl border border-white/5 group">
+                            <div className="flex-[3] relative bg-white rounded-3xl overflow-hidden shadow-2xl border border-gray-200 group">
                                 {remoteStream ? (
                                     <video
                                         id="remote-assessor-video"
@@ -9171,13 +9179,13 @@
                                         className="w-full h-full object-cover"
                                     />
                                 ) : (
-                                    <div className="absolute inset-0 flex items-center justify-center">
+                                    <div className="absolute inset-0 flex items-center justify-center bg-gray-50">
                                         <div className="text-center animate-pulse">
-                                            <div className="w-24 h-24 mx-auto mb-6 rounded-3xl bg-secondary-800 flex items-center justify-center">
-                                                <Icons.User className="w-12 h-12 text-secondary-600" />
+                                            <div className="w-24 h-24 mx-auto mb-6 rounded-3xl bg-gray-100 flex items-center justify-center border border-gray-200">
+                                                <Icons.User className="w-12 h-12 text-gray-400" />
                                             </div>
-                                            <h2 className="text-2xl font-bold text-secondary-700">Waiting for Assessor...</h2>
-                                            <p className="text-sm text-secondary-600 mt-2">Connecting to encrypted video stream</p>
+                                            <h2 className="text-2xl font-bold text-gray-900">Waiting for Assessor...</h2>
+                                            <p className="text-sm text-gray-500 mt-2">Connecting to encrypted video stream</p>
                                         </div>
                                     </div>
                                 )}
@@ -9204,19 +9212,19 @@
                                 </div>
 
                                 {/* Participant Details / Info */}
-                                <div className="flex-1 glass-dark rounded-3xl p-6 border border-white/5 flex flex-col">
-                                    <div className="flex items-center justify-between mb-6">
-                                        <h3 className="font-bold text-sm tracking-widest text-secondary-700 uppercase">Assessment Meta</h3>
-                                        <Icons.ShieldCheck className="w-4 h-4 text-emerald-500" />
+                                <div className="flex-1 glass-dark rounded-3xl p-6 border border-gray-200 flex flex-col">
+                                    <div className="flex items-center justify-between mb-6 border-b border-gray-100 pb-4">
+                                        <h3 className="font-bold text-sm tracking-widest text-gray-900 uppercase">Assessment Meta</h3>
+                                        <Icons.ShieldCheck className="w-4 h-4 text-emerald-600" />
                                     </div>
                                     <div className="space-y-4">
-                                        <div className="p-4 bg-white/5 rounded-2xl border border-white/5">
-                                            <p className="text-[10px] font-bold text-secondary-800 uppercase tracking-widest mb-1">Assessor Name</p>
-                                            <p className="font-medium">Connecting...</p>
+                                        <div className="p-4 bg-gray-50 rounded-2xl border border-gray-100">
+                                            <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">Assessor Name</p>
+                                            <p className="font-bold text-gray-900">Connecting...</p>
                                         </div>
-                                        <div className="p-4 bg-white/5 rounded-2xl border border-white/5">
-                                            <p className="text-[10px] font-bold text-secondary-800 uppercase tracking-widest mb-1">Student ID</p>
-                                            <p className="font-medium">{user.name}</p>
+                                        <div className="p-4 bg-gray-50 rounded-2xl border border-gray-100">
+                                            <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">Student ID</p>
+                                            <p className="font-bold text-gray-900">{user.name}</p>
                                         </div>
                                     </div>
                                     <div className="mt-auto p-4 bg-primary-500/10 border border-primary-500/20 rounded-2xl">
@@ -9229,18 +9237,18 @@
                             </div>
 
                             {/* Float Controls */}
-                            <div className="absolute bottom-10 left-1/2 -translate-x-1/2 flex items-center gap-4 px-8 py-4 glass-dark rounded-3xl border border-white/10 shadow-2xl">
-                                <button className="p-3.5 rounded-2xl bg-secondary-800 hover:bg-secondary-700 transition-colors text-gray-900 outline-none">
+                            <div className="absolute bottom-10 left-1/2 -translate-x-1/2 flex items-center gap-4 px-8 py-4 glass-dark rounded-3xl border border-gray-200 shadow-2xl">
+                                <button className="p-3.5 rounded-2xl bg-gray-100 hover:bg-gray-200 transition-colors text-gray-900 outline-none">
                                     <Icons.Mic className="w-6 h-6" />
                                 </button>
-                                <button className="p-3.5 rounded-2xl bg-secondary-800 hover:bg-secondary-700 transition-colors text-gray-900 outline-none">
+                                <button className="p-3.5 rounded-2xl bg-gray-100 hover:bg-gray-200 transition-colors text-gray-900 outline-none">
                                     <Icons.Video className="w-6 h-6" />
                                 </button>
-                                <button className="p-3.5 rounded-2xl bg-secondary-800 hover:bg-secondary-700 transition-colors text-gray-900 outline-none">
+                                <button className="p-3.5 rounded-2xl bg-gray-100 hover:bg-gray-200 transition-colors text-gray-900 outline-none">
                                     <Icons.MonitorUp className="w-6 h-6" />
                                 </button>
-                                <div className="w-px h-8 bg-white/10 mx-2"></div>
-                                <button onClick={endExam} className="p-3.5 rounded-2xl bg-rose-600 hover:bg-rose-700 transition-all text-gray-900 shadow-lg shadow-rose-900/30 active:scale-90 flex items-center gap-3 font-bold px-6">
+                                <div className="w-px h-8 bg-gray-200 mx-2"></div>
+                                <button onClick={endExam} className="p-3.5 rounded-2xl bg-rose-600 hover:bg-rose-700 transition-all text-white shadow-lg shadow-rose-600/20 active:scale-90 flex items-center gap-3 font-bold px-6">
                                     <Icons.PhoneMissed className="w-6 h-6" /> END SESSION
                                 </button>
                             </div>
@@ -9386,11 +9394,11 @@
                                     <div className="aspect-video bg-black rounded-3xl overflow-hidden shadow-xl border-4 border-secondary-100 group-hover:border-primary-500/30 transition-colors">
                                         <video ref={videoRef} id="student-cam" autoPlay muted playsInline className={`w-full h-full object-cover transform ${examMode === 'Practical' ? '' : 'scale-x-[-1]'} ${streamActive ? 'block' : 'hidden'}`}></video>
                                         {!streamActive && (
-                                            <div className="absolute inset-0 flex flex-col items-center justify-center bg-secondary-900 z-20">
-                                                <div className="w-12 h-12 rounded-2xl bg-white/10 flex items-center justify-center mb-3">
-                                                    <Icons.VideoOff className="w-6 h-6 text-gray-900/40" />
+                                            <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-50 z-20">
+                                                <div className="w-12 h-12 rounded-2xl bg-white border border-gray-200 flex items-center justify-center mb-3">
+                                                    <Icons.VideoOff className="w-6 h-6 text-gray-400" />
                                                 </div>
-                                                <button onClick={startCameraManual} className="bg-primary-600 hover:bg-primary-500 text-gray-900 px-5 py-2 rounded-xl font-bold shadow-lg transition-all text-xs active:scale-95">
+                                                <button onClick={startCameraManual} className="bg-primary-600 hover:bg-primary-700 text-white px-5 py-2 rounded-xl font-bold shadow-lg transition-all text-xs active:scale-95">
                                                     ENABLE CAMERA
                                                 </button>
                                             </div>
@@ -9559,8 +9567,8 @@
 
                     {/* v26: Verification Modal */}
                     {verificationStep && (
-                        <div className="fixed inset-0 bg-secondary-950/80 backdrop-blur-md z-[100] flex items-center justify-center p-4 md:p-8 animate-fade-in">
-                            <div className="bg-white rounded-4xl overflow-hidden max-w-2xl w-full flex flex-col max-h-[90vh] shadow-[0_0_100px_rgba(0,0,0,0.5)] border border-white/10 relative">
+                        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[100] flex items-center justify-center p-4 md:p-8 animate-fade-in">
+                            <div className="bg-white rounded-4xl overflow-hidden max-w-2xl w-full flex flex-col max-h-[90vh] shadow-[0_32px_64px_-16px_rgba(0,0,0,0.3)] border border-gray-100 relative">
                                 {/* Modal Header */}
                                 <div className="p-8 pb-4 flex justify-between items-start">
                                     <div>
@@ -9589,7 +9597,7 @@
                                 {/* CAMERA STEPS */}
                                 {(verificationStep === 'SELFIE' || verificationStep === 'ID_CARD') && (
                                     <div className="p-8">
-                                        <div className="bg-secondary-900 rounded-3xl overflow-hidden relative aspect-video shadow-2xl border-4 border-secondary-50">
+                                        <div className="bg-gray-100 rounded-3xl overflow-hidden relative aspect-video shadow-2xl border-4 border-gray-50">
                                             <VideoPreview
                                                 onCapture={(img) => {
                                                     const type = verificationStep === 'SELFIE' ? 'VERIFICATION_SELFIE' : 'VERIFICATION_ID';
