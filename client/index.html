@@ -899,6 +899,22 @@
                 }
             },
 
+            // v82.5: Real-time Storage Monitor
+            getStorageInfo: () => {
+                try {
+                    let totalBytes = 0;
+                    for (let i = 0; i < localStorage.length; i++) {
+                        const key = localStorage.key(i);
+                        totalBytes += (key.length + localStorage.getItem(key).length) * 2;
+                    }
+                    const mb = totalBytes / (1024 * 1024);
+                    return {
+                        mb: mb.toFixed(2),
+                        percent: Math.min(100, (mb / 10) * 100).toFixed(1) // 10MB limit display
+                    };
+                } catch (e) { return { mb: "0.00", percent: "0" }; }
+            },
+
 
             downloadFromCloud: async (silent = false) => {
                 const MAPPING = {
@@ -1254,7 +1270,7 @@
                 // localStorage.setItem(DB_KEYS.BATCHES, '[]');
             },
             factoryReset: async () => {
-                if (!confirm("?? FACTORY RESET WARNING ??\n\nThis will PERMANENTLY DELETE ALL DATA from both your device AND the Cloud.\n\nThis includes data from ALL connected devices.\n\nAre you sure you want to proceed?")) return;
+                if (!confirm("?? TOTAL WIPE WARNING ??\n\nThis will PERMANENTLY DELETE ALL DATA from:\n- This Device (Local Cache)\n- Cloud Database (All Records)\n- S3 Storage (All Media)\n\nThis affects ALL connected browsers. Are you 100% sure?")) return;
 
                 const statusBtn = document.getElementById('sync-status-text');
                 const originalText = statusBtn ? statusBtn.innerText : '';
@@ -1300,12 +1316,17 @@
                     // Clear Local
                     localStorage.clear();
                     try {
-                        indexedDB.deleteDatabase('VideoStorage');
+                        const delProctor = indexedDB.deleteDatabase('ProctoringDB');
+                        const delVideo = indexedDB.deleteDatabase('VideoStorage');
+                        await Promise.all([
+                            new Promise(r => delProctor.onsuccess = r),
+                            new Promise(r => delVideo.onsuccess = r)
+                        ]);
                     } catch (e) { }
 
                     const errorSummary = errors.length > 0 ? `\n\n⚠️ FAILURES:\n- ${errors.join('\n- ')}` : "";
-                    alert(`Factory Reset Complete.\n\n- Cloud Data: Wiped (${totalDeleted}/${collections.length} collections)${errorSummary}\n- Local Data: Cleared\n\nThe app will now reload.`);
-                    window.location.reload();
+                    alert(`✅ WIPE COMPLETE.\n\n- Cloud State: Cleaned (${totalDeleted}/${collections.length} nodes)${errorSummary}\n- Local State: Purged\n\nReturning to login...`);
+                    window.location.href = window.location.pathname; // Return to login
 
                 } catch (e) {
                     console.error("Factory Reset Fatal Error", e);
@@ -7845,16 +7866,16 @@
                             </div>
 
                             <div className="premium-card">
-                                <h3 className="text-xs font-black text-gray-700 uppercase tracking-widest mb-4">Storage Info</h3>
+                                <h3 className="text-xs font-black text-gray-700 uppercase tracking-widest mb-4">Storage Intelligence</h3>
                                 <div className="space-y-3">
                                     <div className="flex justify-between items-center text-[10px] font-bold">
-                                        <span className="text-gray-800">Local Cache</span>
-                                        <span className="text-gray-900">12.4 MB</span>
+                                        <span className="text-gray-800">Local Content</span>
+                                        <span className="text-primary-700">{window.Utils.getStorageInfo().mb} MB</span>
                                     </div>
                                     <div className="w-full bg-gray-100 h-1.5 rounded-full overflow-hidden">
-                                        <div className="bg-primary-500 h-full w-[20%]"></div>
+                                        <div className="bg-primary-500 h-full transition-all duration-1000" style={{ width: `${window.Utils.getStorageInfo().percent}%` }}></div>
                                     </div>
-                                    <p className="text-[9px] text-gray-700 font-medium">Automatic optimization active</p>
+                                    <p className="text-[9px] text-gray-500 font-medium">Real-time usage tracking active</p>
                                 </div>
                             </div>
                         </div>
