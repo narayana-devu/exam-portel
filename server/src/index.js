@@ -23,7 +23,7 @@ if (fs.existsSync(path.join(__dirname, '../../.env'))) {
 
 const app = express();
 const PORT = process.env.PORT || 5000;
-const API_VERSION = '80'; // v80: Premium UI Redesign & Version Bump
+const API_VERSION = '81'; // v81: Video Recording Disabled
 
 app.use(cors({
     origin: '*',
