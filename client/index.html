@@ -2057,22 +2057,22 @@
             ];
 
             return (
-                <div className="w-72 sidebar-glass text-white min-h-screen flex flex-col border-r border-white/10 relative z-20">
+                <div className="w-72 sidebar-glass text-gray-800 min-h-screen flex flex-col border-r border-gray-200/30 relative z-20 shadow-xl">
                     <div className="p-8 mb-4">
                         <div className="flex items-center gap-3 mb-2">
                             <div className="w-10 h-10 premium-gradient rounded-xl flex items-center justify-center shadow-lg shadow-primary-500/30">
                                 <Icons.Shield className="text-white w-6 h-6" />
                             </div>
                             <div>
-                                <h1 className="text-2xl font-black tracking-tight text-white leading-none">NSXpertise</h1>
-                                <p className="text-[10px] font-bold text-primary-300 uppercase tracking-widest mt-1 opacity-80">Premium Portal v82</p>
+                                <h1 className="text-2xl font-black tracking-tight text-gray-900 leading-none">NSXpertise</h1>
+                                <p className="text-[10px] font-bold text-primary-600 uppercase tracking-widest mt-1 opacity-80">Premium Portal v82</p>
                             </div>
                         </div>
 
                         <div className="grid grid-cols-2 gap-2 mt-6">
                             <button
                                 onClick={() => { if (confirm('Clear cache for v82?')) { localStorage.clear(); location.reload(true); } }}
-                                className="text-[9px] bg-white/5 hover:bg-rose-500/20 border border-white/10 px-2 py-2 rounded-xl transition-all text-gray-300 font-bold uppercase tracking-tighter"
+                                className="text-[9px] bg-gray-100 hover:bg-rose-500/10 border border-gray-200 px-2 py-2 rounded-xl transition-all text-gray-600 font-bold uppercase tracking-tighter"
                             >
                                 Reset Cache
                             </button>
@@ -2081,7 +2081,7 @@
                                     const logs = window.__syncLogs || [];
                                     alert("--- SYNC LOGS (v82) ---\n\n" + (logs.length ? logs.join('\n') : "No errors logged."));
                                 }}
-                                className="text-[9px] bg-white/5 hover:bg-indigo-500/20 border border-white/10 px-2 py-2 rounded-xl transition-all text-gray-300 font-bold uppercase tracking-tighter"
+                                className="text-[9px] bg-gray-100 hover:bg-indigo-500/10 border border-gray-200 px-2 py-2 rounded-xl transition-all text-gray-600 font-bold uppercase tracking-tighter"
                             >
                                 Sync Logs
                             </button>
@@ -2096,7 +2096,7 @@
                             <button
                                 key={item.id}
                                 onClick={() => setActiveTab(item.id)}
-                                className={`w-full flex items-center gap-4 px-4 py-3.5 rounded-2xl transition-all duration-300 group ${activeTab === item.id ? 'bg-white/10 text-white shadow-xl shadow-black/10 border border-white/10' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}
+                                className={`w-full flex items-center gap-4 px-4 py-3.5 rounded-2xl transition-all duration-300 group ${activeTab === item.id ? 'bg-white text-indigo-600 shadow-xl shadow-indigo-100 border border-indigo-100/50' : 'text-gray-500 hover:text-indigo-600 hover:bg-white/50'}`}
                             >
                                 <span className={`${activeTab === item.id ? 'text-primary-400' : 'text-gray-500 group-hover:text-gray-300'} transition-colors`}>
                                     {React.cloneElement(item.icon, { className: "w-5 h-5" })}
@@ -2123,11 +2123,11 @@
                             <div className={`overflow-hidden transition-all duration-300 ${isQpsOpen ? 'max-h-40 mt-1' : 'max-h-0'}`}>
                                 <div className="pl-12 space-y-1">
                                     <button onClick={() => setActiveTab('qps')}
-                                        className={`w-full text-left px-4 py-2.5 rounded-xl text-xs font-bold transition-all ${activeTab === 'qps' ? 'text-primary-400 bg-white/5' : 'text-gray-500 hover:text-gray-300 hover:bg-white/5'}`}>
+                                        className={`w-full text-left px-4 py-2.5 rounded-xl text-xs font-bold transition-all ${activeTab === 'qps' ? 'text-indigo-600 bg-indigo-50/50' : 'text-gray-500 hover:text-indigo-600 hover:bg-gray-100'}`}>
                                         Qualification Pack
                                     </button>
                                     <button onClick={() => setActiveTab('nos')}
-                                        className={`w-full text-left px-4 py-2.5 rounded-xl text-xs font-bold transition-all ${activeTab === 'nos' ? 'text-primary-400 bg-white/5' : 'text-gray-500 hover:text-gray-300 hover:bg-white/5'}`}>
+                                        className={`w-full text-left px-4 py-2.5 rounded-xl text-xs font-bold transition-all ${activeTab === 'nos' ? 'text-indigo-600 bg-indigo-50/50' : 'text-gray-500 hover:text-indigo-600 hover:bg-gray-100'}`}>
                                         NOS & PC
                                     </button>
                                 </div>
@@ -2149,7 +2149,7 @@
                                 <button
                                     key={item.id}
                                     onClick={() => setActiveTab(item.id)}
-                                    className={`w-full flex items-center gap-4 px-4 py-3 rounded-2xl transition-all duration-300 group ${activeTab === item.id ? 'bg-white/10 text-white shadow-xl shadow-black/10 border border-white/10' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}
+                                    className={`w-full flex items-center gap-4 px-4 py-3 rounded-2xl transition-all duration-300 group ${activeTab === item.id ? 'bg-white text-indigo-600 shadow-xl shadow-indigo-100 border border-indigo-100/50' : 'text-gray-500 hover:text-indigo-600 hover:bg-white/50'}`}
                                 >
                                     <span className={`${activeTab === item.id ? 'text-primary-400' : 'text-gray-500 group-hover:text-gray-300'} transition-colors`}>
                                         {React.cloneElement(item.icon, { className: "w-5 h-5" })}
