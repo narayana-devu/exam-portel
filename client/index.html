@@ -1320,47 +1320,14 @@
                 // Trigger custom event for UI update
                 window.dispatchEvent(new CustomEvent('notificationCreated', { detail: notification }));
 
-                // v46: Auto-send WhatsApp for completion notifications
-                if (type === 'ALL_COMPLETED' && window.Utils.sendWhatsAppAlert) {
-                    window.Utils.sendWhatsAppAlert(notification).catch(err => {
-                        console.warn('WhatsApp send failed (non-blocking):', err);
-                    });
+                // v46: Auto-send WhatsApp (Removed - v82)
+                if (type === 'ALL_COMPLETED') {
+                    console.log("Exam completion alert (WhatsApp disabled)");
                 }
 
                 return notification;
             },
 
-            // v50: WhatsApp Sender Utility (Consolidated)
-            sendWhatsAppAlert: async (notification) => {
-                if (!notification) return;
-
-                let adminPhone = localStorage.getItem('admin_whatsapp_phone') || '917981927566';
-                // Strip '+' if present for Gupshup compatibility
-                adminPhone = adminPhone.replace(/\+/g, '').trim();
-
-                const msg = `🔔 *Exam Portal Alert*\n\n${notification.message}\n\nBatch: ${notification.batchName || 'N/A'}\nExam: ${notification.examType || 'N/A'}\n\n🔗 Login: https://exam-portel.vercel.app`;
-
-                console.log(`[WhatsApp] Attempting auto-alert to ${adminPhone}...`);
-
-                try {
-                    const res = await fetch('/api/send-whatsapp', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'x-api-key': 'portel_secure_key_2025'
-                        },
-                        body: JSON.stringify({
-                            phone: adminPhone,
-                            message: msg
-                        })
-                    });
-                    const data = await res.json();
-                    console.log("[WhatsApp] Auto-Alert Response:", data);
-                    return data;
-                } catch (e) {
-                    console.error("[WhatsApp] Auto-Alert Failed:", e);
-                }
-            },
             markNotificationRead: (id) => {
                 const notifications = window.Utils.getNotifications();
                 const notif = notifications.find(n => n.id === id);
@@ -2054,7 +2021,7 @@
                                             {navigator.onLine ? "Cloud Connected" : "Offline Mode"}
                                         </span>
                                     </div>
-                                    <span className="text-[11px] font-bold text-secondary-400 tracking-widest uppercase">Version v81</span>
+                                    <span className="text-[11px] font-bold text-secondary-400 tracking-widest uppercase">Version v82</span>
                                 </div>
                             </form>
                         </div>
@@ -2098,13 +2065,13 @@
                             </div>
                             <div>
                                 <h1 className="text-2xl font-black tracking-tight text-white leading-none">NSXpertise</h1>
-                                <p className="text-[10px] font-bold text-primary-300 uppercase tracking-widest mt-1 opacity-80">Premium Portal v81</p>
+                                <p className="text-[10px] font-bold text-primary-300 uppercase tracking-widest mt-1 opacity-80">Premium Portal v82</p>
                             </div>
                         </div>
 
                         <div className="grid grid-cols-2 gap-2 mt-6">
                             <button
-                                onClick={() => { if (confirm('Clear cache for v81?')) { localStorage.clear(); location.reload(true); } }}
+                                onClick={() => { if (confirm('Clear cache for v82?')) { localStorage.clear(); location.reload(true); } }}
                                 className="text-[9px] bg-white/5 hover:bg-rose-500/20 border border-white/10 px-2 py-2 rounded-xl transition-all text-gray-300 font-bold uppercase tracking-tighter"
                             >
                                 Reset Cache
@@ -2112,7 +2079,7 @@
                             <button
                                 onClick={() => {
                                     const logs = window.__syncLogs || [];
-                                    alert("--- SYNC LOGS (v81) ---\n\n" + (logs.length ? logs.join('\n') : "No errors logged."));
+                                    alert("--- SYNC LOGS (v82) ---\n\n" + (logs.length ? logs.join('\n') : "No errors logged."));
                                 }}
                                 className="text-[9px] bg-white/5 hover:bg-indigo-500/20 border border-white/10 px-2 py-2 rounded-xl transition-all text-gray-300 font-bold uppercase tracking-tighter"
                             >

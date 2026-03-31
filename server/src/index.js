@@ -23,7 +23,7 @@ if (fs.existsSync(path.join(__dirname, '../../.env'))) {
 
 const app = express();
 const PORT = process.env.PORT || 5000;
-const API_VERSION = '81'; // v81: Video Recording Disabled
+const API_VERSION = '82'; // v82: WhatsApp Integration Removed
 
 app.use(cors({
     origin: '*',
@@ -574,70 +574,7 @@ app.post('/api/upload-media', authMiddleware, upload.single('file'), async (req,
 });
 
 
-app.post('/api/send-whatsapp-old', authMiddleware, (req, res) => {
-    const { phone, message } = req.body;
-    if (!phone || !message) {
-        return res.status(400).json({ error: 'Phone and message required' });
-    }
-
-    const GUPSHUP_API_KEY = process.env.GUPSHUP_API_KEY;
-    const GUPSHUP_APP_NAME = process.env.GUPSHUP_APP_NAME;
-
-    if (!GUPSHUP_API_KEY || !GUPSHUP_APP_NAME) {
-        console.error('Missing Gupshup credentials');
-        return res.status(500).json({ error: 'Server configuration error: Missing Gupshup Env Vars' });
-    }
-
-    const postData = querystring.stringify({
-        channel: 'whatsapp',
-        source: GUPSHUP_APP_NAME,
-        destination: phone,
-        'src.name': GUPSHUP_APP_NAME,
-        message: JSON.stringify({
-            type: 'text',
-            text: message
-        })
-    });
-
-    const options = {
-        hostname: 'api.gupshup.io',
-        path: '/sm/api/v1/msg',
-        method: 'POST',
-        headers: {
-            'apikey': GUPSHUP_API_KEY,
-            'Content-Type': 'application/x-www-form-urlencoded',
-            'Content-Length': Buffer.byteLength(postData)
-        }
-    };
-
-    const apiReq = https.request(options, (apiRes) => {
-        let data = '';
-        apiRes.on('data', (chunk) => { data += chunk; });
-        apiRes.on('end', () => {
-            try {
-                const jsonResponse = JSON.parse(data);
-                if (apiRes.statusCode >= 200 && apiRes.statusCode < 300) {
-                    console.log('✅ WhatsApp Sent:', jsonResponse);
-                    res.json({ success: true, data: jsonResponse });
-                } else {
-                    console.error('❌ Gupshup Error:', jsonResponse);
-                    res.status(apiRes.statusCode).json({ error: 'Gupshup API Failed', details: jsonResponse });
-                }
-            } catch (e) {
-                console.error('❌ Gupshup Parse Error:', data);
-                res.status(500).json({ error: 'Invalid response from Gupshup' });
-            }
-        });
-    });
-
-    apiReq.on('error', (e) => {
-        console.error('❌ WhatsApp Request Error:', e);
-        res.status(500).json({ error: e.message });
-    });
-
-    apiReq.write(postData);
-    apiReq.end();
-});
+// WHATSAPP API REMOVED - v82
 
 // DELETE MEDIA FROM S3
 app.delete('/api/media', authMiddleware, async (req, res) => {
@@ -743,81 +680,9 @@ app.get('/api/media-stream', (req, res) => {
 // Removed duplicate health check from bottom
 
 
-// WHATSAPP API PROXY (v54: Added Flexibility & Better Logging)
+// WHATSAPP API PROXY REMOVED - v82
 app.post('/api/send-whatsapp', authMiddleware, async (req, res) => {
-    const { phone, message } = req.body;
-    const apiKey = process.env.GUPSHUP_API_KEY;
-    const appName = process.env.GUPSHUP_APP_NAME || 'exammessage';
-    const sourceNumber = process.env.GUPSHUP_SOURCE_PHONE || '917834811114'; // Default to Sandbox
-    const apiPath = process.env.GUPSHUP_API_PATH || '/wa/api/v1/msg'; // Default to Sandbox
-
-    if (!apiKey) {
-        console.error("WhatsApp Error: Missing GUPSHUP_API_KEY");
-        return res.status(500).json({ error: 'Server misconfiguration: Missing API Key' });
-    }
-
-    if (!phone || !message) {
-        return res.status(400).json({ error: 'Missing phone or message' });
-    }
-
-    // Prepare Gupshup Data
-    const postData = querystring.stringify({
-        'channel': 'whatsapp',
-        'source': sourceNumber,
-        'destination': phone.replace(/\+/g, '').trim(),
-        'message': JSON.stringify({
-            'type': 'text',
-            'text': message
-        }),
-        'src.name': appName
-    });
-
-    const options = {
-        hostname: 'api.gupshup.io',
-        port: 443,
-        path: apiPath,
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/x-www-form-urlencoded',
-            'apikey': apiKey,
-            'Content-Length': postData.length
-        }
-    };
-
-    const apiReq = https.request(options, (apiRes) => {
-        let data = '';
-        apiRes.on('data', (chunk) => data += chunk);
-        apiRes.on('end', () => {
-            console.log(`[WhatsApp] Gupshup Response Code: ${apiRes.statusCode}`);
-            console.log(`[WhatsApp] Gupshup Response Data: ${data}`);
-
-            if (apiRes.statusCode >= 200 && apiRes.statusCode < 300) {
-                try {
-                    const parsed = JSON.parse(data || '{}');
-                    res.json({ success: true, api: apiPath, source: sourceNumber, data: parsed });
-                } catch (e) {
-                    res.json({ success: true, api: apiPath, source: sourceNumber, raw: data });
-                }
-            } else {
-                console.error(`[WhatsApp] Gupshup API Fail: ${apiRes.statusCode} - ${data}`);
-                res.status(apiRes.statusCode).json({
-                    error: 'Gupshup API rejected the message',
-                    statusCode: apiRes.statusCode,
-                    details: data,
-                    config: { apiPath, sourceNumber, appName }
-                });
-            }
-        });
-    });
-
-    apiReq.on('error', (e) => {
-        console.error("[WhatsApp] Request Error:", e);
-        res.status(500).json({ error: e.message });
-    });
-
-    console.log(`[WhatsApp] Sending to ${phone} via ${apiPath} (Source: ${sourceNumber})...`);
-    apiReq.write(postData);
-    apiReq.end();
+    res.status(410).json({ error: 'WhatsApp feature has been permanently disabled (v82).' });
 });
 
 // --- STABILITY: AUTO-CLEANUP TASK (v56) ---
