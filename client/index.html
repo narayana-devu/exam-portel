@@ -841,18 +841,27 @@
                                         // We modified `pendingItems` in place.
                                         // So we just need to ensure the outer save happens.
 
-                                        // Re-save logic from original code:
-                                        // `if (hasMediaUpdates) localStorage.setItem(key, JSON.stringify(items));`
-                                        // We need to mimic this.
                                         if (mediaQueue.length > 0) {
-                                            // We don't have easy access to the full `items` array from `pendingItems` if it was filtered?
-                                            // Wait, `items` variable in the scope IS the full list from localStorage.
-                                            // `pendingItems` is `items` filtered or just `items`.
-                                            // Looking at context: `let pendingItems = items;` (usually).
-                                            // Let's assume we can confirm `items` is in scope or we must re-read.
-                                            // The original code had: `if (hasMediaUpdates) localStorage.setItem(key, JSON.stringify(items));`
-                                            // So `items` is available.
-                                            localStorage.setItem(key, JSON.stringify(items));
+                                            // SAFE RE-FETCH: Do not overwrite with closure 'items' which erases newly added data.
+                                            const freshDataStr = localStorage.getItem(key);
+                                            if (freshDataStr) {
+                                                let freshItems = JSON.parse(freshDataStr);
+                                                mediaQueue.forEach(({ ev, item, localKey }) => {
+                                                    const matchItem = freshItems.find(li => li.id === item.id);
+                                                    if (matchItem && matchItem.evidence) {
+                                                        const matchEv = matchItem.evidence.find(e => e.key === localKey || e.img === localKey);
+                                                        if (matchEv) {
+                                                            matchEv.url = ev.url;
+                                                            matchEv.img = ev.img;
+                                                            matchEv.type = ev.type;
+                                                            matchEv.uploaded = ev.uploaded;
+                                                            matchEv.storage = ev.storage;
+                                                            matchEv._fileMissing = ev._fileMissing;
+                                                        }
+                                                    }
+                                                });
+                                                localStorage.setItem(key, JSON.stringify(freshItems));
+                                            }
                                         }
                                     }
                                 }
@@ -866,18 +875,25 @@
                                 });
 
                                 if (response.ok) {
-                                    // ULTRA-SAFE: Only mark as synced if ALL media within this batch was uploaded
-                                    items.forEach(i => {
-                                        if (route === 'responses' && i.evidence) {
-                                            const hasUnuploadedMedia = i.evidence.some(ev => (ev.storage === 'indexeddb' || ev.type === 'VIDEO_INDEXED_DB') && !ev.url && !ev._fileMissing);
-                                            if (hasUnuploadedMedia) {
-                                                i.synced = false;
-                                                return;
+                                    // SAFE RE-FETCH: Only update the specific pending items we synced to prevent wiping memory.
+                                    const freshDataStr = localStorage.getItem(key);
+                                    if (freshDataStr) {
+                                        let freshItems = JSON.parse(freshDataStr);
+                                        pendingItems.forEach(pi => {
+                                            const match = freshItems.find(li => li.id === pi.id);
+                                            if (match) {
+                                                if (route === 'responses' && match.evidence) {
+                                                    const hasUnuploadedMedia = match.evidence.some(ev => (ev.storage === 'indexeddb' || ev.type === 'VIDEO_INDEXED_DB') && !ev.url && !ev._fileMissing);
+                                                    if (hasUnuploadedMedia) {
+                                                        match.synced = false;
+                                                        return; // Skip marking TRUE
+                                                    }
+                                                }
+                                                match.synced = true;
                                             }
-                                        }
-                                        if (!i.synced) i.synced = true;
-                                    });
-                                    localStorage.setItem(key, JSON.stringify(items));
+                                        });
+                                        localStorage.setItem(key, JSON.stringify(freshItems));
+                                    }
                                     success += pendingItems.length;
                                 } else {
                                     throw new Error(`Server Error: ${response.statusText}`);
