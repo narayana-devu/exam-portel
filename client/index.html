@@ -3393,38 +3393,59 @@
                     let countNOS = 0;
                     let countPC = 0;
 
+                    // Support forward-fill for merged/empty headers
+                    let currentNOS = null;
+                    let lastNOSCode = null;
+
+                    // Get latest list from storage to avoid stale state in loop
+                    const allNOS = window.Utils.getNOS();
+
                     data.forEach(row => {
-                        if (row['QualificationPackID'] && row['NOSID'] && row['NOS Name']) {
-                            if (String(row['QualificationPackID']).trim() === selectedQP.code) {
-                                let nos = nosList.find(n => n.code === row['NOSID'] && n.qpId === selectedQP.id);
+                        const qpCode = (row['QualificationPackID'] || "").toString().trim();
+                        const nosCode = (row['NOSID'] || "").toString().trim();
+                        const nosName = (row['NOS Name'] || "").toString().trim();
+
+                        // If row has NOS headers, it's a new or existing NOS
+                        if (qpCode && nosCode && nosName) {
+                            if (qpCode.toUpperCase() === selectedQP.code.toUpperCase()) {
+                                // Important: Check against the local list that we update in this loop
+                                let nos = allNOS.find(n => n.code === nosCode && n.qpId === selectedQP.id);
                                 if (!nos) {
                                     nos = {
                                         id: window.Utils.generateId(),
                                         qpId: selectedQP.id,
-                                        code: row['NOSID'],
-                                        name: row['NOS Name'],
+                                        code: nosCode,
+                                        name: nosName,
                                         createdAt: new Date().toISOString()
                                     };
                                     window.Utils.saveNOS(nos);
+                                    allNOS.push(nos); // Update local list for subsequent row lookups
                                     countNOS++;
                                 }
-
-                                if (row['PC No'] && row['PC Name']) {
-                                    const pc = {
-                                        id: window.Utils.generateId(),
-                                        nosId: nos.id,
-                                        code: row['PC No'],
-                                        name: row['PC Name'],
-                                        theoryMarks: parseFloat(row['Theory Marks']) || 0,
-                                        practicalMarks: parseFloat(row['Practical Marks']) || 0,
-                                        vivaMarks: parseFloat(row['Viva Marks']) || 0,
-                                        totalMarks: (parseFloat(row['Theory Marks']) || 0) + (parseFloat(row['Practical Marks']) || 0) + (parseFloat(row['Viva Marks']) || 0),
-                                        createdAt: new Date().toISOString()
-                                    };
-                                    window.Utils.savePC(pc);
-                                    countPC++;
-                                }
+                                currentNOS = nos;
+                                lastNOSCode = nosCode;
+                            } else {
+                                // Mismatching QP, clear context
+                                currentNOS = null;
+                                lastNOSCode = null;
                             }
+                        }
+
+                        // If row has PC info but missing NOS headers, use the latest found NOS
+                        if (currentNOS && row['PC No'] && row['PC Name']) {
+                            const pc = {
+                                id: window.Utils.generateId(),
+                                nosId: currentNOS.id,
+                                code: row['PC No'],
+                                name: row['PC Name'],
+                                theoryMarks: parseFloat(row['Theory Marks']) || 0,
+                                practicalMarks: parseFloat(row['Practical Marks']) || 0,
+                                vivaMarks: parseFloat(row['Viva Marks']) || 0,
+                                totalMarks: (parseFloat(row['Theory Marks']) || 0) + (parseFloat(row['Practical Marks']) || 0) + (parseFloat(row['Viva Marks']) || 0),
+                                createdAt: new Date().toISOString()
+                            };
+                            window.Utils.savePC(pc);
+                            countPC++;
                         }
                     });
 
@@ -3432,7 +3453,7 @@
                     setNOSList(window.Utils.getNOS());
                     setPCList(window.Utils.getPCs());
                     setShowUploadNOSModal(false);
-                    alert(`Import Success: Created ${countNOS} NOS and ${countPC} PC records.`);
+                    alert(`Import Success: Processed ${countNOS} NOS and ${countPC} PC records.`);
                 };
                 reader.readAsBinaryString(file);
             };
@@ -5042,36 +5063,43 @@
                         const batchCounts = {};
                         const newStudentsToSave = [];
 
+                        let lastBatchName = null;
+                        let lastBatch = null;
+
                         rows.forEach((row, index) => {
                             // FLEXIBLE HEADER MATCHING (Case-insensitive, trim)
                             const getVal = (keys) => {
                                 for (let k of keys) {
                                     // Direct match
-                                    if (row[k] !== undefined) return row[k];
+                                    if (row[k] !== undefined && row[k] !== null && String(row[k]).trim() !== "") return row[k];
                                     // Case-insensitive match in row keys
                                     const foundKey = Object.keys(row).find(rk => rk.trim().toLowerCase() === k.trim().toLowerCase());
-                                    if (foundKey) return row[foundKey];
+                                    if (foundKey && row[foundKey] !== undefined && row[foundKey] !== null && String(row[foundKey]).trim() !== "") return row[foundKey];
                                 }
                                 return null;
                             };
 
-                            const batchName = getVal(['BatchName', 'Batch Name', 'Batch', 'Project']);
+                            let batchName = getVal(['BatchName', 'Batch Name', 'Batch', 'Project']);
                             const enrollmentNo = getVal(['Enrollment No', 'EnrollmentNo', 'Enrollment', 'Reg No', 'Registration No']);
-                            // Add 'Candidate Name' and other potential headers
                             const studentName = getVal(['Name of the Trainee', 'Trainee Name', 'Name', 'Student Name', 'StudentName', 'Candidate Name', 'CandidateName', 'Full Name', 'FullName', 'Trainee']);
                             const gender = getVal(['Gender', 'Gender(M/F/T)', 'Sex']);
 
-                            // Debug log for specific rows if needed
-                            // console.log(`Row ${index + 2}:`, { batchName, studentName, enrollmentNo });
+                            // Forward-fill batch name from previous row if current is empty
+                            if (batchName) {
+                                lastBatchName = String(batchName).trim();
+                                lastBatch = currentBatches.find(b => b.name.trim().toLowerCase() === lastBatchName.toLowerCase());
+                            } else {
+                                batchName = lastBatchName;
+                            }
 
                             if (!batchName) {
-                                errors.push(`Row ${index + 2}: Skipped - Missing 'BatchName' (Found keys: ${Object.keys(row).join(', ')})`);
+                                errors.push(`Row ${index + 2}: Skipped - Missing 'BatchName' (Merge cells? Ensure first row has it)`);
                                 skippedCount++;
                                 return;
                             }
 
-                            // Find batch (Case-insensitive)
-                            const targetBatch = currentBatches.find(b => b.name.trim().toLowerCase() === String(batchName).trim().toLowerCase());
+                            // Use the cached lastBatch or find it if batchName changed
+                            const targetBatch = lastBatch;
 
                             if (!targetBatch) {
                                 errors.push(`Row ${index + 2}: Skipped - Batch "${batchName}" not found in system.`);
