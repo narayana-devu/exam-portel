@@ -3379,6 +3379,16 @@
                 setNewPC({ name: '', code: '' });
             };
 
+            const handleNOSMarkChange = (id, type, val) => {
+                const refreshed = nosList.map(n => n.id === id ? { ...n, [type]: val } : n);
+                setNOSList(refreshed);
+            };
+
+            const handleSaveNOSInline = (id) => {
+                const nos = nosList.find(n => n.id === id);
+                if (nos) window.Utils.saveNOS(nos);
+            };
+
             const handlePCMarkChange = (id, type, val) => {
                 const refreshed = pcList.map(p => p.id === id ? { ...p, [type]: val } : p);
                 setPCList(refreshed);
@@ -3432,6 +3442,9 @@
                                         qpId: selectedQP.id,
                                         code: nosCode,
                                         name: nosName,
+                                        theoryCutoff: row['Theory Cutoff %'] !== undefined ? row['Theory Cutoff %'] : (row['Theory Cutoff'] || 0),
+                                        practicalCutoff: row['Practical Cutoff %'] !== undefined ? row['Practical Cutoff %'] : (row['Practical Cutoff'] || 0),
+                                        overallCutoff: row['Overall Cutoff %'] !== undefined ? row['Overall Cutoff %'] : (row['Overall Cutoff'] || 0),
                                         createdAt: new Date().toISOString()
                                     };
                                     window.Utils.saveNOS(nos);
@@ -3556,18 +3569,21 @@
                                                 <h4 className="text-md font-black text-gray-900 truncate">{nos.name}</h4>
                                             </div>
 
-                                            <div className="hidden lg:flex items-center gap-8 px-8 border-x border-gray-100">
-                                                <div className="text-center">
-                                                    <p className="text-[8px] font-black text-gray-700 uppercase tracking-widest mb-0.5">Theory</p>
-                                                    <p className="text-xs font-black text-gray-700">{nos.theoryCutoff || '0'}%</p>
+                                            <div className="hidden lg:flex items-center gap-4 px-8 border-x border-gray-100" onClick={e => e.stopPropagation()}>
+                                                <div className="text-center group">
+                                                    <p className="text-[8px] font-black text-gray-700 uppercase tracking-widest mb-0.5">Theory %</p>
+                                                    <input type="number" className="w-14 bg-gray-50/50 border border-transparent hover:border-gray-200 rounded-md p-1 text-xs font-black text-center text-gray-700 outline-none focus:bg-white focus:border-primary-300 transition-all cursor-text"
+                                                        value={nos.theoryCutoff || ''} onChange={e => handleNOSMarkChange(nos.id, 'theoryCutoff', e.target.value)} onBlur={() => handleSaveNOSInline(nos.id)} placeholder="0" />
                                                 </div>
-                                                <div className="text-center">
-                                                    <p className="text-[8px] font-black text-gray-700 uppercase tracking-widest mb-0.5">Practical</p>
-                                                    <p className="text-xs font-black text-gray-700">{nos.practicalCutoff || '0'}%</p>
+                                                <div className="text-center group">
+                                                    <p className="text-[8px] font-black text-gray-700 uppercase tracking-widest mb-0.5">Practical %</p>
+                                                    <input type="number" className="w-14 bg-gray-50/50 border border-transparent hover:border-gray-200 rounded-md p-1 text-xs font-black text-center text-gray-700 outline-none focus:bg-white focus:border-primary-300 transition-all cursor-text"
+                                                        value={nos.practicalCutoff || ''} onChange={e => handleNOSMarkChange(nos.id, 'practicalCutoff', e.target.value)} onBlur={() => handleSaveNOSInline(nos.id)} placeholder="0" />
                                                 </div>
-                                                <div className="text-center">
-                                                    <p className="text-[8px] font-black text-gray-700 uppercase tracking-widest mb-0.5">Overall</p>
-                                                    <p className="text-xs font-black text-primary-600">{nos.overallCutoff || '0'}%</p>
+                                                <div className="text-center group">
+                                                    <p className="text-[8px] font-black text-gray-700 uppercase tracking-widest mb-0.5">Overall %</p>
+                                                    <input type="number" className="w-14 bg-gray-50/50 border border-transparent hover:border-primary-200 rounded-md p-1 text-xs font-black text-center text-primary-600 outline-none focus:bg-white focus:border-primary-400 transition-all cursor-text"
+                                                        value={nos.overallCutoff || ''} onChange={e => handleNOSMarkChange(nos.id, 'overallCutoff', e.target.value)} onBlur={() => handleSaveNOSInline(nos.id)} placeholder="0" />
                                                 </div>
                                             </div>
 
@@ -3675,8 +3691,8 @@
                                     <div className="p-6 bg-gray-50 border border-gray-100 rounded-3xl group hover:border-emerald-500/50 transition-all">
                                         <button
                                             onClick={() => {
-                                                const headers = [['QualificationPackID', 'NOSID', 'NOS Name', 'PC No', 'PC Name', 'Theory Marks', 'Practical Marks', 'Viva Marks', 'Total Marks']];
-                                                const data = [['QP001', 'NOS101', 'Intro to Tech', 'PC1', 'Coding Basics', '10', '20', '5', '35']];
+                                                const headers = [['Qualification Pack ID', 'NOS ID', 'NOS Name', 'PC No', 'PC Name', 'Theory Marks', 'Practical Marks', 'Viva Marks', 'Total Marks', 'Theory Cutoff %', 'Practical Cutoff %', 'Overall Cutoff %']];
+                                                const data = [['QP001', 'NOS101', 'Intro to Tech', 'PC1', 'Coding Basics', '10', '20', '5', '35', '40', '40', '50']];
                                                 const ws = window.XLSX.utils.aoa_to_sheet([...headers, ...data]);
                                                 const wb = window.XLSX.utils.book_new();
                                                 window.XLSX.utils.book_append_sheet(wb, ws, "Format");
