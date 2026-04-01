@@ -3913,12 +3913,18 @@
                     const sheet = workbook.Sheets[workbook.SheetNames[0]];
                     const rows = XLSX.utils.sheet_to_json(sheet);
 
+                    // v84.1: Enhanced PC Mapping (Support Codes like "PC1")
+                    const allNOS = window.Utils.getNOS();
+                    const qpNOS = allNOS.filter(n => n.qpId === filterQPId);
+                    const allPCs = window.Utils.getPCs();
+                    const qpPCs = allPCs.filter(p => qpNOS.some(n => n.id === p.nosId));
+
                     const questions = rows.map((row, idx) => {
-                        const questionType = (row.QuestionTypeID || '').toString().toUpperCase();
+                        const questionType = (row.QuestionTypeID || row.questionType || '').toString().toUpperCase();
                         const isCoding = questionType === 'CODING';
                         const isPractical = questionType === 'PRACTICAL';
                         const isViva = questionType === 'VIVA';
-                        const noOfOptions = (isCoding || isPractical || isViva) ? 0 : parseInt(row.Noofoptions || 4);
+                        const noOfOptions = (isCoding || isPractical || isViva) ? 0 : parseInt(row.NoofOptions || row.Noofoptions || 4);
 
                         // Parse PCIDsWithMarks (e.g., "PC1:5,PC2:3")
                         const pcMapping = {};
@@ -3927,11 +3933,17 @@
                             row.PCIDsWithMarks.toString().split(',').forEach(item => {
                                 const parts = item.split(':');
                                 if (parts.length === 2) {
-                                    const pcId = parts[0].trim();
+                                    const rawTarget = parts[0].trim();
                                     const marks = parseFloat(parts[1]);
                                     if (!isNaN(marks)) {
-                                        pcMapping[pcId] = marks;
-                                        calculatedMarks += marks;
+                                        // Lookup: Try direct ID match first, then Code match
+                                        let pc = qpPCs.find(p => p.id === rawTarget || p.code === rawTarget);
+                                        if (pc) {
+                                            pcMapping[pc.id] = marks;
+                                            calculatedMarks += marks;
+                                        } else {
+                                            console.warn(`[v84.1] PC "${rawTarget}" not found in current QP.`);
+                                        }
                                     }
                                 }
                             });
@@ -3941,8 +3953,8 @@
                             question: row.Question || row.question || '',
                             questionType: questionType || 'MCQ',
                             options: (isCoding || isPractical || isViva) ? [] : [row.Option1, row.Option2, row.Option3, row.Option4, row.Option5].filter((o, i) => i < noOfOptions && o),
-                            correctAnswer: row.Solution || row.Answer || row.CorrectOption || '',
-                            totalMarks: calculatedMarks > 0 ? calculatedMarks : parseFloat(row.Marks || 1),
+                            correctAnswer: row.Solution || row.Answer || row.CorrectOption || row.correctOption || '',
+                            totalMarks: calculatedMarks > 0 ? calculatedMarks : parseFloat(row.Marks || row.marks || 1),
                             pcMapping: pcMapping
                         };
                     });
