@@ -2254,11 +2254,8 @@
                         </div>
                     </nav>
 
-                    <div className="p-6 mt-auto border-t border-white/5">
-                        <div id="scheduler-heartbeat" className="flex items-center gap-2 px-3 py-2 bg-gray-50/50 rounded-xl border border-gray-100">
-                            <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></div>
-                            <span className="text-[10px] font-bold text-gray-700 uppercase tracking-tighter">Engine Active</span>
-                        </div>
+                    <div className="p-6 mt-auto border-t border-white/5 opacity-0 pointer-events-none">
+                        {/* Status Engine Hidden */}
                     </div>
                 </div>
             );
@@ -10132,12 +10129,10 @@
                 if (!user) return;
 
                 const updateStatus = (msg) => {
-                    const el = document.getElementById('scheduler-heartbeat');
-                    if (el) el.innerText = `Scheduler: ${msg} (${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })})`;
+                    // console.log(`[Scheduler] ${msg}`);
                 };
 
                 if (user.role !== 'admin') {
-                    updateStatus("Inactive (Non-Admin)");
                     return;
                 }
 
