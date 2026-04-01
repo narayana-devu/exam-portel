@@ -3499,12 +3499,12 @@
             const filteredNOS = selectedQP ? nosList.filter(n => n.qpId === selectedQP.id) : nosList;
 
             return (
-                <div className="animate-fade-in-up space-y-8">
+                <div className="animate-fade-in-up space-y-4">
                     {selectedQP ? (
-                        <div className="glass-effect rounded-[32px] p-8 border border-white/40 shadow-xl relative overflow-hidden">
+                        <div className="glass-effect rounded-[24px] p-5 border border-white/40 shadow-xl relative overflow-hidden">
                             <div className="absolute top-0 right-0 w-64 h-64 bg-primary-500/5 blur-[100px] -mr-32 -mt-32"></div>
 
-                            <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 relative z-10">
+                            <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4 relative z-10">
                                 <div className="space-y-1">
                                     <div className="flex items-center gap-2 mb-1">
                                         <span className="text-[10px] font-black text-primary-600 bg-primary-50 px-2 py-0.5 rounded-full uppercase tracking-widest">{getSSCName(selectedQP.sscId)}</span>
@@ -3547,51 +3547,53 @@
                     )}
 
                     {selectedQP && (
-                        <div className="space-y-6">
+                        <div className="space-y-3">
                             <div className="flex justify-between items-center">
-                                <h3 className="text-lg font-black text-gray-900 uppercase tracking-widest">Standards & Criteria</h3>
-                                <div className="flex items-center gap-3">
-                                    <button onClick={() => setShowUploadNOSModal(true)} className="bg-white text-gray-700 border border-gray-200 px-5 py-2.5 rounded-xl flex items-center gap-2 font-bold text-xs hover:bg-gray-50 transition-all shadow-sm">
-                                        <Icons.UploadCloud className="w-4 h-4 text-emerald-500" /> Bulk Import
+                                <h3 className="text-sm font-black text-gray-900 uppercase tracking-widest">Standards & Criteria</h3>
+                                <div className="flex items-center gap-2">
+                                    <button onClick={() => setShowUploadNOSModal(true)} className="bg-white text-gray-700 border border-gray-200 px-3 py-1.5 rounded-lg flex items-center gap-2 font-bold text-[10px] hover:bg-gray-50 transition-all shadow-sm">
+                                        <Icons.UploadCloud className="w-3 h-3 text-emerald-500" /> Bulk Import
                                     </button>
-                                    <button onClick={() => setShowNOSModal(true)} className="bg-primary-500 hover:bg-primary-600 text-gray-900 px-5 py-2.5 rounded-xl flex items-center gap-2 font-bold text-xs transition-all shadow-lg shadow-primary-500/20">
-                                        <Icons.Plus className="w-4 h-4" /> Add New NOS
+                                    <button onClick={() => setShowNOSModal(true)} className="bg-primary-500 hover:bg-primary-600 text-gray-900 px-3 py-1.5 rounded-lg flex items-center gap-2 font-bold text-[10px] transition-all shadow-md shadow-primary-500/20">
+                                        <Icons.Plus className="w-3 h-3" /> Add NOS
                                     </button>
                                 </div>
                             </div>
 
-                            <div className="space-y-4">
+                            <div className="grid grid-cols-1 xl:grid-cols-2 2xl:grid-cols-3 gap-3">
                                 {filteredNOS.map((nos, idx) => (
                                     <div key={nos.id} className="premium-card p-0 overflow-hidden transition-all duration-300">
                                         <div
                                             onClick={() => toggleExpand(nos.id)}
-                                            className={`p-6 cursor-pointer flex items-center gap-5 hover:bg-gray-50/50 transition-colors ${expandedNOS.includes(nos.id) ? 'bg-gray-50/50 border-b border-gray-100' : ''}`}
+                                            className={`p-4 cursor-pointer flex justify-between items-center gap-3 hover:bg-gray-50/50 transition-colors ${expandedNOS.includes(nos.id) ? 'bg-gray-50/50 border-b border-gray-100' : ''}`}
                                         >
-                                            <div className="w-10 h-10 rounded-xl bg-primary-50 text-primary-600 flex items-center justify-center font-black text-sm">
-                                                {idx + 1}
-                                            </div>
-                                            <div className="flex-1 min-w-0">
-                                                <div className="flex items-center gap-2 mb-0.5">
-                                                    <span className="text-[10px] font-black text-primary-600 uppercase tracking-widest bg-primary-50 px-2 py-0.5 rounded-md">{nos.code}</span>
-                                                    <span className="text-[9px] text-gray-700 font-bold uppercase tracking-tighter">ID: {nos.id.slice(0, 8)}</span>
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-8 h-8 rounded-lg bg-primary-50 text-primary-600 flex items-center justify-center font-black text-xs">
+                                                    {idx + 1}
                                                 </div>
-                                                <h4 className="text-md font-black text-gray-900 truncate">{nos.name}</h4>
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="flex items-center gap-2 mb-0.5">
+                                                        <span className="text-[10px] font-black text-primary-600 uppercase tracking-widest bg-primary-50 px-2 py-0.5 rounded-md">{nos.code}</span>
+                                                        <span className="text-[9px] text-gray-700 font-bold uppercase tracking-tighter">ID: {nos.id.slice(0, 8)}</span>
+                                                    </div>
+                                                    <h4 className="text-sm font-black text-gray-900 truncate">{nos.name}</h4>
+                                                </div>
                                             </div>
 
-                                            <div className="hidden lg:flex items-center gap-4 px-8 border-x border-gray-100" onClick={e => e.stopPropagation()}>
+                                            <div className="hidden lg:flex items-center gap-4 px-4 border-l border-gray-100" onClick={e => e.stopPropagation()}>
                                                 <div className="text-center group">
                                                     <p className="text-[8px] font-black text-gray-700 uppercase tracking-widest mb-0.5">Theory %</p>
-                                                    <input type="number" className="w-14 bg-gray-50/50 border border-transparent hover:border-gray-200 rounded-md p-1 text-xs font-black text-center text-gray-700 outline-none focus:bg-white focus:border-primary-300 transition-all cursor-text"
+                                                    <input type="number" className="w-12 bg-gray-50/50 border border-transparent hover:border-gray-200 rounded-md p-1 text-xs font-black text-center text-gray-700 outline-none focus:bg-white focus:border-primary-300 transition-all cursor-text"
                                                         value={nos.theoryCutoff || ''} onChange={e => handleNOSMarkChange(nos.id, 'theoryCutoff', e.target.value)} onBlur={() => handleSaveNOSInline(nos.id)} placeholder="0" />
                                                 </div>
                                                 <div className="text-center group">
                                                     <p className="text-[8px] font-black text-gray-700 uppercase tracking-widest mb-0.5">Practical %</p>
-                                                    <input type="number" className="w-14 bg-gray-50/50 border border-transparent hover:border-gray-200 rounded-md p-1 text-xs font-black text-center text-gray-700 outline-none focus:bg-white focus:border-primary-300 transition-all cursor-text"
+                                                    <input type="number" className="w-12 bg-gray-50/50 border border-transparent hover:border-gray-200 rounded-md p-1 text-xs font-black text-center text-gray-700 outline-none focus:bg-white focus:border-primary-300 transition-all cursor-text"
                                                         value={nos.practicalCutoff || ''} onChange={e => handleNOSMarkChange(nos.id, 'practicalCutoff', e.target.value)} onBlur={() => handleSaveNOSInline(nos.id)} placeholder="0" />
                                                 </div>
                                                 <div className="text-center group">
                                                     <p className="text-[8px] font-black text-gray-700 uppercase tracking-widest mb-0.5">Overall %</p>
-                                                    <input type="number" className="w-14 bg-gray-50/50 border border-transparent hover:border-primary-200 rounded-md p-1 text-xs font-black text-center text-primary-600 outline-none focus:bg-white focus:border-primary-400 transition-all cursor-text"
+                                                    <input type="number" className="w-12 bg-gray-50/50 border border-transparent hover:border-primary-200 rounded-md p-1 text-xs font-black text-center text-primary-600 outline-none focus:bg-white focus:border-primary-400 transition-all cursor-text"
                                                         value={nos.overallCutoff || ''} onChange={e => handleNOSMarkChange(nos.id, 'overallCutoff', e.target.value)} onBlur={() => handleSaveNOSInline(nos.id)} placeholder="0" />
                                                 </div>
                                             </div>
@@ -5657,156 +5659,156 @@
                     )}
 
                     {showCreateModal && (
-                        <div className="fixed inset-0 bg-white/40 backdrop-blur-md flex items-center justify-center p-6 z-[100] animate-fade-in font-sans">
-                            <div className="bg-white border border-gray-100 w-full max-w-5xl rounded-[40px] shadow-[0_32px_64px_-16px_rgba(0,0,0,0.15)] overflow-hidden relative">
+                        <div className="fixed inset-0 bg-white/40 backdrop-blur-md flex items-center justify-center p-4 z-[100] animate-fade-in font-sans">
+                            <div className="bg-white border border-gray-100 w-full max-w-5xl rounded-[32px] shadow-[0_32px_64px_-16px_rgba(0,0,0,0.15)] overflow-hidden relative">
                                 {/* Decorative Background */}
                                 <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-primary-500/10 blur-[130px] -mr-48 -mt-48"></div>
                                 <div className="absolute bottom-0 left-0 w-[500px] h-[500px] bg-fuchsia-500/10 blur-[130px] -ml-48 -mb-48"></div>
 
-                                <div className="relative z-10 flex flex-col max-h-[90vh]">
+                                <div className="relative z-10 flex flex-col max-h-[95vh]">
                                     {/* Header */}
-                                    <div className="px-10 py-8 border-b border-white/5 flex justify-between items-center bg-white/[0.02]">
+                                    <div className="px-6 py-4 border-b border-white/5 flex justify-between items-center bg-white/[0.02]">
                                         <div>
-                                            <h3 className="text-2xl font-black text-gray-900 tracking-tight">
+                                            <h3 className="text-xl font-black text-gray-900 tracking-tight">
                                                 {newBatch.id ? 'Modify' : 'Initialize'} <span className="text-primary-700">Deployment</span>
                                             </h3>
-                                            <p className="text-[10px] font-black text-gray-800 uppercase tracking-[0.3em] mt-1">Operational Environment Configurator</p>
+                                            <p className="text-[9px] font-black text-gray-800 uppercase tracking-[0.3em] mt-0.5">Operational Environment Configurator</p>
                                         </div>
-                                        <button onClick={() => setShowCreateModal(false)} className="w-12 h-12 rounded-2xl bg-white/5 flex items-center justify-center text-gray-700 hover:bg-rose-500/20 hover:text-rose-400 transition-all border border-white/5">
-                                            <Icons.X className="w-6 h-6" />
+                                        <button onClick={() => setShowCreateModal(false)} className="w-8 h-8 rounded-xl bg-white/5 flex items-center justify-center text-gray-700 hover:bg-rose-500/20 hover:text-rose-400 transition-all border border-white/5">
+                                            <Icons.X className="w-5 h-5" />
                                         </button>
                                     </div>
 
-                                    <div className="p-10 space-y-10 overflow-y-auto custom-scrollbar">
+                                    <div className="p-6 space-y-4 overflow-y-auto custom-scrollbar">
                                         {/* Section: Core Identity */}
-                                        <div className="space-y-6">
-                                            <div className="flex items-center gap-3">
-                                                <div className="w-1.5 h-6 bg-primary-500 rounded-full"></div>
-                                                <h4 className="text-[10px] font-black text-gray-900 uppercase tracking-[0.4em]">Core Identity</h4>
+                                        <div className="space-y-2">
+                                            <div className="flex items-center gap-2 mb-2">
+                                                <div className="w-1 h-4 bg-primary-500 rounded-full"></div>
+                                                <h4 className="text-[9px] font-black text-gray-900 uppercase tracking-[0.3em]">Core Identity</h4>
                                             </div>
-                                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                                                <div className="lg:col-span-2 space-y-2">
-                                                    <label className="text-[10px] font-black text-gray-800 uppercase tracking-widest ml-1">Universal Context (Project)</label>
+                                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                                                <div className="lg:col-span-2 space-y-1">
+                                                    <label className="text-[9px] font-black text-gray-800 uppercase tracking-widest ml-1">Universal Context (Project)</label>
                                                     <div className="relative">
                                                         {showNewProjectInput ? (
                                                             <div className="flex gap-2">
-                                                                <input autoFocus type="text" className="w-full bg-white/5 border border-white/10 rounded-2xl px-5 py-4 text-gray-900 text-xs font-bold outline-none focus:border-primary-500/50"
+                                                                <input autoFocus type="text" className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-gray-900 text-xs font-bold outline-none focus:border-primary-500/50"
                                                                     placeholder="New Project Name" value={newBatch.project} onChange={e => setNewBatch({ ...newBatch, project: e.target.value })} />
-                                                                <button type="button" onClick={() => setShowNewProjectInput(false)} className="px-4 rounded-2xl bg-white/5 text-gray-700 hover:text-rose-400 transition-colors"><Icons.XCircle className="w-5 h-5" /></button>
+                                                                <button type="button" onClick={() => setShowNewProjectInput(false)} className="px-3 rounded-xl bg-white/5 text-gray-700 hover:text-rose-400 transition-colors"><Icons.XCircle className="w-4 h-4" /></button>
                                                             </div>
                                                         ) : (
                                                             <>
-                                                                <select className="w-full bg-white/5 border border-white/10 rounded-2xl px-5 py-4 text-gray-900 text-xs font-bold appearance-none focus:border-primary-500/50 outline-none cursor-pointer"
+                                                                <select className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-gray-900 text-xs font-bold appearance-none focus:border-primary-500/50 outline-none cursor-pointer"
                                                                     value={newBatch.project} onChange={e => e.target.value === 'NEW' ? setShowNewProjectInput(true) : setNewBatch({ ...newBatch, project: e.target.value })}>
                                                                     <option value="" className="bg-white">Select Project Matrix</option>
                                                                     {projects.map(p => <option key={p} value={p} className="bg-white">{p}</option>)}
                                                                     <option value="NEW" className="bg-gray-50 text-primary-600 font-black">+ Create New Node</option>
                                                                 </select>
-                                                                <Icons.ChevronDown className="absolute right-5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-800 pointer-events-none" />
+                                                                <Icons.ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-800 pointer-events-none" />
                                                             </>
                                                         )}
                                                     </div>
                                                 </div>
-                                                <div className="space-y-2">
-                                                    <label className="text-[10px] font-black text-gray-800 uppercase tracking-widest ml-1">Deployment Name</label>
-                                                    <input required type="text" className="w-full bg-white/5 border border-white/10 rounded-2xl px-5 py-4 text-gray-900 text-xs font-bold outline-none focus:border-primary-500/50"
+                                                <div className="space-y-1">
+                                                    <label className="text-[9px] font-black text-gray-800 uppercase tracking-widest ml-1">Deployment Name</label>
+                                                    <input required type="text" className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-gray-900 text-xs font-bold outline-none focus:border-primary-500/50"
                                                         placeholder="Batch ID" value={newBatch.name} onChange={e => setNewBatch({ ...newBatch, name: e.target.value })} />
                                                 </div>
-                                                <div className="space-y-2">
-                                                    <label className="text-[10px] font-black text-gray-800 uppercase tracking-widest ml-1">T.P Authority</label>
-                                                    <input required type="text" className="w-full bg-white/5 border border-white/10 rounded-2xl px-5 py-4 text-gray-900 text-xs font-bold outline-none focus:border-primary-500/50"
+                                                <div className="space-y-1">
+                                                    <label className="text-[9px] font-black text-gray-800 uppercase tracking-widest ml-1">T.P Authority</label>
+                                                    <input required type="text" className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-gray-900 text-xs font-bold outline-none focus:border-primary-500/50"
                                                         placeholder="Training Partner" value={newBatch.tpName} onChange={e => setNewBatch({ ...newBatch, tpName: e.target.value })} />
                                                 </div>
                                             </div>
                                         </div>
 
                                         {/* Section: Classification & Localization */}
-                                        <div className="space-y-6">
-                                            <div className="flex items-center gap-3">
-                                                <div className="w-1.5 h-6 bg-indigo-500 rounded-full"></div>
-                                                <h4 className="text-[10px] font-black text-gray-900 uppercase tracking-[0.4em]">Classification & Localization</h4>
+                                        <div className="space-y-2 mt-4!">
+                                            <div className="flex items-center gap-2 mb-2">
+                                                <div className="w-1 h-4 bg-indigo-500 rounded-full"></div>
+                                                <h4 className="text-[9px] font-black text-gray-900 uppercase tracking-[0.3em]">Classification & Localization</h4>
                                             </div>
-                                            <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6">
-                                                <div className="space-y-2">
-                                                    <label className="text-[10px] font-black text-gray-800 uppercase tracking-widest ml-1">Sector Council</label>
+                                            <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                                                <div className="space-y-1">
+                                                    <label className="text-[9px] font-black text-gray-800 uppercase tracking-widest ml-1">Sector Council</label>
                                                     <div className="relative">
-                                                        <select className="w-full bg-white/5 border border-white/10 rounded-2xl px-5 py-4 text-gray-900 text-xs font-bold appearance-none outline-none"
+                                                        <select className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-gray-900 text-xs font-bold appearance-none outline-none"
                                                             value={newBatch.sscId} onChange={e => setNewBatch({ ...newBatch, sscId: e.target.value, qpId: '' })}>
                                                             <option value="" className="bg-white">Select SSC</option>
                                                             {sscList.map(s => <option key={s.id} value={s.id} className="bg-white">{s.name}</option>)}
                                                         </select>
-                                                        <Icons.ChevronDown className="absolute right-5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-800 pointer-events-none" />
+                                                        <Icons.ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-800 pointer-events-none" />
                                                     </div>
                                                 </div>
-                                                <div className="space-y-2">
-                                                    <label className="text-[10px] font-black text-gray-800 uppercase tracking-widest ml-1">Qualification Pack</label>
+                                                <div className="space-y-1">
+                                                    <label className="text-[9px] font-black text-gray-800 uppercase tracking-widest ml-1">Qualification Pack</label>
                                                     <div className="relative">
-                                                        <select className="w-full bg-white/5 border border-white/10 rounded-2xl px-5 py-4 text-gray-900 text-xs font-bold appearance-none outline-none disabled:opacity-30"
+                                                        <select className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-gray-900 text-xs font-bold appearance-none outline-none disabled:opacity-30"
                                                             value={newBatch.qpId} onChange={e => setNewBatch({ ...newBatch, qpId: e.target.value })} disabled={!newBatch.sscId}>
                                                             <option value="" className="bg-white">Select QP</option>
                                                             {qpList.filter(q => q.sscId == newBatch.sscId).map(q => <option key={q.id} value={q.id} className="bg-white">{q.name}</option>)}
                                                         </select>
-                                                        <Icons.ChevronDown className="absolute right-5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-800 pointer-events-none" />
+                                                        <Icons.ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-800 pointer-events-none" />
                                                     </div>
                                                 </div>
-                                                <div className="space-y-2">
-                                                    <label className="text-[10px] font-black text-gray-800 uppercase tracking-widest ml-1">Operational Area</label>
+                                                <div className="space-y-1">
+                                                    <label className="text-[9px] font-black text-gray-800 uppercase tracking-widest ml-1">Operational Area</label>
                                                     <div className="relative">
-                                                        <select className="w-full bg-white/5 border border-white/10 rounded-2xl px-5 py-4 text-gray-900 text-xs font-bold appearance-none outline-none"
+                                                        <select className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-gray-900 text-xs font-bold appearance-none outline-none"
                                                             value={newBatch.trainingCentre} onChange={handleTCSelection}>
                                                             <option value="" className="bg-white">Station ID</option>
                                                             {trainingCentres.map(tc => <option key={tc.id} value={tc.name} className="bg-white">{tc.name}</option>)}
                                                         </select>
-                                                        <Icons.ChevronDown className="absolute right-5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-800 pointer-events-none" />
+                                                        <Icons.ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-800 pointer-events-none" />
                                                     </div>
                                                 </div>
-                                                <div className="space-y-2">
-                                                    <label className="text-[10px] font-black text-gray-800 uppercase tracking-widest ml-1">State Logic</label>
-                                                    <input readOnly type="text" className="w-full bg-white/5 border border-white/10 rounded-2xl px-5 py-4 text-gray-800 text-xs font-black outline-none"
+                                                <div className="space-y-1">
+                                                    <label className="text-[9px] font-black text-gray-800 uppercase tracking-widest ml-1">State Logic</label>
+                                                    <input readOnly type="text" className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-gray-800 text-xs font-black outline-none"
                                                         value={newBatch.state || 'AUTO_RESOLVE'} />
                                                 </div>
                                             </div>
                                         </div>
 
                                         {/* Section: Temporal & Monitoring Controls */}
-                                        <div className="space-y-6">
-                                            <div className="flex items-center gap-3">
-                                                <div className="w-1.5 h-6 bg-rose-500 rounded-full"></div>
-                                                <h4 className="text-[10px] font-black text-gray-900 uppercase tracking-[0.4em]">Temporal & Monitoring Controls</h4>
+                                        <div className="space-y-2 mt-4!">
+                                            <div className="flex items-center gap-2 mb-2">
+                                                <div className="w-1 h-4 bg-rose-500 rounded-full"></div>
+                                                <h4 className="text-[9px] font-black text-gray-900 uppercase tracking-[0.3em]">Temporal & Monitoring Controls</h4>
                                             </div>
-                                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                                                <div className="grid grid-cols-2 gap-4">
-                                                    <div className="space-y-2">
-                                                        <label className="text-[10px] font-black text-gray-800 uppercase tracking-widest ml-1">Start Date</label>
-                                                        <input required type="date" className="w-full bg-white/5 border border-white/10 rounded-2xl px-5 py-4 text-gray-900 text-xs font-bold outline-none"
+                                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                                <div className="grid grid-cols-2 gap-3">
+                                                    <div className="space-y-1">
+                                                        <label className="text-[9px] font-black text-gray-800 uppercase tracking-widest ml-1">Start Date</label>
+                                                        <input required type="date" className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-gray-900 text-xs font-bold outline-none"
                                                             value={newBatch.startDate ? newBatch.startDate.split('T')[0] : ''} onChange={e => setNewBatch({ ...newBatch, startDate: e.target.value })} />
                                                     </div>
-                                                    <div className="space-y-2">
-                                                        <label className="text-[10px] font-black text-gray-800 uppercase tracking-widest ml-1">End Date</label>
-                                                        <input required type="date" className="w-full bg-white/5 border border-white/10 rounded-2xl px-5 py-4 text-gray-900 text-xs font-bold outline-none"
+                                                    <div className="space-y-1">
+                                                        <label className="text-[9px] font-black text-gray-800 uppercase tracking-widest ml-1">End Date</label>
+                                                        <input required type="date" className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-gray-900 text-xs font-bold outline-none"
                                                             value={newBatch.endDate} onChange={e => setNewBatch({ ...newBatch, endDate: e.target.value })} />
                                                     </div>
                                                 </div>
-                                                <div className="grid grid-cols-2 gap-4">
-                                                    <div className="space-y-2">
-                                                        <label className="text-[10px] font-black text-gray-800 uppercase tracking-widest ml-1">Restrict Count</label>
-                                                        <input type="number" className="w-full bg-white/5 border border-white/10 rounded-2xl px-5 py-4 text-gray-900 text-xs font-bold outline-none"
+                                                <div className="grid grid-cols-2 gap-3">
+                                                    <div className="space-y-1">
+                                                        <label className="text-[9px] font-black text-gray-800 uppercase tracking-widest ml-1">Restrict Count</label>
+                                                        <input type="number" className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-gray-900 text-xs font-bold outline-none"
                                                             value={newBatch.loginRestrictCount} onChange={e => setNewBatch({ ...newBatch, loginRestrictCount: e.target.value })} />
                                                     </div>
-                                                    <div className="space-y-2">
-                                                        <label className="text-[10px] font-black text-gray-800 uppercase tracking-widest ml-1">Batch Size</label>
-                                                        <input type="number" className="w-full bg-white/5 border border-white/10 rounded-2xl px-5 py-4 text-gray-900 text-xs font-bold outline-none"
+                                                    <div className="space-y-1">
+                                                        <label className="text-[9px] font-black text-gray-800 uppercase tracking-widest ml-1">Batch Size</label>
+                                                        <input type="number" className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-gray-900 text-xs font-bold outline-none"
                                                             value={newBatch.batchSize} onChange={e => setNewBatch({ ...newBatch, batchSize: e.target.value })} />
                                                     </div>
                                                 </div>
-                                                <div className="bg-white/5 rounded-3xl p-6 border border-white/5 flex items-center justify-between">
-                                                    <div className="space-y-1">
-                                                        <p className="text-[10px] font-black text-gray-800 uppercase tracking-widest">Image Surveillance</p>
-                                                        <p className="text-[9px] text-gray-600 font-bold uppercase">Periodic Snapshot Protocol</p>
+                                                <div className="bg-white/5 rounded-xl px-4 py-2 border border-white/5 flex items-center justify-between">
+                                                    <div className="space-y-0.5">
+                                                        <p className="text-[9px] font-black text-gray-800 uppercase tracking-widest">Image Surveillance</p>
+                                                        <p className="text-[8px] text-gray-600 font-bold uppercase">Periodic Protocol</p>
                                                     </div>
                                                     <label className="relative inline-flex items-center cursor-pointer">
                                                         <input type="checkbox" className="sr-only peer" checked={newBatch.captureImage} onChange={e => setNewBatch({ ...newBatch, captureImage: e.target.checked })} />
-                                                        <div className="w-14 h-7 bg-white/10 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[4px] after:left-[4px] after:bg-gray-400 after:border-gray-300 after:border after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-primary-500/50 peer-checked:after:bg-white"></div>
+                                                        <div className="w-10 h-5 bg-white/10 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-gray-400 after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary-500/50 peer-checked:after:bg-white"></div>
                                                     </label>
                                                 </div>
                                             </div>
@@ -5814,11 +5816,11 @@
                                     </div>
 
                                     {/* Action Footer */}
-                                    <div className="px-10 py-8 bg-gray-50 border-t border-gray-100 flex gap-4">
-                                        <button type="button" onClick={() => setShowCreateModal(false)} className="flex-1 py-4 px-6 bg-white/5 hover:bg-white/10 border border-white/10 rounded-2xl text-gray-700 font-black text-[10px] uppercase tracking-widest transition-all">
+                                    <div className="px-6 py-4 bg-gray-50 border-t border-gray-100 flex gap-3">
+                                        <button type="button" onClick={() => setShowCreateModal(false)} className="flex-1 py-3 px-4 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-gray-700 font-black text-[10px] uppercase tracking-widest transition-all">
                                             Discard Protocol
                                         </button>
-                                        <button onClick={handleCreateBatch} className="flex-[2] py-4 px-6 bg-primary-500 hover:bg-primary-600 text-gray-900 rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-xl shadow-primary-500/20 transition-all active:scale-95 flex items-center justify-center gap-2">
+                                        <button onClick={handleCreateBatch} className="flex-[2] py-3 px-4 bg-primary-500 hover:bg-primary-600 text-gray-900 rounded-xl font-black text-[10px] uppercase tracking-widest shadow-xl shadow-primary-500/20 transition-all active:scale-95 flex items-center justify-center gap-2">
                                             <Icons.Zap className="w-4 h-4" /> {newBatch.id ? 'Authorize Modifications' : 'Initialize Deployment Unit'}
                                         </button>
                                     </div>
@@ -8050,7 +8052,7 @@
 
                     <div className="flex-1 flex flex-col h-screen overflow-hidden relative z-10 transition-all duration-500">
                         {/* Header */}
-                        <header className="glass sticky top-0 z-30 px-8 py-4 flex justify-between items-center border-b border-white/40 shadow-sm backdrop-blur-xl">
+                        <header className="glass sticky top-0 z-30 px-6 py-2 flex justify-between items-center border-b border-white/40 shadow-sm backdrop-blur-xl">
                             <div className="flex items-center gap-3">
                                 <div className="flex items-center text-[10px] font-black uppercase tracking-[0.2em] text-gray-700 bg-gray-100/50 px-3 py-1.5 rounded-full border border-gray-200">
                                     <span className="hover:text-primary-600 transition-colors cursor-pointer">Admin</span>
@@ -8191,7 +8193,7 @@
                             </div>
                         </header>
 
-                        <div className="p-8 flex-1 overflow-y-auto custom-scrollbar relative">
+                        <div className="p-4 flex-1 overflow-y-auto custom-scrollbar relative">
                             {activeTab === 'dashboard' && <DashboardTab />}
                             {activeTab === 'calendar' && <CalendarTab />}
                             {activeTab === 'location' && <LocationTab />}
