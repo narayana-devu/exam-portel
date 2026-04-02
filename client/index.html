@@ -344,7 +344,7 @@
             alert(report);
             return false;
         };
-        console.log("v75 DEPLOYMENT ACTIVE - Video Recording Improvements");
+        console.log("v84.2 DEPLOYMENT ACTIVE - Question Paper Sync & Recovery");
 
         // DATA LAYER
         const DB_KEYS = {
@@ -2159,13 +2159,13 @@
                             </div>
                             <div>
                                 <h1 className="text-2xl font-black tracking-tight text-gray-900 leading-none">NSXpertise</h1>
-                                <p className="text-[10px] font-bold text-primary-600 uppercase tracking-widest mt-1 opacity-80">Premium Portal v82</p>
+                                <p className="text-[10px] font-bold text-primary-600 uppercase tracking-widest mt-1 opacity-80">Premium Portal v84.2</p>
                             </div>
                         </div>
 
                         <div className="grid grid-cols-2 gap-2 mt-6">
                             <button
-                                onClick={() => { if (confirm('Clear cache for v82?')) { localStorage.clear(); location.reload(true); } }}
+                                onClick={() => { if (confirm('Clear cache for v84.2?')) { localStorage.clear(); location.reload(); } }}
                                 className="text-[9px] bg-gray-100 hover:bg-rose-500/10 border border-gray-200 px-2 py-2 rounded-xl transition-all text-gray-600 font-bold uppercase tracking-tighter"
                             >
                                 Reset Cache
@@ -2173,7 +2173,7 @@
                             <button
                                 onClick={() => {
                                     const logs = window.__syncLogs || [];
-                                    alert("--- SYNC LOGS (v82) ---\n\n" + (logs.length ? logs.join('\n') : "No errors logged."));
+                                    alert("--- SYNC LOGS (v84.2) ---\n\n" + (logs.length ? logs.join('\n') : "No logs yet."));
                                 }}
                                 className="text-[9px] bg-gray-100 hover:bg-indigo-500/10 border border-gray-200 px-2 py-2 rounded-xl transition-all text-gray-600 font-bold uppercase tracking-tighter"
                             >
@@ -8696,28 +8696,7 @@
                 return () => clearInterval(autoCaptureInterval.current);
             }, [examMode, isLocked, user.id, captureImage, cameraInterval]);
 
-            // SEGMENTED RECORDING LOGIC (Disabled - v29: User disabled video recording)
-            useEffect(() => {
-                // v42: Strict Recording - Only for Theory/Practical (Not Viva/Assessors)
-                const isStudentExam = examMode === 'Theory' || examMode === 'Practical';
-                const shouldRecord = isStudentExam && !isLocked && webcamActive;
-
-                if (!shouldRecord) {
-                    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
-                        console.log("[Record] Stopping recording (Condition changed)");
-                        mediaRecorderRef.current.stop();
-                    }
-                    if (window.studentRecordingInterval) clearInterval(window.studentRecordingInterval);
-                    return;
-                }
-
-                // Video recording logic is intentionally disabled. Camera still shows in UI.
-                console.log("[Record] Video recording is disabled for this session.");
-
-                return () => {
-                    if (window.studentRecordingInterval) clearInterval(window.studentRecordingInterval);
-                };
-            }, [examMode, isLocked, webcamActive, user.id, mediaStream, isSubmitting]);
+            // v84.2: Video Recording Subsystem is fully legacy and disabled to save script volume.
             // Ensure Camera Stream is Attached to Video Element
             useEffect(() => {
                 if (webcamActive && examMode && examMode !== 'VivaLive') {
@@ -9088,19 +9067,18 @@
 
                 if (qp) {
                     // v30.7: Explicit Recording Start logic for BOTH modes
+                    // v84.2: Final Cleanup for Student Initialization
                     setQuestions(qp.questions || []);
                     setTimeLeft((qp.duration || 60) * 60);
 
-                    // v57: Load Batch Capture Settings
                     if (batch) {
                         setCaptureImage(batch.captureImage !== false);
                         setCameraInterval(batch.cameraInterval || '60');
                     }
-
                     setExamMode(startMode);
-                    setPendingExamMode(null); // Clear pending mode after start
-                    setVerificationStep(null); // Ensure modal is closed
-                    setWebcamActive(true); // Ensure webcam state is active for proctoring loops
+                    setPendingExamMode(null);
+                    setVerificationStep(null);
+                    setWebcamActive(true);
                     startTimeRef.current = Date.now();
 
                     if (startMode === 'Practical') {
@@ -9898,15 +9876,7 @@
 
                                         <button
                                             onClick={() => {
-                                                // Final confirmation & launch
-                                                const finalInstr = (document.getElementById('final-instr-check') || { checked: true }).checked;
-                                                if (!finalInstr) { alert("Please agree to the instructions."); return; }
-
-                                                // Update user details in memory
-                                                const updatedUser = { ...user, fatherName: verificationDetails.fatherName, aadharNumber: verificationDetails.aadharNumber };
-                                                sessionStorage.setItem('kp_user', JSON.stringify(updatedUser));
-
-                                                // Save Evidence & Start
+                                                // Save Evidence
                                                 window.Utils.saveResponse({
                                                     studentId: user.id,
                                                     examType: 'VERIFICATION',
@@ -9915,9 +9885,8 @@
                                                     submittedAt: new Date().toISOString()
                                                 });
 
-                                                setExamMode(pendingExamMode);
-                                                setVerificationStep(null);
-                                                setPendingExamMode(null);
+                                                // v84.2: CALL THE START LOGIC
+                                                startExam('VERIFIED_START');
                                             }}
                                             className="w-full bg-emerald-600 hover:bg-emerald-700 text-gray-900 py-5 rounded-3xl font-black text-lg shadow-2xl shadow-emerald-900/30 transition-all hover:-translate-y-1 active:scale-95 flex items-center justify-center gap-3"
                                         >
@@ -10236,6 +10205,16 @@
                 const interval = setInterval(checkScheduledAlerts, 20000); // Check every 20s
                 checkScheduledAlerts();
                 return () => clearInterval(interval);
+            }, [user]);
+
+            // v84.2: Global Icon & Layout Initialization
+            useEffect(() => {
+                const init = () => {
+                    if (typeof lucide !== 'undefined') lucide.createIcons();
+                };
+                init();
+                const timer = setTimeout(init, 1000); // Retry after Babel delay
+                return () => clearTimeout(timer);
             }, [user]);
 
             const handleLogin = (u) => {
