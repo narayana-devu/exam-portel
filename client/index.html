@@ -3936,13 +3936,15 @@
                                     const rawTarget = parts[0].trim();
                                     const marks = parseFloat(parts[1]);
                                     if (!isNaN(marks)) {
-                                        // Lookup: Try direct ID match first, then Code match
-                                        let pc = qpPCs.find(p => p.id === rawTarget || p.code === rawTarget);
+                        // Lookup: Try direct ID match first, then Code match (Case Insensitive)
+                                        const pcCodeToMatch = rawTarget.toString().trim().toUpperCase();
+                                        let pc = qpPCs.find(p => String(p.id) === String(rawTarget) || (p.code && p.code.toString().trim().toUpperCase() === pcCodeToMatch));
+                                        
                                         if (pc) {
                                             pcMapping[pc.id] = marks;
                                             calculatedMarks += marks;
                                         } else {
-                                            console.warn(`[v84.1] PC "${rawTarget}" not found in current QP.`);
+                                            console.warn(`[v84.2] PC "${rawTarget}" not found in current QP.`);
                                         }
                                     }
                                 }
@@ -3950,14 +3952,19 @@
                         }
                         return {
                             id: window.Utils.generateId(),
-                            question: row.Question || row.question || '',
-                            questionType: questionType || 'MCQ',
-                            options: (isCoding || isPractical || isViva) ? [] : [row.Option1, row.Option2, row.Option3, row.Option4, row.Option5].filter((o, i) => i < noOfOptions && o),
-                            correctAnswer: row.Solution || row.Answer || row.CorrectOption || row.correctOption || '',
+                            question: (row.Question || row.question || `Question ${idx + 1}`).toString(),
+                            questionType: (questionType || 'MCQ'),
+                            options: (isCoding || isPractical || isViva) ? [] : [row.Option1, row.Option2, row.Option3, row.Option4, row.Option5].filter((o, i) => i < noOfOptions && o !== undefined && o !== null),
+                            correctAnswer: (row.Solution || row.Answer || row.CorrectOption || row.correctOption || '').toString(),
                             totalMarks: calculatedMarks > 0 ? calculatedMarks : parseFloat(row.Marks || row.marks || 1),
                             pcMapping: pcMapping
                         };
                     });
+
+                    if (questions.length === 0) {
+                        alert("Error: No valid questions found in the Excel sheet.");
+                        return;
+                    }
 
                     // Validation: Check Total Theory Marks
                     const currentQPDef = masterQPList.find(q => q.id === filterQPId);
@@ -9050,7 +9057,34 @@
                     }
                 }
 
-
+                // v84.2: Recovery Logic for Empty Papers
+                if (!qp || !qp.questions || qp.questions.length === 0) {
+                    if (confirm("Paper found but contains zero questions. This usually means the sync from the Admin device is incomplete.\n\nAttempt a DEEP Cloud Sync now?")) {
+                        setIsLoading(true);
+                        try {
+                            const btn = document.getElementById('sync-status-text');
+                            if (btn) btn.innerText = "Deep Syncing...";
+                            // Force download everything ignoring local cache
+                            await window.Utils.downloadFromCloud(true);
+                            const refreshedQP = window.Utils.getQuestionPapers().find(q => String(q.id) === String(pid));
+                            
+                            if (refreshedQP && refreshedQP.questions && refreshedQP.questions.length > 0) {
+                                qp = refreshedQP;
+                                alert("Success! Question data recovered from Cloud.");
+                            } else {
+                                throw new Error("Deep Sync completed but Paper still has 0 questions.");
+                            }
+                        } catch (err) {
+                            alert("Recovery Failed: " + err.message + "\nPlease contact Admin to re-upload the paper.");
+                            setIsLoading(false);
+                            return;
+                        } finally {
+                             setIsLoading(false);
+                        }
+                    } else {
+                        return;
+                    }
+                }
 
                 if (qp) {
                     // v30.7: Explicit Recording Start logic for BOTH modes
@@ -9419,8 +9453,8 @@
                                         <Icons.GraduationCap className="w-6 h-6" />
                                     </div>
                                     <div>
-                                        <h2 className="font-extrabold text-secondary-900 tracking-tight">{examMode} Assessment</h2>
-                                        <p className="text-xs font-bold text-secondary-700 uppercase tracking-widest">Question {currentQ + 1} of {questions.length}</p>
+                                        <h2 className="font-extrabold text-secondary-900 tracking-tight">{examMode} Protocol</h2>
+                                        <p className="text-xs font-bold text-secondary-700 uppercase tracking-widest">Question {questions.length > 0 ? (currentQ + 1) : 0} of {questions.length}</p>
                                     </div>
                                 </div>
 
@@ -9565,7 +9599,7 @@
                                         <p className="text-[10px] font-black text-secondary-700 uppercase tracking-widest flex items-center gap-2">
                                             <div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div> AI Monitoring Active
                                         </p>
-                                        <p className="text-[10px] font-bold text-secondary-300">v80</p>
+                                        <p className="text-[10px] font-bold text-secondary-300">v84.2 (Secure)</p>
                                     </div>
                                 </div>
                             </div>
@@ -9592,12 +9626,14 @@
                             <div className="p-6 bg-secondary-50 border-t border-secondary-100">
                                 <div className="bg-white p-4 rounded-2xl border border-secondary-200 flex items-center justify-between mb-4">
                                     <span className="text-xs font-bold text-secondary-800">Completion</span>
-                                    <span className="text-sm font-black text-primary-600">{Math.round((Object.keys(answers).length / questions.length) * 100)}%</span>
+                                    <span className="text-sm font-black text-primary-600">
+                                        {questions.length > 0 ? Math.round((Object.keys(answers).length / questions.length) * 100) : 0}%
+                                    </span>
                                 </div>
                                 <div className="w-full bg-secondary-200 h-2 rounded-full overflow-hidden">
                                     <div
                                         className="h-full bg-primary-600 transition-all duration-500"
-                                        style={{ width: `${(Object.keys(answers).length / questions.length) * 100}%` }}
+                                        style={{ width: `${questions.length > 0 ? (Object.keys(answers).length / questions.length) * 100 : 0}%` }}
                                     ></div>
                                 </div>
                             </div>
