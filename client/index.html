@@ -8454,6 +8454,7 @@
             const [questions, setQuestions] = useState([]);
             const [currentQ, setCurrentQ] = useState(0);
             const [answers, setAnswers] = useState({});
+            const [isLoading, setIsLoading] = useState(false); // v84.2: Fix ReferenceError during Deep Sync
 
             // Poll for Assessor "Admit" signal (Replaced by Socket.io in VivaWait)
             // useEffect(() => { ... }, []);
@@ -9419,6 +9420,16 @@
                         </div>
                     </div>
                 );
+
+                {isLoading && (
+                    <div className="fixed inset-0 z-[200] bg-white/80 backdrop-blur-xl flex flex-col items-center justify-center animate-fade-in text-center p-8">
+                        <div className="w-24 h-24 bg-primary-50 rounded-4xl flex items-center justify-center mb-8 border border-primary-100 shadow-2xl animate-bounce">
+                            <Icons.RefreshCw className="w-12 h-12 text-primary-600 animate-spin" />
+                        </div>
+                        <h2 className="text-3xl font-black text-gray-900 mb-2">Syncing Exam Data...</h2>
+                        <p className="text-gray-600 font-medium max-w-sm">We're performing a deep cloud synchronization to recover your question paper. Please do not close this window.</p>
+                    </div>
+                )}
 
                 return (
                     <div className="flex h-screen fixed inset-0 z-50 bg-secondary-50 animate-fade-in overflow-hidden">
