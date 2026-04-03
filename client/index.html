@@ -8725,23 +8725,16 @@
 
             // v57: Customizable Auto-Capture Loop (Photos)
             useEffect(() => {
-                if (!examMode || isLocked || !captureImage) {
-                    if (autoCaptureInterval.current) clearInterval(autoCaptureInterval.current);
-                    return;
-                }
+                if (!examMode || isLocked || !captureImage) return;
 
                 const intervalMs = (parseInt(cameraInterval) || 60) * 1000;
                 console.log(`AutoCapture Loop Started: ${intervalMs}ms`);
 
-                if (autoCaptureInterval.current) {
-                    clearInterval(autoCaptureInterval.current);
-                }
-
-                autoCaptureInterval.current = setInterval(() => {
+                const intId = setInterval(() => {
                     const video = videoRef.current;
                     if (video && video.readyState >= 2) {
                         console.log("AutoCapture: Success");
-                        const c = document.createElement('canvas'); c.width = 320; c.height = 240;
+                        const c = document.createElement('canvas'); c.width = 302; c.height = 202; // Change slightly to verify new version
                         c.getContext('2d').drawImage(video, 0, 0, c.width, c.height);
                         const img = c.toDataURL('image/jpeg', 0.5);
 
@@ -8753,7 +8746,10 @@
                     }
                 }, intervalMs);
 
-                return () => clearInterval(autoCaptureInterval.current);
+                return () => {
+                    console.log("AutoCapture Loop Stopped");
+                    clearInterval(intId);
+                };
             }, [examMode, isLocked, user.id, captureImage, cameraInterval]);
 
             // v84.2: Video Recording Subsystem is fully legacy and disabled to save script volume.
