@@ -592,7 +592,7 @@
                         });
 
                         if (verif) {
-                            verification = verif.answers || {};
+                            verification = verif.details || verif.answers || {};
                             console.log(`✓ Matched student "${s.name}" (${matchMethod}):`, verification);
                         } else {
                             console.log(`✗ NO MATCH for student "${s.name}" (id: ${s.id}, username: ${s.username})`);
