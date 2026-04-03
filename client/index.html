@@ -600,12 +600,17 @@
 
                         const isAbsent = !verification || !verification.fatherName;
 
+                        const selfie = verif?.evidence?.find(e => e.type === 'VERIFICATION_SELFIE');
+                        const idcard = verif?.evidence?.find(e => e.type === 'VERIFICATION_ID');
+
                         return {
                             "S.No": i + 1,
                             "Student Name": s.name || "N/A",
                             "Username": s.username || "N/A",
                             "Father Name": isAbsent ? "NOT SUBMITTED" : (verification.fatherName || "N/A"),
                             "Aadhar Number": isAbsent ? "NOT SUBMITTED" : (verification.aadharNumber || "N/A"),
+                            "Selfie Link": selfie ? (selfie.url || "Local Asset - Sync Required") : "MISSING",
+                            "ID Card Link": idcard ? (idcard.url || "Local Asset - Sync Required") : "MISSING",
                             "Status": isAbsent ? "NOT SUBMITTED" : "SUBMITTED"
                         };
                     });
