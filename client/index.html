@@ -344,7 +344,7 @@
             alert(report);
             return false;
         };
-        console.log("v84.2 DEPLOYMENT ACTIVE - Question Paper Sync & Recovery");
+        console.log("v84.3-Secure DEPLOYMENT ACTIVE - Force Sync Override & Integrity Guard");
 
         // DATA LAYER
         const DB_KEYS = {
@@ -2166,13 +2166,13 @@
                             </div>
                             <div>
                                 <h1 className="text-2xl font-black tracking-tight text-gray-900 leading-none">NSXpertise</h1>
-                                <p className="text-[10px] font-bold text-primary-600 uppercase tracking-widest mt-1 opacity-80">Premium Portal v84.2</p>
+                                <p className="text-[10px] font-bold text-primary-600 uppercase tracking-widest mt-1 opacity-80">Premium Portal v84.3 (Secure Sync)</p>
                             </div>
                         </div>
 
                         <div className="grid grid-cols-2 gap-2 mt-6">
                             <button
-                                onClick={() => { if (confirm('Clear cache for v84.2?')) { localStorage.clear(); location.reload(); } }}
+                                onClick={() => { if (confirm("DANGER: This will wipe all local data for v84.3-Secure. Proceed?")) { localStorage.clear(); location.reload(); } }}
                                 className="text-[9px] bg-gray-100 hover:bg-rose-500/10 border border-gray-200 px-2 py-2 rounded-xl transition-all text-gray-600 font-bold uppercase tracking-tighter"
                             >
                                 Reset Cache
@@ -9069,7 +9069,7 @@
                     }
                 }
 
-                // v84.2: Recovery Logic for Empty Papers
+                // v84.3: Recovery Logic for Empty Papers
                 if (!qp || !qp.questions || qp.questions.length === 0) {
                     if (confirm("Paper found but contains zero questions. This usually means the sync from the Admin device is incomplete.\n\nAttempt a DEEP Cloud Sync now?")) {
                         setIsLoading(true);
@@ -9622,7 +9622,7 @@
                                         <p className="text-[10px] font-black text-secondary-700 uppercase tracking-widest flex items-center gap-2">
                                             <div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div> AI Monitoring Active
                                         </p>
-                                        <p className="text-[10px] font-bold text-secondary-300">v84.2 (Secure)</p>
+                                        <p className="text-[10px] font-bold text-secondary-300">v84.3 (Secure Sync)</p>
                                     </div>
                                 </div>
                             </div>
