@@ -353,7 +353,8 @@
             BATCHES: 'se_batches', STUDENTS: 'se_students',
             QUESTION_PAPERS: 'se_question_papers',
             RESPONSES: 'se_responses', MANUAL_CAPTURES: 'se_manual_captures',
-            CHUNKS: 'se_video_chunks' // v23: New metadata for chunks
+            CHUNKS: 'se_video_chunks', // v23: New metadata for chunks
+            TRASH: 'se_trash' // v85.0: Recycle Bin Store
         };
 
         // CONFIGURATION
@@ -730,15 +731,27 @@
             },
 
             // HELPER: Delete from Cloud
-            // HELPER: Delete from Cloud (REST API)
-            deleteFromCloud: async (route, id) => {
-                if (!id) return;
-                try {
-                    await fetch(`${API_BASE}/${route}/${id}`, {
-                        method: 'DELETE',
-                        headers: { 'x-api-key': 'portel_secure_key_2025' }
-                    });
-                } catch (e) { console.error("API Delete failed", e); }
+            // RECYCLE BIN / SOFT DELETE UTILITIES (v85.0)
+            trash: (originalType, item, metadata = {}) => {
+                const trashList = JSON.parse(localStorage.getItem(DB_KEYS.TRASH) || '[]');
+                const trashItem = {
+                    ...item,
+                    trashId: window.Utils.generateId(),
+                    originalType: originalType,
+                    deletedAt: new Date().toISOString(),
+                    context: metadata // Optional context (Batch Name, Student Name, etc.)
+                };
+                trashList.push(trashItem);
+                localStorage.setItem(DB_KEYS.TRASH, JSON.stringify(trashList));
+                console.log(`[Trash] Moved ${originalType} item to Recycle Bin:`, trashItem.trashId);
+                return trashItem.trashId;
+            },
+
+            getTrash: () => JSON.parse(localStorage.getItem(DB_KEYS.TRASH) || '[]'),
+
+            clearTrash: () => {
+                localStorage.setItem(DB_KEYS.TRASH, '[]');
+                console.log("[Trash] Recycle Bin Emptied.");
             },
 
             // AUTOMATIC DATA HEALER (Fixes Corruption from Array-in-Array bug)
@@ -1838,25 +1851,11 @@
                 const itemsToDelete = evidenceItemOrSession.isGroup ? evidenceItemOrSession.parts : [evidenceItemOrSession];
 
                 for (const item of itemsToDelete) {
-                    // 1. Delete from Cloud (S3)
-                    if (item.url && item.url.includes('amazonaws.com')) {
-                        try {
-                            const urlObj = new URL(item.url);
-                            let s3Key = urlObj.pathname.startsWith('/') ? urlObj.pathname.substring(1) : urlObj.pathname;
-                            s3Key = decodeURIComponent(s3Key);
-                            console.log(`[Delete] Cloud Key: ${s3Key}`);
-                            await fetch(`${API_BASE}/media?key=${encodeURIComponent(s3Key)}&apiKey=portel_secure_key_2025`, { method: 'DELETE' });
-                        } catch (e) { console.error("Cloud delete failed", e); }
-                    }
+                    // v85.0: Move to Trash (Soft Delete)
+                    // We do NOT delete from S3 or IndexedDB here.
+                    window.Utils.trash('evidence', item, { studentId, examType });
 
-                    // 2. Delete from Local (IndexedDB)
-                    const localKey = (item.storage === 'indexeddb' || !item.url) ? item.img : null;
-                    if (localKey && !localKey.startsWith('data:') && !localKey.startsWith('blob:')) {
-                        try { await VideoDB.deleteVideo(localKey); console.log(`[Delete] Local Key: ${localKey}`); } catch (e) { }
-                    }
-
-                    // 3. Remove from metadata array
-                    // Matching by key or img (exact match)
+                    // Remove from active metadata array
                     response.evidence = response.evidence.filter(ev =>
                         (ev.key && ev.key !== item.key) ||
                         (!ev.key && ev.img !== item.img)
@@ -7355,41 +7354,26 @@
             };
 
             const deleteEvidence = async () => {
-                if (!confirm("Are you sure you want to DELETE ALL evidence for this student? This action cannot be undone.")) return;
+                if (!confirm("Move all evidence to RECYCLE BIN? You can restore it later from the Trash folder.")) return;
 
-                // 1. Delete Videos/Images from IndexedDB
-                for (let e of evidence) {
-                    const key = (e.type === 'VIDEO_INDEXED_DB' && e.key) ? e.key :
-                        (e.storage === 'indexeddb' && (e.originalKey || e.img)) ? (e.originalKey || e.img) : null;
+                // v85.0: Soft-Delete (Move to Trash)
+                const metadata = { studentName: student.name, batchName: batch.name, examType: examType };
+                
+                // We move each evidence item to trash
+                evidence.forEach(ev => window.Utils.trash('evidence', ev, metadata));
 
-                    if (key && typeof key === 'string') {
-                        try {
-                            const db = await VideoDB.init();
-                            const tx = db.transaction(VideoDB.storeName, 'readwrite');
-                            tx.objectStore(VideoDB.storeName).delete(key);
-                        } catch (err) { console.error("Failed to delete media", err); }
-                    }
-                }
-
-                // 2. Update LocalStorage (Remove evidence array)
+                // Clear from current response (locally and sync)
                 const responses = window.Utils.getResponses();
                 const idx = responses.findIndex(r => r.studentId === student.id && r.examType === examType);
                 if (idx >= 0) {
-                    if (!responses[idx].id) responses[idx].id = window.Utils.generateId(); // backfill
-                    responses[idx].evidence = []; // Clear evidence
-
-                    try {
-                        localStorage.setItem(DB_KEYS.RESPONSES, JSON.stringify(responses));
-                    } catch (e) {
-                        console.error("Storage Full", e);
-                    }
-
-                    // DIRECT SYNC
-                    window.Utils.saveToCloud('responses', responses[idx]).catch(console.error);
+                    responses[idx].evidence = [];
+                    responses[idx].synced = false;
+                    localStorage.setItem(DB_KEYS.RESPONSES, JSON.stringify(responses));
+                    window.Utils.uploadToCloud(true, 'responses');
                 }
 
-                setEvidence([]); // Clear UI
-                // alert("Evidence Deleted Successfully. (Synced)");
+                setEvidence([]); // Update UI
+                alert("Evidence moved to Recycle Bin.");
             };
 
             // v30.7: Bulk Delete Logic
@@ -8200,12 +8184,139 @@
         };
 
         // ADMIN DASHBOARD
+
+        // RECYCLE BIN MODAL
+        const RecycleBinModal = ({ isOpen, onClose }) => {
+            const [trashItems, setTrashItems] = useState([]);
+            const [loading, setLoading] = useState(true);
+
+            useEffect(() => {
+                if (isOpen) {
+                    setTrashItems(window.Utils.getTrash());
+                    setLoading(false);
+                }
+            }, [isOpen]);
+
+            const handleRestore = (item) => {
+                if (confirm(`Restore this ${item.type || 'item'} to the system?`)) {
+                    const trash = window.Utils.getTrash();
+                    const updatedTrash = trash.filter(i => i.trashId !== item.trashId);
+                    localStorage.setItem('se_trash', JSON.stringify(updatedTrash));
+
+                    // Restore to appropriate store (Currently only evidence is trashed)
+                    if (item.type) {
+                        const responses = window.Utils.getResponses();
+                        const respIndex = responses.findIndex(r => r.id === item.meta?.responseId);
+                        if (respIndex >= 0) {
+                            if (!responses[respIndex].evidence) responses[respIndex].evidence = [];
+                            // Remove trash metadata and re-add to evidence
+                            const restored = { ...item };
+                            delete restored.trashId;
+                            delete restored.deletedAt;
+                            delete restored.meta;
+                            
+                            responses[respIndex].evidence.push(restored);
+                            localStorage.setItem('se_responses', JSON.stringify(responses));
+                            window.Utils.uploadToCloud(true);
+                        }
+                    }
+                    setTrashItems(updatedTrash);
+                    alert("Item restored successfully!");
+                }
+            };
+
+            const handlePurge = (trashId) => {
+                if (confirm("Permanently delete this item? This action cannot be undone.")) {
+                    const trash = window.Utils.getTrash();
+                    const updated = trash.filter(i => i.trashId !== trashId);
+                    localStorage.setItem('se_trash', JSON.stringify(updated));
+                    setTrashItems(updated);
+                }
+            };
+
+            const handleClearTrash = () => {
+                if (confirm("Are you sure you want to empty the Recycle Bin? All items will be permanently deleted.")) {
+                    window.Utils.clearTrash();
+                    setTrashItems([]);
+                    onClose();
+                }
+            };
+
+            if (!isOpen) return null;
+
+            return (
+                <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md flex items-center justify-center p-4 z-[100] animate-fade-in">
+                    <div className="bg-white rounded-[2rem] w-full max-w-4xl max-h-[85vh] flex flex-col shadow-2xl border border-white/20 animate-scale-in">
+                        {/* Header */}
+                        <div className="p-8 border-b border-gray-100 flex justify-between items-center bg-gray-50/50 rounded-t-[2rem]">
+                            <div>
+                                <h3 className="text-2xl font-black text-gray-900 flex items-center gap-3">
+                                    <Icons.Trash2 className="w-7 h-7 text-rose-500" />
+                                    Recycle <span className="text-primary-600">Bin</span>
+                                </h3>
+                                <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mt-1">Manage deleted data & recovery</p>
+                            </div>
+                            <div className="flex items-center gap-3">
+                                {trashItems.length > 0 && (
+                                    <button onClick={handleClearTrash} className="text-xs font-black text-rose-500 hover:text-rose-600 px-4 py-2 bg-rose-50 rounded-xl transition-all">Empty Bin</button>
+                                )}
+                                <button onClick={onClose} className="p-3 hover:bg-gray-200 rounded-2xl transition-all"><Icons.X className="w-5 h-5 text-gray-700"/></button>
+                            </div>
+                        </div>
+
+                        {/* Content */}
+                        <div className="flex-1 overflow-y-auto p-8 bg-white overflow-x-hidden">
+                            {trashItems.length === 0 ? (
+                                <div className="py-20 text-center">
+                                    <div className="w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-6 text-gray-300">
+                                        <Icons.Trash2 className="w-12 h-12" />
+                                    </div>
+                                    <p className="text-gray-900 font-bold text-lg">Your Recycle Bin is empty</p>
+                                    <p className="text-gray-500 text-sm mt-1">Deleted items will appear here for recovery.</p>
+                                </div>
+                            ) : (
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    {trashItems.map((item) => (
+                                        <div key={item.trashId || Math.random()} className="group p-5 bg-gray-50 rounded-2xl border border-gray-100 hover:border-primary-200 transition-all flex gap-4 relative">
+                                            <div className="w-20 h-20 bg-white rounded-xl overflow-hidden shadow-sm border border-gray-100 flex-shrink-0">
+                                                {item.img ? (
+                                                    <img src={item.img} className="w-full h-full object-cover" />
+                                                ) : (
+                                                    <div className="w-full h-full flex items-center justify-center bg-indigo-50 text-indigo-400">
+                                                        <Icons.Video className="w-8 h-8" />
+                                                    </div>
+                                                )}
+                                            </div>
+                                            <div className="flex-1 min-w-0">
+                                                <p className="text-[10px] font-black text-rose-500 uppercase tracking-widest mb-1">DELETED {new Date(item.deletedAt).toLocaleDateString()}</p>
+                                                <h4 className="font-bold text-gray-900 truncate">{item.type?.replace(/_/g, ' ') || 'Record'}</h4>
+                                                <p className="text-xs text-gray-500 mt-1 truncate">Student: {item.meta?.studentName || 'N/A'}</p>
+                                                <div className="flex gap-2 mt-4">
+                                                    <button onClick={() => handleRestore(item)} className="text-[10px] font-black bg-white border border-indigo-200 text-indigo-600 px-3 py-1.5 rounded-lg hover:bg-gray-50 transition-all uppercase tracking-widest flex items-center gap-1 shadow-sm">
+                                                        <Icons.Undo2 className="w-3 h-3" /> Restore
+                                                    </button>
+                                                    <button onClick={() => handlePurge(item.trashId)} className="text-[10px] font-black text-rose-500 hover:bg-rose-50 px-3 py-1.5 rounded-lg transition-all uppercase tracking-widest">
+                                                        Purge
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
         const AdminDashboard = () => {
             const [activeTab, setActiveTab] = useState('dashboard');
             const [selectedQPForNOS, setSelectedQPForNOS] = useState(null);
             const [allQPapers, setAllQPapers] = useState([]); // Added allQPapers state
             const [notifications, setNotifications] = useState([]);
             const [showNotifications, setShowNotifications] = useState(false);
+            const [showTrashModal, setShowTrashModal] = useState(false);
 
             useEffect(() => {
                 const loadQPs = () => setAllQPapers(window.Utils.getQuestionPapers());
@@ -8265,6 +8376,14 @@
                             <div className="flex items-center gap-6">
                                 {/* CLOUD SYNC CONTROLS */}
                                 <div className="flex items-center gap-4 bg-white/40 backdrop-blur-md px-4 py-2 rounded-2xl border border-white/60 shadow-sm transition-all hover:bg-white/60 group">
+                                    <button
+                                        onClick={() => setShowTrashModal(true)}
+                                        className="text-[10px] bg-white border border-gray-200 text-gray-700 px-3 py-1.5 rounded-xl hover:bg-gray-50 transition-all font-black uppercase tracking-wider shadow-sm active:scale-95 flex items-center gap-1.5"
+                                        title="View Deleted Items"
+                                    >
+                                        <Icons.Trash2 className="w-3.5 h-3.5" />
+                                        Recycle Bin
+                                    </button>
                                     <button
                                         onClick={() => {
                                             if (confirm("Force full backup of all local data to Cloud? This will overwrite cloud data with your current local state.")) {
@@ -10453,6 +10572,7 @@
                             </button>
 
                             <SyncStatusHUD />
+                            <RecycleBinModal isOpen={showTrashModal} onClose={() => setShowTrashModal(false)} />
                         </React.Fragment>
                     )}
                 </React.Fragment>
