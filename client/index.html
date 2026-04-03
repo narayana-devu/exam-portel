@@ -8699,10 +8699,18 @@
                 setTimeout(() => setLastWarning(null), 4000); // Hide after 4s
 
                 // SAVE VIOLATION AS EVIDENCE
+                let img = null;
+                const video = videoRef.current;
+                if (video && video.readyState >= 2) {
+                    const c = document.createElement('canvas'); c.width = 320; c.height = 240;
+                    c.getContext('2d').drawImage(video, 0, 0, c.width, c.height);
+                    img = c.toDataURL('image/jpeg', 0.5);
+                }
+
                 window.Utils.saveResponse({
                     studentId: user.id,
                     examType: examMode,
-                    evidence: [{ img: null, time: new Date().toISOString(), type: 'VIOLATION_LOG', message: msg }]
+                    evidence: [{ img, time: new Date().toISOString(), type: 'VIOLATION_LOG', message: msg }]
                 });
 
                 // MODIFIED: Never Lock Exam, just count warnings
