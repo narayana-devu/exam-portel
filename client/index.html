@@ -7152,8 +7152,11 @@
                 let evList = [];
                 let targetResp = null;
 
+                // AGGREGATE VIEW (v84.9.4): Fetch ALL responses for this student to find verification & other section data
+                const allStudentResponses = responses.filter(r => r.studentId === s.id);
+
                 // 1. Find the specific response for this exam type (for answers/marks)
-                targetResp = responses.find(r => r.studentId === s.id && r.examType === examType);
+                targetResp = allStudentResponses.find(r => r.examType === examType);
 
                 // 2. Aggregate Evidence from BOTH current exam and 'Photo' exam (v84.9.4)
                 // This ensures manual photos (now stored in 'Photo') are visible everywhere.
