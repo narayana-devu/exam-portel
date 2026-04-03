@@ -8777,6 +8777,7 @@
                         // Hidden Source Video
                         const srcVid = document.createElement('video');
                         srcVid.srcObject = rawStream;
+                        camStreamRef.current = rawStream; // CRITICAL: Ensure track cleanup for theory mode
                         srcVid.muted = true;
 
                         const draw = () => {
@@ -8858,6 +8859,7 @@
             useEffect(() => {
                 if (examMode === 'VivaLive') {
                     navigator.mediaDevices.getUserMedia({ video: true, audio: true }).then(stream => {
+                        camStreamRef.current = stream; // Reference for cleanup
                         const v = document.getElementById('student-cam-viva');
                         if (v) v.srcObject = stream;
                     });
@@ -9316,9 +9318,11 @@
                     await window.Utils.uploadToCloud(false, 'responses', filterByStudent);
 
                     const totalPhotos = finalEvidence.filter(e => e.type && (e.type.includes('PHOTO') || e.type.includes('MANUAL') || e.type.includes('SNAPSHOT'))).length;
-                    alert(`Exam Submitted Successfully!\n\nSummary: \n - Duration: ${durationSec}s\n - Evidence Items: ${finalEvidence.length}\n - Photos: ${totalPhotos}`);
 
+                    // v84.3: END EXAM BEFORE ALERT (Ensures camera light turns off immediately)
                     endExam();
+
+                    alert(`Exam Submitted Successfully!\n\nSummary: \n - Duration: ${durationSec}s\n - Evidence Items: ${finalEvidence.length}\n - Photos: ${totalPhotos}`);
 
                 } catch (e) {
                     console.error("Submit Failed", e);
