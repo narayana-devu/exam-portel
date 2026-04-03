@@ -7080,17 +7080,16 @@
                     evList = [...targetResp.evidence];
                 }
 
-                // v45: FIX - Only include VERIFICATION evidence in Photo tab
-                // This prevents verification selfies/IDs from appearing in Theory/Practical/Viva tabs
-                if (examType === 'Photo') {
-                    const verifResp = allStudentResponses.find(r => r.examType.toUpperCase() === 'VERIFICATION'); // Case-insensitive check
-                    if (verifResp) {
-                        if (verifResp.answers) setVerificationInfo(verifResp.answers); // Load Father/Aadhar
-                        if (verifResp.evidence) {
-                            console.log("Found Verification Evidence:", verifResp.evidence.length);
-                            // Prepend verification evidence so it appears first in Photo tab only
-                            evList = [...verifResp.evidence, ...evList];
-                        }
+                // v84.3: ALWAYS load verification details and photos regardless of exam type
+                const verifResp = allStudentResponses.find(r => r.examType.toUpperCase() === 'VERIFICATION');
+                if (verifResp) {
+                    if (verifResp.details) setVerificationInfo(verifResp.details); // Load Father/Aadhar from 'details' field
+                    else if (verifResp.answers) setVerificationInfo(verifResp.answers); // Fallback for older versions
+                    
+                    if (verifResp.evidence) {
+                        console.log("Found Verification Evidence:", verifResp.evidence.length);
+                        // Prepend verification evidence so it appears first in the gallery
+                        evList = [...verifResp.evidence, ...evList];
                     }
                 }
 
@@ -7338,8 +7337,8 @@
                         </div>
                     </div>
 
-                    {/* v30.7: Verification Details Display */}
-                    {!captureOnly && verificationInfo ? (
+                    {/* v30.7: Verification Details Display (v84.3: Always show if available) */}
+                    {verificationInfo ? (
                         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6 flex flex-wrap gap-8 items-center shadow-sm">
                             <div>
                                 <h4 className="text-xs font-bold text-blue-500 uppercase tracking-wider">Candidate Name</h4>
