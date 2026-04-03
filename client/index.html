@@ -13,6 +13,7 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <script src="/socket.io/socket.io.js"></script>
 
     <script>
@@ -624,6 +625,100 @@
                     const submitted = data.filter(d => d.Status === "SUBMITTED").length;
                     alert("✅ Downloaded: " + batch.name + "_Aadhar_Father.xlsx\n\nTotal: " + students.length + "\nSubmitted: " + submitted + "\nNot Submitted: " + (students.length - submitted));
                 } catch (e) { console.error('Export error:', e); alert('Error: ' + e.message); }
+            },
+
+            downloadBatchIdentityZip: async (batchId, onProgress) => {
+                try {
+                    const batch = window.Utils.getBatches().find(b => b.id === batchId);
+                    const students = window.Utils.getStudentsByBatch(batchId);
+                    const allResponses = window.Utils.getResponses();
+                    const zip = new JSZip();
+                    const photosFolder = zip.folder("Photos");
+
+                    // 1. Generate Excel Blob
+                    onProgress("Generating Excel Report...");
+                    const excelData = students.map((s, i) => {
+                        const verif = allResponses.find(r => r.examType.toUpperCase() === 'VERIFICATION' && (r.studentId === s.id || r.studentId === s.username));
+                        const details = verif?.details || verif?.answers || {};
+                        const selfie = verif?.evidence?.find(e => e.type === 'VERIFICATION_SELFIE');
+                        const idcard = verif?.evidence?.find(e => e.type === 'VERIFICATION_ID');
+                        return {
+                            "S.No": i + 1,
+                            "Student Name": s.name || "N/A",
+                            "Username": s.username || "N/A",
+                            "Father Name": details.fatherName || "NOT SUBMITTED",
+                            "Aadhar Number": details.aadharNumber || "NOT SUBMITTED",
+                            "Selfie FILENAME": selfie ? `${s.username}_${s.name}_Selfie.jpg`.replace(/ /g, '_') : "MISSING",
+                            "ID Card FILENAME": idcard ? `${s.username}_${s.name}_IDCard.jpg`.replace(/ /g, '_') : "MISSING"
+                        };
+                    });
+                    const ws = XLSX.utils.json_to_sheet(excelData);
+                    const wb = XLSX.utils.book_new();
+                    XLSX.utils.book_append_sheet(wb, ws, "Identity Records");
+                    const excelBuffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+                    zip.file(`${batch.name}_Identity_Report.xlsx`, excelBuffer);
+
+                    // 2. Fetch Photos
+                    let completed = 0;
+                    const totalStudents = students.length;
+
+                    for (const s of students) {
+                        const verif = allResponses.find(r => r.examType.toUpperCase() === 'VERIFICATION' && (r.studentId === s.id || r.studentId === s.username));
+                        if (verif && verif.evidence) {
+                            for (const item of verif.evidence) {
+                                if (item.type === 'VERIFICATION_SELFIE' || item.type === 'VERIFICATION_ID') {
+                                    const suffix = item.type === 'VERIFICATION_SELFIE' ? 'Selfie' : 'IDCard';
+                                    const fileName = `${s.username}_${s.name}_${suffix}.jpg`.replace(/ /g, '_');
+                                    
+                                    try {
+                                        let blob;
+                                        // A. Try Local IndexedDB
+                                        const key = (item.storage === 'indexeddb' || !item.url) ? item.img : null;
+                                        if (key && !key.startsWith('data:') && !key.startsWith('blob:')) {
+                                            blob = await VideoDB.getVideo(key);
+                                        }
+                                        
+                                        // B. Try Cloud Fetch (v18.3 Proxy)
+                                        if (!blob) {
+                                            let finalUrl = item.url || item.img;
+                                            if (finalUrl && finalUrl.includes('amazonaws.com') && !finalUrl.includes('media-stream')) {
+                                                const urlObj = new URL(finalUrl);
+                                                let s3Key = urlObj.pathname.startsWith('/') ? urlObj.pathname.substring(1) : urlObj.pathname;
+                                                finalUrl = `${API_BASE}/media-stream?key=${encodeURIComponent(decodeURIComponent(s3Key))}&apiKey=portel_secure_key_2025`;
+                                            }
+                                            if (finalUrl && finalUrl.startsWith('http')) {
+                                                const resp = await fetch(finalUrl);
+                                                if (resp.ok) blob = await resp.blob();
+                                            } else if (finalUrl && finalUrl.startsWith('data:')) {
+                                                const res = await fetch(finalUrl);
+                                                blob = await res.blob();
+                                            }
+                                        }
+
+                                        if (blob) photosFolder.file(fileName, blob);
+                                    } catch (err) { console.error(`Error zipping photo for ${s.name}:`, err); }
+                                }
+                            }
+                        }
+                        completed++;
+                        onProgress(`Zipping Identity Photos: ${completed} / ${totalStudents}`);
+                    }
+
+                    // 3. Finalize and Download
+                    onProgress("Compressing Folder... please wait.");
+                    const content = await zip.generateAsync({ type: "blob" });
+                    const link = document.createElement("a");
+                    link.href = URL.createObjectURL(content);
+                    link.download = `${batch.name}_Identity_Assets.zip`;
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    onProgress(null);
+                } catch (e) { 
+                    console.error('ZIP Error:', e); 
+                    alert('ZIP Creation Failed: ' + e.message); 
+                    onProgress(null);
+                }
             },
 
             downloadSampleFormat: () => {
@@ -6658,18 +6753,35 @@
                 </div>
             );
 
-            if (examType === 'Aad/Fat') return (
+            if (examType === 'Aad/Fat') {
+                const [zipStatus, setZipStatus] = useState(null);
+                return (
                 <div>
                     <div className="flex justify-between items-center mb-6">
                         <button onClick={() => setExamType(null)} className="text-secondary-600 font-bold flex items-center gap-1 hover:text-primary-600 transition-colors">
                             <Icons.ChevronLeft className="w-5 h-5" /> Back to Batch Overview
                         </button>
-                        <button 
-                            onClick={() => window.Utils.exportAadharFatherData(selectedBatch.id)}
-                            className="bg-primary-600 hover:bg-primary-700 text-gray-900 px-6 py-2 rounded-2xl font-black text-[11px] uppercase tracking-widest shadow-lg shadow-primary-500/20 active:scale-95 transition-all flex items-center gap-2"
-                        >
-                            <Icons.Download className="w-4 h-4" /> Download CSV Report
-                        </button>
+                        <div className="flex gap-3">
+                            {zipStatus ? (
+                                <div className="bg-primary-50 border border-primary-200 px-6 py-2 rounded-2xl flex items-center gap-3">
+                                    <Icons.Loader className="w-4 h-4 animate-spin text-primary-600" />
+                                    <span className="text-[10px] font-black text-primary-700 uppercase tracking-widest">{zipStatus}</span>
+                                </div>
+                            ) : (
+                                <button 
+                                    onClick={() => window.Utils.downloadBatchIdentityZip(selectedBatch.id, setZipStatus)}
+                                    className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2 rounded-2xl font-black text-[11px] uppercase tracking-widest shadow-lg shadow-indigo-500/20 active:scale-95 transition-all flex items-center gap-2"
+                                >
+                                    <Icons.FolderArchive className="w-5 h-5" /> Download Identity Folder (ZIP)
+                                </button>
+                            )}
+                            <button 
+                                onClick={() => window.Utils.exportAadharFatherData(selectedBatch.id)}
+                                className="bg-primary-600 hover:bg-primary-700 text-gray-900 px-6 py-2 rounded-2xl font-black text-[11px] uppercase tracking-widest shadow-lg shadow-primary-500/20 active:scale-95 transition-all flex items-center gap-2"
+                            >
+                                <Icons.Download className="w-4 h-4" /> Download CSV Report
+                            </button>
+                        </div>
                     </div>
 
                     <div className="bg-white rounded-3xl shadow-xl border border-secondary-100 overflow-hidden animate-fade-in">
