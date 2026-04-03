@@ -1800,7 +1800,7 @@
                                     e.type === newItem.type && 
                                     Math.abs(new Date(e.time) - new Date(newItem.time)) < 2000
                                 );
-                                if (isDuplicate && newItem.type !== 'VIOLATION_LOG') { // Allow multiple logs, but dedupe auto-captures
+                                if (isDuplicate && newItem.type !== 'VIOLATION_LOG' && newItem.type !== 'MANUAL_CAPTURE_PHOTO') { // v84.9.4: Allow manual assessor captures
                                     console.warn(`[Sync-Guard] Duplicate ${newItem.type} detected. Skipping save.`);
                                     return;
                                 }
@@ -7114,6 +7114,8 @@
             const [showGallery, setShowGallery] = useState(false); // Default hidden as per user request
             const [verificationInfo, setVerificationInfo] = useState(null); // v30.7: Father Name & Aadhar
             const [selectedEvidence, setSelectedEvidence] = useState([]); // v30.7: Bulk Delete State
+            const [isFlashing, setIsFlashing] = useState(false); // v84.9.4: Shutter Effect
+            const [lastCaptureToast, setLastCaptureToast] = useState(null); // v84.9.4: Success Notification
 
             // Camera State
             const [isCamActive, setIsCamActive] = useState(false);
@@ -7150,22 +7152,24 @@
                 let evList = [];
                 let targetResp = null;
 
-                // AGGREGATE VIEW: Fetch ALL evidence (Manual + Auto) for this student
-                // We want to show proctoring evidence for Theory/Practical/Viva as well.
-                const allStudentResponses = responses.filter(r => r.studentId === s.id);
+                // 1. Find the specific response for this exam type (for answers/marks)
+                targetResp = responses.find(r => r.studentId === s.id && r.examType === examType);
 
-                // 1. Find the specific response for this exam type (for answers/grades)
-                targetResp = allStudentResponses.find(r => r.studentId === s.id && r.examType === examType);
-
-                // 2. Gather Evidence:
-                // If it's the specific exam, get its evidence.
-                // ALSO, include any 'MANUAL' or 'AUTO' evidence captured during this session timeframe (simplified: just show all evidence for now or specific types)
-
-                // Current Requirement: Show "system recorded video and photos" (likely MANUAL/AUTO type) for Writing (Theory) Exam.
-                // So we should NOT filter out MANUAL types for Theory.
-
+                // 2. Aggregate Evidence from BOTH current exam and 'Photo' exam (v84.9.4)
+                // This ensures manual photos (now stored in 'Photo') are visible everywhere.
+                const photoResp = responses.find(r => r.studentId === s.id && r.examType === 'Photo');
+                
                 if (targetResp && targetResp.evidence) {
                     evList = [...targetResp.evidence];
+                }
+                
+                if (photoResp && photoResp.evidence) {
+                    // Merge and de-duplicate by time or content if needed
+                    photoResp.evidence.forEach(pe => {
+                        if (!evList.some(e => e.time === pe.time || e.img === pe.img)) {
+                            evList.push(pe);
+                        }
+                    });
                 }
 
                 // If no specific response found (e.g. absent but maybe has evidence?), keep evList empty or check others.
@@ -7255,6 +7259,11 @@
 
             const capturePhoto = () => {
                 if (!videoRef.current) return;
+                
+                // v84.9.4: Shutter Effect (Flash)
+                setIsFlashing(true);
+                setTimeout(() => setIsFlashing(false), 150);
+
                 const canvas = document.createElement('canvas');
                 canvas.width = 640;
                 canvas.height = 480;
@@ -7262,23 +7271,24 @@
                 ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
                 const dataUrl = canvas.toDataURL('image/jpeg');
                 addEvidence(dataUrl, 'MANUAL_CAPTURE_PHOTO');
+
+                // v84.9.4: Success Notification
+                setLastCaptureToast("Photo Captured!");
+                setTimeout(() => setLastCaptureToast(null), 3000);
             };
 
             // Helper to add evidence with correct ExamType context
             const addEvidence = (data, type) => {
-                // When capturing, we must ensure it is saved under the CURRENT examType (e.g. 'Viva', 'Practical', 'Theory')
-                // However, if the user explicitly selected 'Photo' mode, then it saves as 'Photo'.
-                // The AssessorPortal flow sets 'examType' correctly based on user selection.
+                // v84.9.4: ALL manual photos captured by assessor go to 'Photo' section as per user request
+                const effectiveExamType = type === 'MANUAL_CAPTURE_PHOTO' ? 'Photo' : examType;
 
                 const newEvidence = { img: data, time: new Date().toISOString(), type };
-                // Correctly delegate to the utility function which handles IndexedDB offloading and merging
-                // We pass a partial object with just the new evidence.
+                
                 const partialResponse = {
                     studentId: student.id,
                     batchId: batch.id,
-                    examType: examType,
+                    examType: effectiveExamType,
                     evidence: [newEvidence],
-                    // Ensure status is tracked if new
                     status: 'draft'
                 };
 
@@ -7286,6 +7296,9 @@
 
                 // Update local state (UI)
                 setEvidence(prev => [...prev, newEvidence]);
+
+                // v84.9.4: Auto-show gallery on first capture to confirm success
+                if (!showGallery) setShowGallery(true);
             };
 
             const startSegment = () => {
@@ -7484,6 +7497,12 @@
                                     <div className="grid md:grid-cols-2 gap-4">
                                         <div className="relative bg-slate-900 rounded overflow-hidden aspect-video shadow-2xl border border-gray-700">
                                             <video ref={videoRef} autoPlay muted playsInline className="w-full h-full object-cover"></video>
+                                            
+                                            {/* v84.9.4: Shutter Flash Effect */}
+                                            {isFlashing && (
+                                                <div className="absolute inset-0 bg-white/80 z-[60] animate-pulse"></div>
+                                            )}
+
                                             {isRecording && (
                                                 <div className="absolute top-4 right-4 animate-pulse flex items-center gap-2 bg-red-600/90 backdrop-blur text-white px-3 py-1 rounded-full text-xs font-bold ring-2 ring-red-500/50">
                                                     <span className="w-2 h-2 rounded-full bg-white"></span> RECORDING
@@ -7502,6 +7521,15 @@
                                     </div>
                                 </div>
                             )}
+                        </div>
+                    )}
+
+                    {/* v84.9.4: Success Toast Notification */}
+                    {lastCaptureToast && (
+                        <div className="fixed bottom-10 left-1/2 -translate-x-1/2 z-[100] animate-bounce">
+                            <div className="bg-emerald-600 text-white px-8 py-4 rounded-2xl shadow-2xl font-black text-sm uppercase tracking-widest flex items-center gap-3">
+                                <Icons.CheckCircle className="w-6 h-6" /> {lastCaptureToast}
+                            </div>
                         </div>
                     )}
 
