@@ -8538,6 +8538,8 @@
             const [streamActive, setStreamActive] = useState(false);
             const compositeReqRef = useRef(null); // Reference for Canvas Animation Frame
 
+            const toggleRecording = () => setIsRecording(prev => !prev);
+
             const startCameraManual = async () => {
                 try {
                     console.log("Requesting Camera...");
