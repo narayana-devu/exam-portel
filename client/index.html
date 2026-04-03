@@ -1694,6 +1694,17 @@
                         let newEvidence = [...(old.evidence || [])];
                         if (response.evidence) {
                             response.evidence.forEach(newItem => {
+                                // v84.3: DE-DUPLICATION GUARD
+                                // If we already have an item of the SAME TYPE within the SAME 2-SECOND WINDOW, skip it.
+                                const isDuplicate = newEvidence.some(e => 
+                                    e.type === newItem.type && 
+                                    Math.abs(new Date(e.time) - new Date(newItem.time)) < 2000
+                                );
+                                if (isDuplicate && newItem.type !== 'VIOLATION_LOG') { // Allow multiple logs, but dedupe auto-captures
+                                    console.warn(`[Sync-Guard] Duplicate ${newItem.type} detected. Skipping save.`);
+                                    return;
+                                }
+
                                 // Check if this evidence key already exists to update it (e.g. adding downloadUrl)
                                 const idx = newItem.key ? newEvidence.findIndex(e => e.key === newItem.key) : -1;
                                 if (idx >= 0) {
