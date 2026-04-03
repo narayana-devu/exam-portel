@@ -1553,6 +1553,12 @@
 
             getQuestionPapers: () => JSON.parse(localStorage.getItem(DB_KEYS.QUESTION_PAPERS) || '[]'),
             saveQuestionPaper: (qp) => {
+                // v84.3 Integrity Guard
+                if (!qp || !qp.questions || qp.questions.length === 0) {
+                    console.error("[Sync] Attempted to save empty Paper object. Aborted.", qp);
+                    alert("CRITICAL ERROR: Attempted to save a Question Paper with ZERO questions. This upload has been aborted to protect data integrity.");
+                    return false;
+                }
                 const list = window.Utils.getQuestionPapers();
                 if (!qp.id) qp.id = Date.now().toString(36) + Math.random().toString(36).substr(2);
                 qp.synced = false;
@@ -1563,6 +1569,7 @@
 
                 localStorage.setItem(DB_KEYS.QUESTION_PAPERS, JSON.stringify(list));
                 window.Utils.uploadToCloud(true, 'question_papers');
+                return true;
             },
             deleteQuestionPaper: (id) => {
                 window.Utils.deleteFromCloud('question_papers', id);
@@ -4245,6 +4252,17 @@
                                     className="bg-red-500 hover:bg-red-600 text-gray-900 px-6 py-2 rounded-lg font-medium shadow-sm transition-colors flex items-center gap-2">
                                     <Icons.Upload className="w-4 h-4" /> Upload Question Paper
                                 </button>
+                                <button onClick={async () => {
+                                    if (confirm("FORCE OVERWRITE CLOUD?\n\nThis will push 100% of your current local Question Papers to the server, overwriting any stale data. Use this if students see 'Zero Questions'.")) {
+                                        const btn = document.getElementById('sync-status-text');
+                                        if (btn) btn.innerText = "Initiating Force Push...";
+                                        const ok = await window.Utils.uploadToCloud(false, 'question_papers', null, true);
+                                        if (ok) alert("FORCE SYNC SUCCESS!\nAll papers are now active in the cloud.");
+                                        setQPList(window.Utils.getQuestionPapers()); // Refresh UI
+                                    }
+                                }} className="bg-gray-100 hover:bg-gray-200 text-gray-800 px-6 py-2 rounded-lg font-medium shadow-sm transition-colors flex items-center gap-2">
+                                    <Icons.CloudLightning className="w-4 h-4" /> Force Cloud Override
+                                </button>
                             </div>
                         )}
                     </div>
@@ -5238,7 +5256,11 @@
             };
 
             const questionPapers = window.Utils.getQuestionPapers();
-            const getQPName = (id) => questionPapers.find(q => q.id === id)?.qpName || '-';
+            const getQPName = (id) => {
+                const qp = questionPapers.find(q => q.id === id);
+                if (!qp) return '-';
+                return `${qp.qpName} [${qp.questions.length} Qs]`;
+            };
 
             return (
                 <div className="animate-fade-in-up space-y-8">
@@ -5403,6 +5425,16 @@
                                         className="px-5 py-2.5 bg-indigo-500 hover:bg-indigo-600 text-gray-900 rounded-xl font-bold text-xs transition-all flex items-center gap-2 shadow-lg shadow-indigo-500/20"
                                     >
                                         <Icons.UserPlus className="w-4 h-4" /> Bulk Import
+                                    </button>
+                                    <button onClick={async () => {
+                                        if (confirm("FORCE SYNC ALL BATCHES?\n\nThis will re-upload every batch definition. Use this if 'Assigned Paper' or 'Dates' are not updating for students.")) {
+                                            const btn = document.getElementById('sync-status-text');
+                                            if (btn) btn.innerText = "Syncing All Batches...";
+                                            const ok = await window.Utils.uploadToCloud(false, 'batches', null, true);
+                                            if (ok) alert("Batch Definitions Synchronized Successfully!");
+                                        }
+                                    }} className="px-5 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-gray-900 rounded-xl font-bold text-xs transition-all flex items-center gap-2 shadow-lg shadow-emerald-500/20">
+                                        <Icons.RefreshCw className="w-4 h-4" /> Force Sync Global Registry
                                     </button>
                                     <button
                                         onClick={() => {
@@ -9051,15 +9083,17 @@
                             if (refreshedQP && refreshedQP.questions && refreshedQP.questions.length > 0) {
                                 qp = refreshedQP;
                                 alert("Success! Question data recovered from Cloud.");
+                                window.location.reload(); 
+                                return;
                             } else {
-                                throw new Error("Deep Sync completed but Paper still has 0 questions.");
+                                alert("DEEP SYNC FAILED: The server also reports zero questions for this paper. Please contact Admin to re-upload the paper using the 'Force Cloud Override' button in the Question Papers tab.");
                             }
                         } catch (err) {
                             alert("Recovery Failed: " + err.message + "\nPlease contact Admin to re-upload the paper.");
                             setIsLoading(false);
                             return;
                         } finally {
-                             setIsLoading(false);
+                            setIsLoading(false);
                         }
                     } else {
                         return;
