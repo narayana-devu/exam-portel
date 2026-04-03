@@ -8527,6 +8527,7 @@
                             {activeTab === 'results' && <ResultsTab />}
                             {activeTab === 'assessors' && <AssessorsTab />}
                         </div>
+                        <RecycleBinModal isOpen={showTrashModal} onClose={() => setShowTrashModal(false)} />
                     </div>
                 </div >
             );
@@ -10572,7 +10573,6 @@
                             </button>
 
                             <SyncStatusHUD />
-                            <RecycleBinModal isOpen={showTrashModal} onClose={() => setShowTrashModal(false)} />
                         </React.Fragment>
                     )}
                 </React.Fragment>
