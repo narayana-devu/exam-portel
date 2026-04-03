@@ -8537,6 +8537,8 @@
 
             const [streamActive, setStreamActive] = useState(false);
             const compositeReqRef = useRef(null); // Reference for Canvas Animation Frame
+            const camStreamRef = useRef(null);
+            const screenStreamRef = useRef(null);
 
             const toggleRecording = () => setIsRecording(prev => !prev);
 
@@ -8544,6 +8546,7 @@
                 try {
                     console.log("Requesting Camera...");
                     const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+                    camStreamRef.current = stream; // Reference for cleanup
                     const video = videoRef.current;
                     if (video) {
                         video.srcObject = stream;
@@ -9122,6 +9125,8 @@
                             alert("Practical Exam: Please allow Screen Sharing and Camera permissions.");
                             const screenStream = await navigator.mediaDevices.getDisplayMedia({ video: { cursor: "always" }, audio: true });
                             const camStream = await navigator.mediaDevices.getUserMedia({ video: { width: 320, height: 240, facingMode: "user" }, audio: true });
+                            screenStreamRef.current = screenStream;
+                            camStreamRef.current = camStream;
 
                             // Hidden Video Elements for Source
                             const screenVid = document.createElement('video');
@@ -9205,10 +9210,16 @@
 
 
             const endExam = () => {
-                // STOP MEDIA
-                if (mediaStream) {
-                    mediaStream.getTracks().forEach(track => track.stop());
-                }
+                // STOP ALL MEDIA TRACKS
+                [mediaStream, camStreamRef.current, screenStreamRef.current].forEach(s => {
+                    if (s) {
+                        s.getTracks().forEach(track => {
+                            track.stop();
+                            console.log(`[EndExam] Stopped track: ${track.kind}`);
+                        });
+                    }
+                });
+
                 if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
                     mediaRecorderRef.current.stop();
                 }
@@ -9218,6 +9229,8 @@
                 }
                 // RESET STATE
                 setMediaStream(null);
+                camStreamRef.current = null;
+                screenStreamRef.current = null;
                 setWebcamActive(false);
                 setStreamActive(false);
                 setExamMode(null);
@@ -9250,14 +9263,18 @@
                         if (window.studentRecordingInterval) clearInterval(window.studentRecordingInterval);
                     }
 
-                    // Release camera stream
-                    if (mediaStream) {
-                        mediaStream.getTracks().forEach(track => {
-                            track.stop();
-                            console.log(`[Submit] Stopped track: ${track.kind}`);
-                        });
-                        setMediaStream(null);
-                    }
+                    // Release ALL camera/screen streams
+                    [mediaStream, camStreamRef.current, screenStreamRef.current].forEach(s => {
+                        if (s) {
+                            s.getTracks().forEach(track => {
+                                track.stop();
+                                console.log(`[Submit] Stopped track: ${track.kind}`);
+                            });
+                        }
+                    });
+                    setMediaStream(null);
+                    camStreamRef.current = null;
+                    screenStreamRef.current = null;
 
                     // 2. NOW FETCH EVIDENCE (Will include the last segment and potentially the photo)
                     const currentResponses = window.Utils.getResponses();
