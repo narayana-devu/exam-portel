@@ -722,7 +722,7 @@
                 }
             },
             
-            // BULK DOWNLOAD: All Evidence Photos (v84.9.6)
+            // BULK DOWNLOAD: All Evidence Photos (v84.9.7)
             downloadBatchFullEvidenceZip: async (batchId, onProgress) => {
                 try {
                     const batch = window.Utils.getBatches().find(b => b.id === batchId);
@@ -731,12 +731,34 @@
                     const allResponses = window.Utils.getResponses();
                     const zip = new JSZip();
 
+                    // --- 1. Generate Master Excel Report ---
+                    onProgress("Generating Master Excel Report...");
+                    const excelData = students.map((s, i) => {
+                        const verif = allResponses.find(r => r.examType.toUpperCase() === 'VERIFICATION' && (r.studentId === s.id || r.studentId === s.username));
+                        const details = verif?.details || verif?.answers || {};
+                        return {
+                            "S.No": i + 1,
+                            "Student Name": s.name || "N/A",
+                            "Username": s.username || "N/A",
+                            "Father Name": details.fatherName || "NOT SUBMITTED",
+                            "Aadhar Number": details.aadharNumber || "NOT SUBMITTED",
+                            "Identity Status": verif ? "SUBMITTED" : "PENDING",
+                            "Total Evidence Photos": allResponses.filter(r => r.studentId === s.id || r.studentId === s.username).reduce((total, r) => total + (r.evidence ? r.evidence.length : 0), 0)
+                        };
+                    });
+                    const ws = XLSX.utils.json_to_sheet(excelData);
+                    const wb = XLSX.utils.book_new();
+                    XLSX.utils.book_append_sheet(wb, ws, "Batch Evidence Report");
+                    const excelBuffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+                    zip.file(`${batch.name}_Master_Evidence_Report.xlsx`, excelBuffer);
+
+                    // --- 2. Process Photos ---
                     let completed = 0;
                     let photoCount = 0;
                     const totalStudents = students.length;
 
                     for (const s of students) {
-                        onProgress(`Zipping: ${s.name} (${completed + 1}/${totalStudents})...`);
+                        onProgress(`Zipping Photos: ${s.name} (${completed + 1}/${totalStudents})...`);
                         
                         // Collect ALL responses for this student
                         const studentResponses = allResponses.filter(r => r.studentId === s.id || r.studentId === s.username);
@@ -755,13 +777,13 @@
 
                                     try {
                                         let blob = null;
-                                        // 1. Try Local indexeddb
+                                        // A. Try Local indexeddb
                                         const key = (item.storage === 'indexeddb' || !item.url) ? item.img : null;
                                         if (key && !key.startsWith('data:') && !key.startsWith('blob:')) {
                                             blob = await VideoDB.getVideo(key);
                                         }
 
-                                        // 2. Try Cloud / Proxy (v18.3 Proxy)
+                                        // B. Try Cloud / Proxy (v18.3 Proxy)
                                         if (!blob) {
                                             let finalUrl = item.url || item.img || item.downloadUrl;
                                             if (finalUrl && finalUrl.includes('amazonaws.com') && !finalUrl.includes('media-stream')) {
@@ -786,23 +808,23 @@
                         completed++;
                     }
 
-                    if (photoCount === 0) {
-                        alert("No downloadable photos found for this batch.");
+                    if (photoCount === 0 && excelData.length === 0) {
+                        alert("No data found for this batch.");
                         onProgress(null);
                         return;
                     }
 
-                    onProgress(`Compressing ${photoCount} photos... please wait.`);
+                    onProgress(`Finalizing ZIP (${photoCount} photos)... please wait.`);
                     const content = await zip.generateAsync({ type: "blob" });
                     const link = document.createElement("a");
                     link.href = URL.createObjectURL(content);
-                    link.download = `${batch.name}_FULL_EVIDENCE_PHOTOS_${new Date().toISOString().slice(0, 10)}.zip`;
+                    link.download = `${batch.name}_FULL_BATCH_ENTIRE_DATA_${new Date().toISOString().slice(0, 10)}.zip`;
                     document.body.appendChild(link);
                     link.click();
                     document.body.removeChild(link);
                     
                     onProgress(null);
-                    alert(`✅ Successfully exported ${photoCount} evidence photos!`);
+                    alert(`✅ Full Batch Export Successful!\n\nIncluded: \n - Excel Report\n - ${photoCount} Evidence Photos`);
                 } catch (e) {
                     console.error('Bulk ZIP Error:', e);
                     alert('Bulk ZIP Creation Failed: ' + e.message);
