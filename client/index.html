@@ -7434,36 +7434,61 @@
                     const zip = new JSZip();
                     const folder = zip.folder(`${student.name}_${examType}_Evidence`);
                     let count = 0;
-                    for (const item of evidence) {
-                        const imgSrc = item.img || item.url;
-                        if (!imgSrc) continue;
-                        // Get base64 data
-                        let base64Data;
-                        if (imgSrc.startsWith('data:image')) {
-                            base64Data = imgSrc.split(',')[1];
-                        } else if (imgSrc.startsWith('blob:')) {
-                            const resp = await fetch(imgSrc);
+
+                    const toBase64 = async (src) => {
+                        if (!src) return null;
+                        if (src.startsWith('data:')) return src.split(',')[1]; // already base64
+                        // blob: URL or https:// URL — fetch it
+                        try {
+                            const resp = await fetch(src);
                             const blob = await resp.blob();
-                            const reader = new FileReader();
-                            base64Data = await new Promise(res => {
+                            return await new Promise(res => {
+                                const reader = new FileReader();
                                 reader.onload = e => res(e.target.result.split(',')[1]);
                                 reader.readAsDataURL(blob);
                             });
-                        } else {
-                            continue;
+                        } catch (e) {
+                            console.warn('Could not fetch image:', src, e);
+                            return null;
                         }
-                        const typeLabel = item.type || 'Photo';
+                    };
+
+                    for (const item of evidence) {
+                        let base64Data = null;
+
+                        // Priority: resolved img (blob/data) > downloadUrl > url > IndexedDB key
+                        if (item.img && (item.img.startsWith('data:') || item.img.startsWith('blob:'))) {
+                            base64Data = await toBase64(item.img);
+                        } else if (item.downloadUrl) {
+                            base64Data = await toBase64(item.downloadUrl);
+                        } else if (item.url) {
+                            base64Data = await toBase64(item.url);
+                        } else if (item.img && item.storage === 'indexeddb') {
+                            // Try to load from IndexedDB directly
+                            try {
+                                const blob = await window.VideoDB.getVideo(item.img);
+                                if (blob) base64Data = await toBase64(URL.createObjectURL(blob));
+                            } catch (e) { console.warn('IndexedDB load failed', e); }
+                        } else if (item.img) {
+                            base64Data = await toBase64(item.img);
+                        }
+
+                        if (!base64Data) continue;
+
+                        const typeLabel = (item.type || 'Photo').replace(/[^a-zA-Z0-9_]/g, '_');
                         const fileName = `${String(count + 1).padStart(2, '0')}_${typeLabel}.jpg`;
                         folder.file(fileName, base64Data, { base64: true });
                         count++;
                     }
-                    if (count === 0) { alert('No downloadable images found.'); return; }
+
+                    if (count === 0) { alert('No downloadable images found. Images may still be uploading to cloud.'); return; }
                     const blob = await zip.generateAsync({ type: 'blob' });
                     const a = document.createElement('a');
                     a.href = URL.createObjectURL(blob);
                     a.download = `${student.name}_${examType}_Evidence_${new Date().toISOString().slice(0,10)}.zip`;
                     a.click();
                     URL.revokeObjectURL(a.href);
+                    alert(`Downloaded ${count} evidence photo(s) successfully!`);
                 } catch (err) {
                     console.error('Download failed', err);
                     alert('Download failed: ' + err.message);
