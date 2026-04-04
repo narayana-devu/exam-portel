@@ -6071,11 +6071,13 @@
                                                         onChange={e => setSelectedAssignQP(e.target.value)}
                                                         disabled={!assignQPDef}>
                                                         <option value="">Select evaluation Blueprint</option>
-                                                        {assignQPDef && questionPapers.filter(qp => qp.qpId == assignQPDef).map(qp => <option key={qp.id} value={qp.id}>{qp.qpName}</option>)}
+                                                        {assignQPDef && questionPapers.filter(qp => qp.qpId == assignQPDef).map(qp => <option key={qp.id} value={qp.id}>[{qp.paperType || 'THEORY'}] {qp.qpName}</option>)}
                                                     </select>
                                                     <Icons.ChevronDown className="absolute right-5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-800 pointer-events-none" />
                                                 </div>
+                                                {assignQPDef && <p className="text-[10px] text-indigo-600 ml-1">💡 Select the <strong>{assignmentType.toUpperCase()}</strong> paper from the list above</p>}
                                             </div>
+
                                         </div>
                                     </div>
 
