@@ -7438,9 +7438,23 @@
                     const toBase64 = async (src) => {
                         if (!src) return null;
                         if (src.startsWith('data:')) return src.split(',')[1]; // already base64
+
+                        // NEW: Handle S3 Proxy to avoid CORS errors during ZIP creation (v84.9.5)
+                        let finalUrl = src;
+                        if (finalUrl && finalUrl.includes('amazonaws.com') && !finalUrl.includes('media-stream')) {
+                            try {
+                                const urlObj = new URL(finalUrl);
+                                let s3Key = urlObj.pathname.startsWith('/') ? urlObj.pathname.substring(1) : urlObj.pathname;
+                                s3Key = decodeURIComponent(s3Key);
+                                finalUrl = `${API_BASE}/media-stream?key=${encodeURIComponent(s3Key)}&apiKey=portel_secure_key_2025`;
+                            } catch (e) {
+                                console.error("Proxy URL Parse Error in Download", e);
+                            }
+                        }
+
                         // blob: URL or https:// URL — fetch it
                         try {
-                            const resp = await fetch(src);
+                            const resp = await fetch(finalUrl);
                             const blob = await resp.blob();
                             return await new Promise(res => {
                                 const reader = new FileReader();
@@ -7448,7 +7462,7 @@
                                 reader.readAsDataURL(blob);
                             });
                         } catch (e) {
-                            console.warn('Could not fetch image:', src, e);
+                            console.warn('Could not fetch image:', finalUrl, e);
                             return null;
                         }
                     };
