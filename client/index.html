@@ -9328,8 +9328,13 @@
                     return;
                 }
 
-                const pid = startMode === 'Theory' ? batch.theoryPaperId : batch.practicalPaperId;
+                const pid = startMode === 'Theory' ? batch.theoryPaperId : (startMode === 'Viva' ? batch.vivaPaperId : batch.practicalPaperId);
                 console.log(`Starting ${startMode}: Batch=${batch.name}, AssignedID=${pid}, AvailableQPs=${window.Utils.getQuestionPapers().length}`);
+
+                if (!pid) {
+                    alert(`No ${startMode} question paper has been assigned to this batch.\n\nPlease contact your administrator to assign a ${startMode} paper.`);
+                    return;
+                }
 
                 let qp = window.Utils.getQuestionPapers().find(q => String(q.id) === String(pid));
 
