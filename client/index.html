@@ -7193,14 +7193,17 @@
                     evList = [...targetResp.evidence];
                 }
 
-                // v84.3: ALWAYS load verification details and photos regardless of exam type
-                const verifResp = allStudentResponses.find(r => r.examType.toUpperCase() === 'VERIFICATION');
+                // v84.3: Load verification details/photos only for the MATCHING exam type
+                const verifResp = allStudentResponses.find(r =>
+                    r.examType.toUpperCase() === 'VERIFICATION' &&
+                    (r.forExamType === examType || !r.forExamType) // match exam type, or allow old records without forExamType
+                );
                 if (verifResp) {
-                    if (verifResp.details) setVerificationInfo(verifResp.details); // Load Father/Aadhar from 'details' field
-                    else if (verifResp.answers) setVerificationInfo(verifResp.answers); // Fallback for older versions
-                    
+                    if (verifResp.details) setVerificationInfo(verifResp.details);
+                    else if (verifResp.answers) setVerificationInfo(verifResp.answers);
+
                     if (verifResp.evidence) {
-                        console.log("Found Verification Evidence:", verifResp.evidence.length);
+                        console.log("Found Verification Evidence for", examType, ":", verifResp.evidence.length);
                         // Prepend verification evidence so it appears first in the gallery
                         evList = [...verifResp.evidence, ...evList];
                     }
@@ -10155,6 +10158,7 @@
                                                 window.Utils.saveResponse({
                                                     studentId: user.id,
                                                     examType: 'VERIFICATION',
+                                                    forExamType: pendingExamMode, // which exam this verification belongs to
                                                     evidence: verificationEvidence,
                                                     details: verificationDetails,
                                                     submittedAt: new Date().toISOString()
