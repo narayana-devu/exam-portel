@@ -721,6 +721,94 @@
                     onProgress(null);
                 }
             },
+            
+            // BULK DOWNLOAD: All Evidence Photos (v84.9.6)
+            downloadBatchFullEvidenceZip: async (batchId, onProgress) => {
+                try {
+                    const batch = window.Utils.getBatches().find(b => b.id === batchId);
+                    if (!batch) throw new Error("Batch not found.");
+                    const students = window.Utils.getStudentsByBatch(batchId);
+                    const allResponses = window.Utils.getResponses();
+                    const zip = new JSZip();
+
+                    let completed = 0;
+                    let photoCount = 0;
+                    const totalStudents = students.length;
+
+                    for (const s of students) {
+                        onProgress(`Zipping: ${s.name} (${completed + 1}/${totalStudents})...`);
+                        
+                        // Collect ALL responses for this student
+                        const studentResponses = allResponses.filter(r => r.studentId === s.id || r.studentId === s.username);
+                        
+                        for (const resp of studentResponses) {
+                            if (resp.evidence && Array.isArray(resp.evidence)) {
+                                for (const item of resp.evidence) {
+                                    // Filter for visual evidence (img, url, or specific photo types)
+                                    const isPhoto = item.img || item.url || item.downloadUrl;
+                                    if (!isPhoto) continue;
+
+                                    const typeLabel = (item.type || 'Photo').replace(/ /g, '_').replace(/[^a-zA-Z0-9_]/g, '');
+                                    const examLabel = (resp.examType || 'Exam').replace(/ /g, '_').replace(/[^a-zA-Z0-9_]/g, '');
+                                    const timestamp = item.time ? new Date(item.time).getTime() : Date.now();
+                                    const fileName = `${s.username}_${s.name}_${examLabel}_${typeLabel}_${timestamp}.jpg`.replace(/ /g, '_');
+
+                                    try {
+                                        let blob = null;
+                                        // 1. Try Local indexeddb
+                                        const key = (item.storage === 'indexeddb' || !item.url) ? item.img : null;
+                                        if (key && !key.startsWith('data:') && !key.startsWith('blob:')) {
+                                            blob = await VideoDB.getVideo(key);
+                                        }
+
+                                        // 2. Try Cloud / Proxy (v18.3 Proxy)
+                                        if (!blob) {
+                                            let finalUrl = item.url || item.img || item.downloadUrl;
+                                            if (finalUrl && finalUrl.includes('amazonaws.com') && !finalUrl.includes('media-stream')) {
+                                                const urlObj = new URL(finalUrl);
+                                                let s3Key = urlObj.pathname.startsWith('/') ? urlObj.pathname.substring(1) : urlObj.pathname;
+                                                finalUrl = `${API_BASE}/media-stream?key=${encodeURIComponent(decodeURIComponent(s3Key))}&apiKey=portel_secure_key_2025`;
+                                            }
+                                            if (finalUrl && (finalUrl.startsWith('http') || finalUrl.startsWith('data:'))) {
+                                                const resp = await fetch(finalUrl);
+                                                if (resp.ok) blob = await resp.blob();
+                                            }
+                                        }
+
+                                        if (blob) {
+                                            zip.file(fileName, blob);
+                                            photoCount++;
+                                        }
+                                    } catch (err) { console.error(`Error zipping photo for ${s.name}:`, err); }
+                                }
+                            }
+                        }
+                        completed++;
+                    }
+
+                    if (photoCount === 0) {
+                        alert("No downloadable photos found for this batch.");
+                        onProgress(null);
+                        return;
+                    }
+
+                    onProgress(`Compressing ${photoCount} photos... please wait.`);
+                    const content = await zip.generateAsync({ type: "blob" });
+                    const link = document.createElement("a");
+                    link.href = URL.createObjectURL(content);
+                    link.download = `${batch.name}_FULL_EVIDENCE_PHOTOS_${new Date().toISOString().slice(0, 10)}.zip`;
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    
+                    onProgress(null);
+                    alert(`✅ Successfully exported ${photoCount} evidence photos!`);
+                } catch (e) {
+                    console.error('Bulk ZIP Error:', e);
+                    alert('Bulk ZIP Creation Failed: ' + e.message);
+                    onProgress(null);
+                }
+            },
 
             downloadSampleFormat: () => {
                 const headers = [["BatchName", "Enrollment No", "Name of Training Agency", "Name of the Trainee", "Gender(M/F/T)"]];
@@ -6801,7 +6889,19 @@
                 content = (
                     <div>
                         <div className="flex justify-between items-center mb-4">
-                            <button onClick={() => setExamType(null)} className="text-indigo-600 font-medium flex items-center gap-1"><Icons.ChevronDown className="rotate-90" /> Back</button>
+                            <button onClick={() => setExamType(null)} className="text-indigo-600 font-medium flex items-center gap-1"><Icons.ChevronLeft className="w-5 h-5" /> Back</button>
+                            <div className="flex gap-3">
+                                {zipStatus ? (
+                                    <div className="bg-blue-50 border border-blue-200 px-6 py-2 rounded-2xl flex items-center gap-3">
+                                        <Icons.Loader className="w-4 h-4 animate-spin text-blue-600" />
+                                        <span className="text-[10px] font-black text-blue-700 uppercase">{zipStatus}</span>
+                                    </div>
+                                ) : (
+                                    <button onClick={() => window.Utils.downloadBatchFullEvidenceZip(selectedBatch.id, setZipStatus)} className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2 rounded-2xl font-black text-[11px] uppercase tracking-widest shadow-lg flex items-center gap-2">
+                                        <Icons.FolderArchive className="w-5 h-5" /> Bulk Download All Photos (ZIP)
+                                    </button>
+                                )}
+                            </div>
                         </div>
                         <h3 className="text-xl font-bold mb-4">{selectedBatch.name} - {examType} Results</h3>
                         <div className="bg-white rounded overflow-hidden shadow">
