@@ -631,18 +631,27 @@
             downloadBatchIdentityZip: async (batchId, onProgress) => {
                 try {
                     const batch = window.Utils.getBatches().find(b => b.id === batchId);
+                    if (!batch) throw new Error("Batch not found.");
                     const students = window.Utils.getStudentsByBatch(batchId);
                     const allResponses = window.Utils.getResponses();
                     const zip = new JSZip();
                     const photosFolder = zip.folder("Photos");
 
-                    // 1. Generate Excel Blob
-                    onProgress("Generating Excel Report...");
+                    // 1. Generate Master Excel Report (Improved Data Integrity)
+                    onProgress("Generating Identity Excel Report...");
                     const excelData = students.map((s, i) => {
+                        // Priority search for VERIFICATION response
                         const verif = allResponses.find(r => r.examType.toUpperCase() === 'VERIFICATION' && (r.studentId === s.id || r.studentId === s.username));
                         const details = verif?.details || verif?.answers || {};
-                        const selfie = verif?.evidence?.find(e => e.type === 'VERIFICATION_SELFIE');
-                        const idcard = verif?.evidence?.find(e => e.type === 'VERIFICATION_ID');
+                        const selfie = verif?.evidence?.find(e => {
+                             const t = (e.type || '').toUpperCase();
+                             return t.includes('SELFIE') || t.includes('PHOTO') && !t.includes('ID');
+                        });
+                        const idcard = verif?.evidence?.find(e => {
+                             const t = (e.type || '').toUpperCase();
+                             return t.includes('ID') || t.includes('AADHAR') || t.includes('CARD');
+                        });
+
                         return {
                             "S.No": i + 1,
                             "Student Name": s.name || "N/A",
@@ -650,7 +659,8 @@
                             "Father Name": details.fatherName || "NOT SUBMITTED",
                             "Aadhar Number": details.aadharNumber || "NOT SUBMITTED",
                             "Selfie FILENAME": selfie ? `${s.username}_${s.name}_Selfie.jpg`.replace(/ /g, '_') : "MISSING",
-                            "ID Card FILENAME": idcard ? `${s.username}_${s.name}_IDCard.jpg`.replace(/ /g, '_') : "MISSING"
+                            "ID Card FILENAME": idcard ? `${s.username}_${s.name}_IDCard.jpg`.replace(/ /g, '_') : "MISSING",
+                            "Status": verif ? "SUBMITTED" : "PENDING"
                         };
                     });
                     const ws = XLSX.utils.json_to_sheet(excelData);
@@ -659,27 +669,33 @@
                     const excelBuffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
                     zip.file(`${batch.name}_Identity_Report.xlsx`, excelBuffer);
 
-                    // 2. Fetch Photos
+                    // 2. Fetch Identity Photos (Secure & Proxy-Aware)
                     let completed = 0;
                     const totalStudents = students.length;
 
                     for (const s of students) {
+                        onProgress(`Collecting Photos: ${s.name} (${completed + 1} / ${totalStudents})`);
                         const verif = allResponses.find(r => r.examType.toUpperCase() === 'VERIFICATION' && (r.studentId === s.id || r.studentId === s.username));
+                        
                         if (verif && verif.evidence) {
                             for (const item of verif.evidence) {
-                                if (item.type === 'VERIFICATION_SELFIE' || item.type === 'VERIFICATION_ID') {
-                                    const suffix = item.type === 'VERIFICATION_SELFIE' ? 'Selfie' : 'IDCard';
+                                const upperType = (item.type || '').toUpperCase();
+                                // Catch Selfie or ID/Aadhar types
+                                if (upperType.includes('SELFIE') || upperType.includes('PHOTO') || upperType.includes('ID') || upperType.includes('AADHAR') || upperType.includes('CARD')) {
+                                    
+                                    const isID = upperType.includes('ID') || upperType.includes('AADHAR') || upperType.includes('CARD');
+                                    const suffix = isID ? 'IDCard' : 'Selfie';
                                     const fileName = `${s.username}_${s.name}_${suffix}.jpg`.replace(/ /g, '_');
                                     
                                     try {
-                                        let blob;
-                                        // A. Try Local IndexedDB
+                                        let blob = null;
+                                        // A. Try Local indexeddb
                                         const key = (item.storage === 'indexeddb' || !item.url) ? item.img : null;
                                         if (key && !key.startsWith('data:') && !key.startsWith('blob:')) {
                                             blob = await VideoDB.getVideo(key);
                                         }
                                         
-                                        // B. Try Cloud Fetch (v18.3 Proxy)
+                                        // B. Try Cloud Fetch with ROBUST S3 PROXY (v18.3 Robust)
                                         if (!blob) {
                                             let finalUrl = item.url || item.img;
                                             if (finalUrl && finalUrl.includes('amazonaws.com') && !finalUrl.includes('media-stream')) {
@@ -687,37 +703,36 @@
                                                 let s3Key = urlObj.pathname.startsWith('/') ? urlObj.pathname.substring(1) : urlObj.pathname;
                                                 finalUrl = `${API_BASE}/media-stream?key=${encodeURIComponent(decodeURIComponent(s3Key))}&apiKey=portel_secure_key_2025`;
                                             }
-                                            if (finalUrl && finalUrl.startsWith('http')) {
+
+                                            if (finalUrl && (finalUrl.startsWith('http') || finalUrl.startsWith('data:'))) {
                                                 const resp = await fetch(finalUrl);
                                                 if (resp.ok) blob = await resp.blob();
-                                            } else if (finalUrl && finalUrl.startsWith('data:')) {
-                                                const res = await fetch(finalUrl);
-                                                blob = await res.blob();
                                             }
                                         }
 
                                         if (blob) photosFolder.file(fileName, blob);
-                                    } catch (err) { console.error(`Error zipping photo for ${s.name}:`, err); }
+                                    } catch (err) { console.error(`Error zipping identity photo for ${s.name}:`, err); }
                                 }
                             }
                         }
                         completed++;
-                        onProgress(`Zipping Identity Photos: ${completed} / ${totalStudents}`);
                     }
 
                     // 3. Finalize and Download
-                    onProgress("Compressing Folder... please wait.");
+                    onProgress("Building ZIP Asset Folder...");
                     const content = await zip.generateAsync({ type: "blob" });
                     const link = document.createElement("a");
                     link.href = URL.createObjectURL(content);
-                    link.download = `${batch.name}_Identity_Assets.zip`;
+                    link.download = `${batch.name}_Identity_Assets_${new Date().toISOString().slice(0, 10)}.zip`;
                     document.body.appendChild(link);
                     link.click();
                     document.body.removeChild(link);
+                    
                     onProgress(null);
+                    alert(`✅ Downloaded: ${batch.name}_Identity_Assets.zip\nExcel Master and Photos included.`);
                 } catch (e) { 
-                    console.error('ZIP Error:', e); 
-                    alert('ZIP Creation Failed: ' + e.message); 
+                    console.error('Identity ZIP Error:', e); 
+                    alert('Identity ZIP Failed: ' + e.message); 
                     onProgress(null);
                 }
             },
