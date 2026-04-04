@@ -1853,7 +1853,7 @@
                 for (const item of itemsToDelete) {
                     // v85.0: Move to Trash (Soft Delete)
                     // We do NOT delete from S3 or IndexedDB here.
-                    window.Utils.trash('evidence', item, { studentId, examType });
+                    window.Utils.trash('evidence', item, { studentId, examType, responseId: response.id });
 
                     // Remove from active metadata array
                     response.evidence = response.evidence.filter(ev =>
@@ -1935,43 +1935,43 @@
         };
 
         const Icons = {
-            User: () => <LucideIcon name="user" className="w-5 h-5" />,
-            Users: () => <LucideIcon name="users" className="w-5 h-5" />,
-            LogOut: () => <LucideIcon name="log-out" className="w-5 h-5" />,
-            Camera: () => <LucideIcon name="camera" className="w-5 h-5" />,
-            Plus: () => <LucideIcon name="plus" className="w-5 h-5" />,
-            Trash2: () => <LucideIcon name="trash-2" className="w-4 h-4" />,
-            Eye: () => <LucideIcon name="eye" className="w-5 h-5" />,
-            EyeOff: () => <LucideIcon name="eye-off" className="w-5 h-5" />,
-            Upload: () => <LucideIcon name="upload" className="w-5 h-5" />,
-            Download: () => <LucideIcon name="download" className="w-5 h-5" />,
+            User: ({ className }) => <LucideIcon name="user" className={className || "w-5 h-5"} />,
+            Users: ({ className }) => <LucideIcon name="users" className={className || "w-5 h-5"} />,
+            LogOut: ({ className }) => <LucideIcon name="log-out" className={className || "w-5 h-5"} />,
+            Camera: ({ className }) => <LucideIcon name="camera" className={className || "w-5 h-5"} />,
+            Plus: ({ className }) => <LucideIcon name="plus" className={className || "w-5 h-5"} />,
+            Trash2: ({ className }) => <LucideIcon name="trash-2" className={className || "w-4 h-4"} />,
+            Eye: ({ className }) => <LucideIcon name="eye" className={className || "w-5 h-5"} />,
+            EyeOff: ({ className }) => <LucideIcon name="eye-off" className={className || "w-5 h-5"} />,
+            Upload: ({ className }) => <LucideIcon name="upload" className={className || "w-5 h-5"} />,
+            Download: ({ className }) => <LucideIcon name="download" className={className || "w-5 h-5"} />,
             Database: ({ className }) => <LucideIcon name="database" className={className || "w-4 h-4"} />,
-            FileText: () => <LucideIcon name="file-text" className="w-5 h-5" />,
-            Book: () => <LucideIcon name="book" className="w-5 h-5" />,
-            Cpu: () => <LucideIcon name="cpu" className="w-5 h-5" />,
-            Edit3: () => <LucideIcon name="edit-3" className="w-4 h-4" />,
-            UserPlus: () => <LucideIcon name="user-plus" className="w-5 h-5" />,
-            ChevronDown: () => <LucideIcon name="chevron-down" className="w-4 h-4" />,
-            ChevronLeft: () => <LucideIcon name="chevron-left" className="w-4 h-4" />,
-            ChevronRight: () => <LucideIcon name="chevron-right" className="w-4 h-4" />,
-            Map: () => <LucideIcon name="map" className="w-4 h-4" />,
-            Home: () => <LucideIcon name="home" className="w-4 h-4" />,
-            Grid: () => <LucideIcon name="grid" className="w-5 h-5" />,
-            Calendar: () => <LucideIcon name="calendar" className="w-5 h-5" />,
-            MapPin: () => <LucideIcon name="map-pin" className="w-5 h-5" />,
-            Layers: () => <LucideIcon name="layers" className="w-5 h-5" />,
-            List: () => <LucideIcon name="list" className="w-5 h-5" />,
-            PlusSquare: () => <LucideIcon name="plus-square" className="w-5 h-5" />,
-            MinusSquare: () => <LucideIcon name="minus-square" className="w-5 h-5" />,
+            FileText: ({ className }) => <LucideIcon name="file-text" className={className || "w-5 h-5"} />,
+            Book: ({ className }) => <LucideIcon name="book" className={className || "w-5 h-5"} />,
+            Cpu: ({ className }) => <LucideIcon name="cpu" className={className || "w-5 h-5"} />,
+            Edit3: ({ className }) => <LucideIcon name="edit-3" className={className || "w-4 h-4"} />,
+            UserPlus: ({ className }) => <LucideIcon name="user-plus" className={className || "w-5 h-5"} />,
+            ChevronDown: ({ className }) => <LucideIcon name="chevron-down" className={className || "w-4 h-4"} />,
+            ChevronLeft: ({ className }) => <LucideIcon name="chevron-left" className={className || "w-4 h-4"} />,
+            ChevronRight: ({ className }) => <LucideIcon name="chevron-right" className={className || "w-4 h-4"} />,
+            Map: ({ className }) => <LucideIcon name="map" className={className || "w-4 h-4"} />,
+            Home: ({ className }) => <LucideIcon name="home" className={className || "w-4 h-4"} />,
+            Grid: ({ className }) => <LucideIcon name="grid" className={className || "w-5 h-5"} />,
+            Calendar: ({ className }) => <LucideIcon name="calendar" className={className || "w-5 h-5"} />,
+            MapPin: ({ className }) => <LucideIcon name="map-pin" className={className || "w-5 h-5"} />,
+            Layers: ({ className }) => <LucideIcon name="layers" className={className || "w-5 h-5"} />,
+            List: ({ className }) => <LucideIcon name="list" className={className || "w-5 h-5"} />,
+            PlusSquare: ({ className }) => <LucideIcon name="plus-square" className={className || "w-5 h-5"} />,
+            MinusSquare: ({ className }) => <LucideIcon name="minus-square" className={className || "w-5 h-5"} />,
             Lock: ({ className }) => <LucideIcon name="lock" className={className || "w-5 h-5"} />,
             Unlock: ({ className }) => <LucideIcon name="unlock" className={className || "w-5 h-5"} />,
-            Video: () => <LucideIcon name="video" className="w-5 h-5" />,
-            Square: () => <LucideIcon name="square" className="w-5 h-5" />,
-            BarChart2: () => <LucideIcon name="bar-chart-2" className="w-5 h-5" />,
-            XCircle: () => <LucideIcon name="x-circle" className="w-5 h-5" />,
-            UploadCloud: () => <LucideIcon name="upload-cloud" className="w-12 h-12" />,
-            Save: () => <LucideIcon name="save" className="w-4 h-4" />,
-            TriangleAlert: () => <LucideIcon name="alert-triangle" className="w-6 h-6" />, // Fallback to safe name 'alert-triangle'
+            Video: ({ className }) => <LucideIcon name="video" className={className || "w-5 h-5"} />,
+            Square: ({ className }) => <LucideIcon name="square" className={className || "w-5 h-5"} />,
+            BarChart2: ({ className }) => <LucideIcon name="bar-chart-2" className={className || "w-5 h-5"} />,
+            XCircle: ({ className }) => <LucideIcon name="x-circle" className={className || "w-5 h-5"} />,
+            UploadCloud: ({ className }) => <LucideIcon name="upload-cloud" className={className || "w-12 h-12"} />,
+            Save: ({ className }) => <LucideIcon name="save" className={className || "w-4 h-4"} />,
+            TriangleAlert: ({ className }) => <LucideIcon name="alert-triangle" className={className || "w-6 h-6"} />,
             Loader: ({ className }) => <LucideIcon name="loader" className={className || "w-4 h-4"} />,
             Play: ({ className }) => <LucideIcon name="play" className={className || "w-4 h-4"} />,
             CheckCircle: ({ className }) => <LucideIcon name="check-circle" className={className || "w-5 h-5"} />,
@@ -1980,7 +1980,6 @@
             VideoOff: ({ className }) => <LucideIcon name="video-off" className={className || "w-5 h-5"} />,
             PhoneMissed: ({ className }) => <LucideIcon name="phone-missed" className={className || "w-5 h-5"} />,
             Check: ({ className }) => <LucideIcon name="check" className={className || "w-5 h-5"} />,
-            Square: ({ className }) => <LucideIcon name="square" className={className || "w-5 h-5"} />,
             RefreshCw: ({ className }) => <LucideIcon name="refresh-cw" className={className || "w-4 h-4"} />,
             Cloud: ({ className }) => <LucideIcon name="cloud" className={className || "w-4 h-4"} />,
             Smartphone: ({ className }) => <LucideIcon name="smartphone" className={className || "w-4 h-4"} />,
@@ -2020,8 +2019,11 @@
             Zap: ({ className }) => <LucideIcon name="zap" className={className || "w-5 h-5"} />,
             CloudLightning: ({ className }) => <LucideIcon name="cloud-lightning" className={className || "w-5 h-5"} />,
             FolderArchive: ({ className }) => <LucideIcon name="folder-archive" className={className || "w-5 h-5"} />,
-            IdCard: ({ className }) => <LucideIcon name="id-card" className={className || "w-5 h-5"} />
+            IdCard: ({ className }) => <LucideIcon name="id-card" className={className || "w-5 h-5"} />,
+            Undo2: ({ className }) => <LucideIcon name="undo-2" className={className || "w-4 h-4"} />,
+            Code: ({ className }) => <LucideIcon name="code" className={className || "w-5 h-5"} />
         };
+
         class ErrorBoundary extends React.Component {
             constructor(props) { super(props); this.state = { hasError: false, error: null }; }
             static getDerivedStateFromError(error) { return { hasError: true, error }; }
@@ -7356,21 +7358,30 @@
             const deleteEvidence = async () => {
                 if (!confirm("Move all evidence to RECYCLE BIN? You can restore it later from the Trash folder.")) return;
 
+                const responses = window.Utils.getResponses();
+                const idx = responses.findIndex(r => r.studentId === student.id && r.examType === examType);
+                if (idx === -1) {
+                    alert("No active response found to delete.");
+                    return;
+                }
+
                 // v85.0: Soft-Delete (Move to Trash)
-                const metadata = { studentName: student.name, batchName: batch.name, examType: examType };
+                const metadata = { 
+                    studentId: student.id, 
+                    studentName: student.name, 
+                    batchName: batch.name, 
+                    examType: examType,
+                    responseId: responses[idx].id 
+                };
                 
                 // We move each evidence item to trash
                 evidence.forEach(ev => window.Utils.trash('evidence', ev, metadata));
 
                 // Clear from current response (locally and sync)
-                const responses = window.Utils.getResponses();
-                const idx = responses.findIndex(r => r.studentId === student.id && r.examType === examType);
-                if (idx >= 0) {
-                    responses[idx].evidence = [];
-                    responses[idx].synced = false;
-                    localStorage.setItem(DB_KEYS.RESPONSES, JSON.stringify(responses));
-                    window.Utils.uploadToCloud(true, 'responses');
-                }
+                responses[idx].evidence = [];
+                responses[idx].synced = false;
+                localStorage.setItem(DB_KEYS.RESPONSES, JSON.stringify(responses));
+                window.Utils.uploadToCloud(true, 'responses');
 
                 setEvidence([]); // Update UI
                 alert("Evidence moved to Recycle Bin.");
@@ -8206,7 +8217,10 @@
                     // Restore to appropriate store (Currently only evidence is trashed)
                     if (item.type) {
                         const responses = window.Utils.getResponses();
-                        const respIndex = responses.findIndex(r => r.id === item.meta?.responseId);
+                        const respIndex = responses.findIndex(r => 
+                            (item.meta?.responseId && r.id === item.meta.responseId) || 
+                            (r.studentId === item.meta?.studentId && r.examType === item.meta?.examType)
+                        );
                         if (respIndex >= 0) {
                             if (!responses[respIndex].evidence) responses[respIndex].evidence = [];
                             // Remove trash metadata and re-add to evidence
