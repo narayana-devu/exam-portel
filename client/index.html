@@ -6836,13 +6836,13 @@
                                 ) : (
                                     <>
                                         <button onClick={() => window.Utils.downloadBatchIdentityZip(selectedBatch.id, setZipStatus)} className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl font-black text-[10px] uppercase tracking-widest shadow-lg flex items-center gap-2" title="Excel Report + Selfie + ID Card Photos">
-                                            <Icons.FolderArchive className="w-4 h-4" /> Aadhar/Father & Identity ZIP
+                                            <Icons.FileText className="w-4 h-4" /> Aadhar/Father & Identity ZIP
                                         </button>
                                         <button onClick={() => window.Utils.downloadBatchCategoryPhotosZip(selectedBatch.id, 'Theory', setZipStatus)} className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl font-black text-[10px] uppercase tracking-widest shadow flex items-center gap-2">
                                             <Icons.Book className="w-4 h-4" /> Theory Photos
                                         </button>
                                         <button onClick={() => window.Utils.downloadBatchCategoryPhotosZip(selectedBatch.id, 'Practical', setZipStatus)} className="bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded-xl font-black text-[10px] uppercase tracking-widest shadow flex items-center gap-2">
-                                            <Icons.Tool className="w-4 h-4" /> Practical Photos
+                                            <Icons.Cpu className="w-4 h-4" /> Practical Photos
                                         </button>
                                         <button onClick={() => window.Utils.downloadBatchCategoryPhotosZip(selectedBatch.id, 'Viva', setZipStatus)} className="bg-cyan-600 hover:bg-cyan-700 text-white px-4 py-2 rounded-xl font-black text-[10px] uppercase tracking-widest shadow flex items-center gap-2">
                                             <Icons.Mic className="w-4 h-4" /> Viva Photos
@@ -6888,7 +6888,7 @@
                                                     <td className="px-6 py-4">
                                                         <div className="flex gap-2">
                                                             {selfie ? <EvidenceImage item={selfie} /> : <div className="w-10 h-10 bg-secondary-100 rounded-lg flex items-center justify-center text-secondary-400"><Icons.User className="w-5 h-5" /></div>}
-                                                            {idcard ? <EvidenceImage item={idcard} /> : <div className="w-10 h-10 bg-secondary-100 rounded-lg flex items-center justify-center text-secondary-400"><Icons.IdCard className="w-5 h-5" /></div>}
+                                                            {idcard ? <EvidenceImage item={idcard} /> : <div className="w-10 h-10 bg-secondary-100 rounded-lg flex items-center justify-center text-secondary-400"><Icons.UserCheck className="w-5 h-5" /></div>}
                                                         </div>
                                                     </td>
                                                     <td className="px-6 py-4 text-center">
