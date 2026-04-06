@@ -636,6 +636,7 @@
                 } catch (e) { console.error('Export error:', e); alert('Error: ' + e.message); }
             },
 
+            // v85.2: CONSOLIDATED Aadhar/Father & Identity ZIP
             downloadBatchIdentityZip: async (batchId, onProgress) => {
                 try {
                     const batch = window.Utils.getBatches().find(b => b.id === batchId);
@@ -643,12 +644,10 @@
                     const students = window.Utils.getStudentsByBatch(batchId);
                     const allResponses = window.Utils.getResponses();
                     const zip = new JSZip();
-                    const photosFolder = zip.folder("Photos");
-
-                    // 1. Generate Master Excel Report (Improved Data Integrity)
-                    onProgress("Generating Identity Excel Report...");
+                    
+                    // 1. Generate Aadhar/Father Excel Report
+                    onProgress("Generating Aadhar/Father Excel Report...");
                     const excelData = students.map((s, i) => {
-                        // Priority search for VERIFICATION response
                         const verif = allResponses.find(r => r.examType.toUpperCase() === 'VERIFICATION' && (r.studentId === s.id || r.studentId === s.username));
                         const details = verif?.details || verif?.answers || {};
                         const selfie = verif?.evidence?.find(e => {
@@ -675,255 +674,113 @@
                     const wb = XLSX.utils.book_new();
                     XLSX.utils.book_append_sheet(wb, ws, "Identity Records");
                     const excelBuffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
-                    zip.file(`${batch.name}_Identity_Report.xlsx`, excelBuffer);
+                    zip.file(`${batch.name}_Aadhar_Father_Report.xlsx`, excelBuffer);
 
-                    // 2. Fetch Identity Photos (Secure & Proxy-Aware)
+                    // 2. Fetch Identity Photos
+                    const photosFolder = zip.folder("Identity_Photos");
                     let completed = 0;
-                    const totalStudents = students.length;
-
                     for (const s of students) {
-                        onProgress(`Collecting Photos: ${s.name} (${completed + 1} / ${totalStudents})`);
+                        onProgress(`Collecting Identity Photos: ${s.name} (${completed + 1} / ${students.length})`);
                         const verif = allResponses.find(r => r.examType.toUpperCase() === 'VERIFICATION' && (r.studentId === s.id || r.studentId === s.username));
-                        
                         if (verif && verif.evidence) {
                             for (const item of verif.evidence) {
                                 const upperType = (item.type || '').toUpperCase();
-                                // Catch Selfie or ID/Aadhar types
                                 if (upperType.includes('SELFIE') || upperType.includes('PHOTO') || upperType.includes('ID') || upperType.includes('AADHAR') || upperType.includes('CARD')) {
-                                    
                                     const isID = upperType.includes('ID') || upperType.includes('AADHAR') || upperType.includes('CARD');
                                     const suffix = isID ? 'IDCard' : 'Selfie';
                                     const fileName = `${s.username}_${s.name}_${suffix}.jpg`.replace(/ /g, '_');
-                                    
                                     try {
-                                        let blob = null;
-                                        // A. Try Local indexeddb
-                                        const key = (item.storage === 'indexeddb' || !item.url) ? item.img : null;
-                                        if (key && !key.startsWith('data:') && !key.startsWith('blob:')) {
-                                            blob = await VideoDB.getVideo(key);
-                                        }
-                                        
-                                        // B. Try Cloud Fetch with ROBUST S3 PROXY (v18.3 Robust)
-                                        if (!blob) {
-                                            let finalUrl = item.url || item.img;
-                                            if (finalUrl && finalUrl.includes('amazonaws.com') && !finalUrl.includes('media-stream')) {
-                                                const urlObj = new URL(finalUrl);
-                                                let s3Key = urlObj.pathname.startsWith('/') ? urlObj.pathname.substring(1) : urlObj.pathname;
-                                                finalUrl = `${API_BASE}/media-stream?key=${encodeURIComponent(decodeURIComponent(s3Key))}&apiKey=portel_secure_key_2025`;
-                                            }
-
-                                            if (finalUrl && (finalUrl.startsWith('http') || finalUrl.startsWith('data:'))) {
-                                                const resp = await fetch(finalUrl);
-                                                if (resp.ok) blob = await resp.blob();
-                                            }
-                                        }
-
+                                        const blob = await window.Utils.fetchEvidenceAsBlob(item);
                                         if (blob) photosFolder.file(fileName, blob);
-                                    } catch (err) { console.error(`Error zipping identity photo for ${s.name}:`, err); }
+                                    } catch (err) { console.warn(`Error zipping identity photo for ${s.name}:`, err); }
                                 }
                             }
                         }
                         completed++;
                     }
 
-                    // 3. Finalize and Download
-                    onProgress("Building ZIP Asset Folder...");
+                    onProgress("Finalizing ZIP...");
                     const content = await zip.generateAsync({ type: "blob" });
                     const link = document.createElement("a");
                     link.href = URL.createObjectURL(content);
-                    link.download = `${batch.name}_Identity_Assets_${new Date().toISOString().slice(0, 10)}.zip`;
+                    link.download = `${batch.name}_Aadhar_Father_Identity_${new Date().toISOString().slice(0, 10)}.zip`;
                     document.body.appendChild(link);
                     link.click();
                     document.body.removeChild(link);
-                    
                     onProgress(null);
-                    alert(`✅ Downloaded: ${batch.name}_Identity_Assets.zip\nExcel Master and Photos included.`);
-                } catch (err) {
-                    console.error("Batch Identity Download Error:", err);
-                    alert("Error: " + err.message);
-                    onProgress(null);
-                }
+                    alert(`✅ Downloaded: ${batch.name}_Aadhar_Father_Identity.zip`);
+                } catch (err) { console.error("Identity ZIP Error:", err); alert("Error: " + err.message); onProgress(null); }
             },
 
-            // v85.1: NEW FUNCTION for Full Exam Evidence (Theory, Practical, Viva)
-            downloadBatchExamEvidenceZip: async (batchId, onProgress) => {
+            // v85.2: SPECIALIZED Category Download (Theory, Practical, Viva)
+            downloadBatchCategoryPhotosZip: async (batchId, category, onProgress) => {
                 try {
                     const batch = window.Utils.getBatches().find(b => b.id === batchId);
                     if (!batch) throw new Error("Batch not found.");
                     const students = window.Utils.getStudentsByBatch(batchId);
                     const allResponses = window.Utils.getResponses();
                     const zip = new JSZip();
-                    const mainFolder = zip.folder(`${batch.name}_Full_Exam_Evidence`);
+                    const photoFolder = zip.folder(category + "_Photos");
 
-                    onProgress("Analysis in Progress...");
-                    const studentData = [];
                     let completed = 0;
-
                     for (const s of students) {
-                        onProgress(`Collecting Exam Photos: ${s.name} (${completed + 1} / ${students.length})`);
+                        onProgress(`Collecting ${category} Photos: ${s.name} (${completed + 1} / ${students.length})`);
+                        const resp = allResponses.find(r => r.studentId === s.id && r.examType.toLowerCase() === category.toLowerCase());
+                        if (resp && resp.evidence && resp.evidence.length > 0) {
+                            for (const item of resp.evidence) {
+                                try {
+                                    const blob = await window.Utils.fetchEvidenceAsBlob(item);
+                                    if (blob) {
+                                        const label = (item.type || 'Photo').replace(/[^a-zA-Z0-9_]/g, '_');
+                                        const time = (item.time || new Date().toISOString()).slice(0,19).replace(/:/g, '-');
+                                        const fileName = `${s.username}_${s.name}_${category}_${label}_${time}.jpg`.replace(/ /g, '_');
+                                        photoFolder.file(fileName, blob);
+                                    }
+                                } catch (e) { console.warn(`Error zipping ${category} photo for ${s.name}:`, e); }
+                            }
+                        }
+                        completed++;
+                    }
+
+                    onProgress("Building ZIP...");
+                    const content = await zip.generateAsync({ type: "blob" });
+                    const link = document.createElement("a");
+                    link.href = URL.createObjectURL(content);
+                    link.download = `${batch.name}_${category}_Photos_${new Date().toISOString().slice(0, 10)}.zip`;
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    onProgress(null);
+                } catch (err) { alert("Error: " + err.message); onProgress(null); }
+            },
+
+            // v85.2: MASTER DOWNLOAD ALL
+            downloadBatchAbsoluteEverythingZip: async (batchId, onProgress) => {
+                try {
+                    const batch = window.Utils.getBatches().find(b => b.id === batchId);
+                    const students = window.Utils.getStudentsByBatch(batchId);
+                    const allResponses = window.Utils.getResponses();
+                    const zip = new JSZip();
+                    const mainFolder = zip.folder(`${batch.name}_COMPLETE_DATA`);
+
+                    let completed = 0;
+                    for (const s of students) {
+                        onProgress(`Archiving Everything: ${s.name} (${completed + 1}/${students.length})...`);
                         const studentFolder = mainFolder.folder(`${s.name}_${s.username}`.replace(/ /g, '_'));
                         
-                        // Check all exam types
-                        const examTypes = ['Theory', 'Practical', 'Viva'];
-                        let totalPhotosForStudent = 0;
-
-                        for (const type of examTypes) {
-                            const resp = allResponses.find(r => r.studentId === s.id && r.examType === type);
-                            if (resp && resp.evidence && resp.evidence.length > 0) {
-                                const typeFolder = studentFolder.folder(type);
-                                let evidenceCount = 0;
-                                for (const item of resp.evidence) {
-                                    const imgSrc = item.img || item.url || item.downloadUrl;
-                                    if (!imgSrc) continue;
-
-                                    try {
-                                        let blob = null;
-                                        // 1. Resolve Local (IndexedDB)
-                                        const key = (item.storage === 'indexeddb' || !item.url) ? item.img : null;
-                                        if (key && !key.startsWith('data:') && !key.startsWith('blob:')) {
-                                            blob = await VideoDB.getVideo(key);
-                                        }
-
-                                        // 2. Resolve Remote (S3 Proxy Aware)
-                                        if (!blob) {
-                                            let finalUrl = imgSrc;
-                                            if (finalUrl.includes('amazonaws.com') && !finalUrl.includes('media-stream')) {
-                                                const urlObj = new URL(finalUrl);
-                                                let s3Key = urlObj.pathname.startsWith('/') ? urlObj.pathname.substring(1) : urlObj.pathname;
-                                                finalUrl = `${API_BASE}/media-stream?key=${encodeURIComponent(decodeURIComponent(s3Key))}&apiKey=portel_secure_key_2025`;
-                                            }
-                                            if (finalUrl.startsWith('http') || finalUrl.startsWith('data:')) {
-                                                const pull = await fetch(finalUrl);
-                                                if (pull.ok) blob = await pull.blob();
-                                            }
-                                        }
-
-                                        if (blob) {
-                                            const label = (item.type || 'Photo').replace(/[^a-zA-Z0-9_]/g, '_');
-                                            const time = (item.time || new Date().toISOString()).slice(0,19).replace(/:/g, '-');
-                                            const fileName = `${type}_${label}_${time}.jpg`;
-                                            typeFolder.file(fileName, blob);
-                                            evidenceCount++;
-                                            totalPhotosForStudent++;
-                                        }
-                                    } catch (e) { console.error(`Failed to zip photo for ${s.name} [${type}]:`, e); }
-                                }
-                            }
-                        }
-
-                        studentData.push({
-                            "Student Name": s.name,
-                            "Username": s.username,
-                            "Total Evidence Photos": totalPhotosForStudent,
-                            "Status": totalPhotosForStudent > 0 ? "EVIDENCE_COLLECTED" : "NO_EVIDENCE"
-                        });
-                        completed++;
-                    }
-
-                    // Master Report
-                    onProgress("Generating Master Report...");
-                    const ws = XLSX.utils.json_to_sheet(studentData);
-                    const wb = XLSX.utils.book_new();
-                    XLSX.utils.book_append_sheet(wb, ws, "Evidence Summary");
-                    const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
-                    mainFolder.file(`Batch_Evidence_Summary_${batch.name}.xlsx`, new Blob([wbout]));
-
-                    onProgress("Finalizing Large ZIP Archive...");
-                    const content = await zip.generateAsync({ type: "blob" });
-                    const link = document.createElement("a");
-                    link.href = URL.createObjectURL(content);
-                    link.download = `${batch.name}_Full_Exam_Evidence_${new Date().toISOString().slice(0, 10)}.zip`;
-                    document.body.appendChild(link);
-                    link.click();
-                    document.body.removeChild(link);
-
-                    onProgress(null);
-                    alert(`✅ Full Exam Evidence ZIP Downloaded: ${batch.name}_Full_Exam_Evidence.zip`);
-                } catch (err) {
-                    console.error("Batch All Evidence Download Error:", err);
-                    alert("Error: " + err.message);
-                    onProgress(null);
-                }
-            },
-            
-            // BULK DOWNLOAD: All Evidence Photos (v84.9.7)
-            downloadBatchFullEvidenceZip: async (batchId, onProgress) => {
-                try {
-                    const batch = window.Utils.getBatches().find(b => b.id === batchId);
-                    if (!batch) throw new Error("Batch not found.");
-                    const students = window.Utils.getStudentsByBatch(batchId);
-                    const allResponses = window.Utils.getResponses();
-                    const zip = new JSZip();
-
-                    // --- 1. Generate Master Excel Report ---
-                    onProgress("Generating Master Excel Report...");
-                    const excelData = students.map((s, i) => {
-                        const verif = allResponses.find(r => r.examType.toUpperCase() === 'VERIFICATION' && (r.studentId === s.id || r.studentId === s.username));
-                        const details = verif?.details || verif?.answers || {};
-                        return {
-                            "S.No": i + 1,
-                            "Student Name": s.name || "N/A",
-                            "Username": s.username || "N/A",
-                            "Father Name": details.fatherName || "NOT SUBMITTED",
-                            "Aadhar Number": details.aadharNumber || "NOT SUBMITTED",
-                            "Identity Status": verif ? "SUBMITTED" : "PENDING",
-                            "Total Evidence Photos": allResponses.filter(r => r.studentId === s.id || r.studentId === s.username).reduce((total, r) => total + (r.evidence ? r.evidence.length : 0), 0)
-                        };
-                    });
-                    const ws = XLSX.utils.json_to_sheet(excelData);
-                    const wb = XLSX.utils.book_new();
-                    XLSX.utils.book_append_sheet(wb, ws, "Batch Evidence Report");
-                    const excelBuffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
-                    zip.file(`${batch.name}_Master_Evidence_Report.xlsx`, excelBuffer);
-
-                    // --- 2. Process Photos ---
-                    let completed = 0;
-                    let photoCount = 0;
-                    const totalStudents = students.length;
-
-                    for (const s of students) {
-                        onProgress(`Zipping Photos: ${s.name} (${completed + 1}/${totalStudents})...`);
-                        
-                        // Collect ALL responses for this student
+                        // Collect all exam types including Verification
                         const studentResponses = allResponses.filter(r => r.studentId === s.id || r.studentId === s.username);
-                        
                         for (const resp of studentResponses) {
                             if (resp.evidence && Array.isArray(resp.evidence)) {
+                                const typeFolder = studentFolder.folder(resp.examType || 'Common');
                                 for (const item of resp.evidence) {
-                                    // Filter for visual evidence (img, url, or specific photo types)
-                                    const isPhoto = item.img || item.url || item.downloadUrl;
-                                    if (!isPhoto) continue;
-
-                                    const typeLabel = (item.type || 'Photo').replace(/ /g, '_').replace(/[^a-zA-Z0-9_]/g, '');
-                                    const examLabel = (resp.examType || 'Exam').replace(/ /g, '_').replace(/[^a-zA-Z0-9_]/g, '');
-                                    const timestamp = item.time ? new Date(item.time).getTime() : Date.now();
-                                    const fileName = `${s.username}_${s.name}_${examLabel}_${typeLabel}_${timestamp}.jpg`.replace(/ /g, '_');
-
                                     try {
-                                        let blob = null;
-                                        // A. Try Local indexeddb
-                                        const key = (item.storage === 'indexeddb' || !item.url) ? item.img : null;
-                                        if (key && !key.startsWith('data:') && !key.startsWith('blob:')) {
-                                            blob = await VideoDB.getVideo(key);
-                                        }
-
-                                        // B. Try Cloud / Proxy (v18.3 Proxy)
-                                        if (!blob) {
-                                            let finalUrl = item.url || item.img || item.downloadUrl;
-                                            if (finalUrl && finalUrl.includes('amazonaws.com') && !finalUrl.includes('media-stream')) {
-                                                const urlObj = new URL(finalUrl);
-                                                let s3Key = urlObj.pathname.startsWith('/') ? urlObj.pathname.substring(1) : urlObj.pathname;
-                                                finalUrl = `${API_BASE}/media-stream?key=${encodeURIComponent(decodeURIComponent(s3Key))}&apiKey=portel_secure_key_2025`;
-                                            }
-                                            if (finalUrl && (finalUrl.startsWith('http') || finalUrl.startsWith('data:'))) {
-                                                const resp = await fetch(finalUrl);
-                                                if (resp.ok) blob = await resp.blob();
-                                            }
-                                        }
-
+                                        const blob = await window.Utils.fetchEvidenceAsBlob(item);
                                         if (blob) {
-                                            zip.file(fileName, blob);
-                                            photoCount++;
+                                            const typeLabel = (item.type || 'Photo').replace(/ /g, '_').replace(/[^a-zA-Z0-9_]/g, '');
+                                            const timestamp = item.time ? new Date(item.time).getTime() : Date.now();
+                                            const fileName = `${s.username}_${resp.examType || 'Exam'}_${typeLabel}_${timestamp}.jpg`.replace(/ /g, '_');
+                                            typeFolder.file(fileName, blob);
                                         }
                                     } catch (err) { console.error(`Error zipping photo for ${s.name}:`, err); }
                                 }
@@ -932,28 +789,43 @@
                         completed++;
                     }
 
-                    if (photoCount === 0 && excelData.length === 0) {
-                        alert("No data found for this batch.");
-                        onProgress(null);
-                        return;
-                    }
-
-                    onProgress(`Finalizing ZIP (${photoCount} photos)... please wait.`);
+                    onProgress("Finalizing Master Archive...");
                     const content = await zip.generateAsync({ type: "blob" });
                     const link = document.createElement("a");
                     link.href = URL.createObjectURL(content);
-                    link.download = `${batch.name}_FULL_BATCH_ENTIRE_DATA_${new Date().toISOString().slice(0, 10)}.zip`;
+                    link.download = `${batch.name}_MASTER_DOWNLOAD_ALL_${new Date().toISOString().slice(0, 10)}.zip`;
                     document.body.appendChild(link);
                     link.click();
                     document.body.removeChild(link);
-                    
                     onProgress(null);
-                    alert(`✅ Full Batch Export Successful!\n\nIncluded: \n - Excel Report\n - ${photoCount} Evidence Photos`);
-                } catch (e) {
-                    console.error('Bulk ZIP Error:', e);
-                    alert('Bulk ZIP Creation Failed: ' + e.message);
-                    onProgress(null);
+                    alert("✅ Master Download Complete!");
+                } catch (err) { alert("Error: " + err.message); onProgress(null); }
+            },
+
+            // Utility to fetch evidence as blob from either IndexedDB or S3 (v85.2)
+            fetchEvidenceAsBlob: async (item) => {
+                let blob = null;
+                // 1. Try Local indexeddb
+                const key = (item.storage === 'indexeddb' || !item.url) ? item.img : null;
+                if (key && !key.startsWith('data:') && !key.startsWith('blob:')) {
+                    blob = await VideoDB.getVideo(key);
                 }
+                // 2. Try Cloud / Proxy
+                if (!blob) {
+                    let finalUrl = item.url || item.img || item.downloadUrl;
+                    if (finalUrl && finalUrl.includes('amazonaws.com') && !finalUrl.includes('media-stream')) {
+                        const urlObj = new URL(finalUrl);
+                        let s3Key = urlObj.pathname.startsWith('/') ? urlObj.pathname.substring(1) : urlObj.pathname;
+                        finalUrl = `${API_BASE}/media-stream?key=${encodeURIComponent(decodeURIComponent(s3Key))}&apiKey=portel_secure_key_2025`;
+                    }
+                    if (finalUrl && (finalUrl.startsWith('http') || finalUrl.startsWith('data:'))) {
+                        try {
+                            const resp = await fetch(finalUrl);
+                            if (resp.ok) blob = await resp.blob();
+                        } catch (e) { console.warn("Fetch failed for", finalUrl, e); }
+                    }
+                }
+                return blob;
             },
 
             downloadSampleFormat: () => {
@@ -6955,25 +6827,34 @@
                             <button onClick={() => setExamType(null)} className="text-secondary-600 font-bold flex items-center gap-1 hover:text-primary-600">
                                 <Icons.ChevronLeft className="w-5 h-5" /> Back to Batch Overview
                             </button>
-                            <div className="flex gap-3">
+                            <div className="flex flex-wrap gap-2">
                                 {zipStatus ? (
                                     <div className="bg-primary-50 border border-primary-200 px-6 py-2 rounded-2xl flex items-center gap-3">
                                         <Icons.Loader className="w-4 h-4 animate-spin text-primary-600" />
                                         <span className="text-[10px] font-black text-primary-700 uppercase">{zipStatus}</span>
                                     </div>
                                 ) : (
-                                    <button onClick={() => window.Utils.downloadBatchIdentityZip(selectedBatch.id, setZipStatus)} className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2 rounded-2xl font-black text-[11px] uppercase tracking-widest shadow-lg flex items-center gap-2">
-                                        <Icons.FolderArchive className="w-5 h-5" /> Download Identity Folder (ZIP)
-                                    </button>
+                                    <>
+                                        <button onClick={() => window.Utils.downloadBatchIdentityZip(selectedBatch.id, setZipStatus)} className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl font-black text-[10px] uppercase tracking-widest shadow-lg flex items-center gap-2" title="Excel Report + Selfie + ID Card Photos">
+                                            <Icons.FolderArchive className="w-4 h-4" /> Aadhar/Father & Identity ZIP
+                                        </button>
+                                        <button onClick={() => window.Utils.downloadBatchCategoryPhotosZip(selectedBatch.id, 'Theory', setZipStatus)} className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl font-black text-[10px] uppercase tracking-widest shadow flex items-center gap-2">
+                                            <Icons.Book className="w-4 h-4" /> Theory Photos
+                                        </button>
+                                        <button onClick={() => window.Utils.downloadBatchCategoryPhotosZip(selectedBatch.id, 'Practical', setZipStatus)} className="bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded-xl font-black text-[10px] uppercase tracking-widest shadow flex items-center gap-2">
+                                            <Icons.Tool className="w-4 h-4" /> Practical Photos
+                                        </button>
+                                        <button onClick={() => window.Utils.downloadBatchCategoryPhotosZip(selectedBatch.id, 'Viva', setZipStatus)} className="bg-cyan-600 hover:bg-cyan-700 text-white px-4 py-2 rounded-xl font-black text-[10px] uppercase tracking-widest shadow flex items-center gap-2">
+                                            <Icons.Mic className="w-4 h-4" /> Viva Photos
+                                        </button>
+                                        <button onClick={() => window.Utils.downloadBatchAbsoluteEverythingZip(selectedBatch.id, setZipStatus)} className="bg-primary-600 hover:bg-primary-700 text-gray-900 px-6 py-2 rounded-2xl font-black text-[11px] uppercase tracking-widest shadow-xl flex items-center gap-2 border-2 border-primary-400 animate-pulse-subtle">
+                                            <Icons.Database className="w-5 h-5" /> DOWNLOAD ALL MASTER DATA (ZIP)
+                                        </button>
+                                    </>
                                 )}
-                                <button onClick={() => window.Utils.exportAadharFatherData(selectedBatch.id)} className="bg-primary-600 hover:bg-primary-700 text-gray-900 px-6 py-2 rounded-2xl font-black text-[11px] uppercase tracking-widest shadow-lg flex items-center gap-2">
-                                    <Icons.Download className="w-4 h-4" /> Download CSV Report
-                                </button>
-                                <button onClick={() => window.Utils.downloadBatchExamEvidenceZip(selectedBatch.id, setZipStatus)} className="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2 rounded-2xl font-black text-[11px] uppercase tracking-widest shadow-lg flex items-center gap-2" title="Download all Theory/Practical/Viva photos for the entire batch">
-                                    <Icons.Camera className="w-5 h-5" /> Download Full Exam Evidence (ZIP)
-                                </button>
                             </div>
                         </div>
+
                         <div className="bg-white rounded-3xl shadow-xl border border-secondary-100 overflow-hidden">
                             <div className="p-6 bg-secondary-50 border-b border-secondary-100">
                                 <h3 className="text-xl font-extrabold text-secondary-900">Identity Verification Report</h3>
@@ -6990,12 +6871,12 @@
                                             <th className="px-6 py-4 text-center">Status</th>
                                         </tr>
                                     </thead>
-                                    <tbody className="divide-y divide-secondary-50">
-                                        {students.map((s, i) => {
-                                            const verif = allResponses.find(r => r.examType.toUpperCase() === 'VERIFICATION' && (r.studentId === s.id || r.studentId === s.username));
+                                    <tbody className="bg-white divide-y divide-secondary-100">
+                                        {students.map((s) => {
+                                            const verif = allResponses.find(r => (r.studentId === s.id || r.studentId === s.username) && r.examType.toUpperCase() === 'VERIFICATION');
                                             const details = verif?.details || verif?.answers || {};
-                                            const selfie = verif?.evidence?.find(e => e.type === 'VERIFICATION_SELFIE');
-                                            const idcard = verif?.evidence?.find(e => e.type === 'VERIFICATION_ID');
+                                            const selfie = verif?.evidence?.find(e => (e.type || '').toUpperCase().includes('SELFIE') || (e.type || '').toUpperCase().includes('PHOTO') && !(e.type || '').toUpperCase().includes('ID'));
+                                            const idcard = verif?.evidence?.find(e => (e.type || '').toUpperCase().includes('ID') || (e.type || '').toUpperCase().includes('AADHAR') || (e.type || '').toUpperCase().includes('CARD'));
                                             return (
                                                 <tr key={s.id} className="hover:bg-primary-50/30 transition-colors">
                                                     <td className="px-6 py-4">
