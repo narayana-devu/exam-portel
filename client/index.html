@@ -621,7 +621,15 @@
                     ws['!cols'] = [{ wch: 8 }, { wch: 25 }, { wch: 15 }, { wch: 25 }, { wch: 20 }, { wch: 15 }];
                     const wb = XLSX.utils.book_new();
                     XLSX.utils.book_append_sheet(wb, ws, "Aadhar & Father");
-                    XLSX.writeFile(wb, batch.name + "_Aadhar_Father.xlsx");
+                    const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+                    const blob = new Blob([wbout], { type: 'application/octet-stream' });
+                    const a = document.createElement('a');
+                    a.href = URL.createObjectURL(blob);
+                    a.download = batch.name + "_Aadhar_Father.xlsx";
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(a.href);
 
                     const submitted = data.filter(d => d.Status === "SUBMITTED").length;
                     alert("✅ Downloaded: " + batch.name + "_Aadhar_Father.xlsx\n\nTotal: " + students.length + "\nSubmitted: " + submitted + "\nNot Submitted: " + (students.length - submitted));
@@ -730,9 +738,110 @@
                     
                     onProgress(null);
                     alert(`✅ Downloaded: ${batch.name}_Identity_Assets.zip\nExcel Master and Photos included.`);
-                } catch (e) { 
-                    console.error('Identity ZIP Error:', e); 
-                    alert('Identity ZIP Failed: ' + e.message); 
+                } catch (err) {
+                    console.error("Batch Identity Download Error:", err);
+                    alert("Error: " + err.message);
+                    onProgress(null);
+                }
+            },
+
+            // v85.1: NEW FUNCTION for Full Exam Evidence (Theory, Practical, Viva)
+            downloadBatchExamEvidenceZip: async (batchId, onProgress) => {
+                try {
+                    const batch = window.Utils.getBatches().find(b => b.id === batchId);
+                    if (!batch) throw new Error("Batch not found.");
+                    const students = window.Utils.getStudentsByBatch(batchId);
+                    const allResponses = window.Utils.getResponses();
+                    const zip = new JSZip();
+                    const mainFolder = zip.folder(`${batch.name}_Full_Exam_Evidence`);
+
+                    onProgress("Analysis in Progress...");
+                    const studentData = [];
+                    let completed = 0;
+
+                    for (const s of students) {
+                        onProgress(`Collecting Exam Photos: ${s.name} (${completed + 1} / ${students.length})`);
+                        const studentFolder = mainFolder.folder(`${s.name}_${s.username}`.replace(/ /g, '_'));
+                        
+                        // Check all exam types
+                        const examTypes = ['Theory', 'Practical', 'Viva'];
+                        let totalPhotosForStudent = 0;
+
+                        for (const type of examTypes) {
+                            const resp = allResponses.find(r => r.studentId === s.id && r.examType === type);
+                            if (resp && resp.evidence && resp.evidence.length > 0) {
+                                const typeFolder = studentFolder.folder(type);
+                                let evidenceCount = 0;
+                                for (const item of resp.evidence) {
+                                    const imgSrc = item.img || item.url || item.downloadUrl;
+                                    if (!imgSrc) continue;
+
+                                    try {
+                                        let blob = null;
+                                        // 1. Resolve Local (IndexedDB)
+                                        const key = (item.storage === 'indexeddb' || !item.url) ? item.img : null;
+                                        if (key && !key.startsWith('data:') && !key.startsWith('blob:')) {
+                                            blob = await VideoDB.getVideo(key);
+                                        }
+
+                                        // 2. Resolve Remote (S3 Proxy Aware)
+                                        if (!blob) {
+                                            let finalUrl = imgSrc;
+                                            if (finalUrl.includes('amazonaws.com') && !finalUrl.includes('media-stream')) {
+                                                const urlObj = new URL(finalUrl);
+                                                let s3Key = urlObj.pathname.startsWith('/') ? urlObj.pathname.substring(1) : urlObj.pathname;
+                                                finalUrl = `${API_BASE}/media-stream?key=${encodeURIComponent(decodeURIComponent(s3Key))}&apiKey=portel_secure_key_2025`;
+                                            }
+                                            if (finalUrl.startsWith('http') || finalUrl.startsWith('data:')) {
+                                                const pull = await fetch(finalUrl);
+                                                if (pull.ok) blob = await pull.blob();
+                                            }
+                                        }
+
+                                        if (blob) {
+                                            const label = (item.type || 'Photo').replace(/[^a-zA-Z0-9_]/g, '_');
+                                            const time = (item.time || new Date().toISOString()).slice(0,19).replace(/:/g, '-');
+                                            const fileName = `${type}_${label}_${time}.jpg`;
+                                            typeFolder.file(fileName, blob);
+                                            evidenceCount++;
+                                            totalPhotosForStudent++;
+                                        }
+                                    } catch (e) { console.error(`Failed to zip photo for ${s.name} [${type}]:`, e); }
+                                }
+                            }
+                        }
+
+                        studentData.push({
+                            "Student Name": s.name,
+                            "Username": s.username,
+                            "Total Evidence Photos": totalPhotosForStudent,
+                            "Status": totalPhotosForStudent > 0 ? "EVIDENCE_COLLECTED" : "NO_EVIDENCE"
+                        });
+                        completed++;
+                    }
+
+                    // Master Report
+                    onProgress("Generating Master Report...");
+                    const ws = XLSX.utils.json_to_sheet(studentData);
+                    const wb = XLSX.utils.book_new();
+                    XLSX.utils.book_append_sheet(wb, ws, "Evidence Summary");
+                    const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+                    mainFolder.file(`Batch_Evidence_Summary_${batch.name}.xlsx`, new Blob([wbout]));
+
+                    onProgress("Finalizing Large ZIP Archive...");
+                    const content = await zip.generateAsync({ type: "blob" });
+                    const link = document.createElement("a");
+                    link.href = URL.createObjectURL(content);
+                    link.download = `${batch.name}_Full_Exam_Evidence_${new Date().toISOString().slice(0, 10)}.zip`;
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+
+                    onProgress(null);
+                    alert(`✅ Full Exam Evidence ZIP Downloaded: ${batch.name}_Full_Exam_Evidence.zip`);
+                } catch (err) {
+                    console.error("Batch All Evidence Download Error:", err);
+                    alert("Error: " + err.message);
                     onProgress(null);
                 }
             },
@@ -6860,6 +6969,9 @@
                                 <button onClick={() => window.Utils.exportAadharFatherData(selectedBatch.id)} className="bg-primary-600 hover:bg-primary-700 text-gray-900 px-6 py-2 rounded-2xl font-black text-[11px] uppercase tracking-widest shadow-lg flex items-center gap-2">
                                     <Icons.Download className="w-4 h-4" /> Download CSV Report
                                 </button>
+                                <button onClick={() => window.Utils.downloadBatchExamEvidenceZip(selectedBatch.id, setZipStatus)} className="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2 rounded-2xl font-black text-[11px] uppercase tracking-widest shadow-lg flex items-center gap-2" title="Download all Theory/Practical/Viva photos for the entire batch">
+                                    <Icons.Camera className="w-5 h-5" /> Download Full Exam Evidence (ZIP)
+                                </button>
                             </div>
                         </div>
                         <div className="bg-white rounded-3xl shadow-xl border border-secondary-100 overflow-hidden">
@@ -7637,7 +7749,9 @@
                     const a = document.createElement('a');
                     a.href = URL.createObjectURL(blob);
                     a.download = `${student.name}_${examType}_Evidence_${new Date().toISOString().slice(0,10)}.zip`;
+                    document.body.appendChild(a); // v85.1: Attach for better browser compatibility
                     a.click();
+                    document.body.removeChild(a);
                     URL.revokeObjectURL(a.href);
                     alert(`Downloaded ${count} evidence photo(s) successfully!`);
                 } catch (err) {
