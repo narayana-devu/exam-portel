@@ -1134,10 +1134,14 @@
                     }
 
                     const isOk = failCount === 0 && success > 0;
-                    if (isOk && statusBtn && !silent) statusBtn.innerText = "Sync Complete";
+                    if (statusBtn && !silent) {
+                        if (isOk) statusBtn.innerText = `Sync Succcess: ${success} Items Placed in Cloud`;
+                        else if (failCount > 0) statusBtn.innerText = `Sync Partial: ${failCount} Errors Detected`;
+                    }
                     return isOk;
                 } catch (globalErr) {
                     console.error("Global Sync Error", globalErr);
+                    if (statusBtn && !silent) statusBtn.innerText = "Sync Failed: Network Error";
                     return false;
                 } finally {
                     window.Utils._syncLock = false;
@@ -2011,29 +2015,33 @@
         const LucideIcon = ({ name, className }) => {
             const ref = useRef(null);
             useEffect(() => {
-                if (window.lucide && ref.current) {
-                    // Convert kebab-case (download, file-text) to PascalCase (Download, FileText) for lookup
-                    const iconKey = name.split('-').map(part => part.charAt(0).toUpperCase() + part.slice(1)).join('');
-                    const iconDef = window.lucide.icons[iconKey];
+                const render = () => {
+                    if (window.lucide && ref.current) {
+                        const iconKey = name.split('-').map(part => part.charAt(0).toUpperCase() + part.slice(1)).join('');
+                        const iconDef = window.lucide.icons[iconKey] || window.lucide.icons[name];
 
-                    if (iconDef) {
-                        window.lucide.createIcons({
-                            attrs: { class: className },
-                            nameAttr: 'data-lucide',
-                            icons: { [name]: iconDef }, // Map 'download' -> Download definition
-                            root: ref.current.parentNode
-                        });
-                    } else {
-                        console.warn(`Icon not found: ${name} (Key: ${iconKey})`);
+                        if (iconDef) {
+                            window.lucide.createIcons({
+                                attrs: { class: className },
+                                icons: { [name]: iconDef },
+                                root: ref.current.parentNode
+                            });
+                        } else {
+                            // Fallback to library default lookup
+                            window.lucide.createIcons({ root: ref.current });
+                        }
                     }
-                    // Actually createIcons replaces elements with data-lucide.
-                    // We need to render <i data-lucide={name} /> and let lucide replace it.
-                    // BUT we want to scope it.
-                    window.lucide.createIcons({
-                        root: ref.current,
-                        icons: window.lucide.icons,
-                        attrs: { class: className }
-                    });
+                };
+                
+                if (window.lucide) render();
+                else {
+                    const check = setInterval(() => {
+                        if (window.lucide) {
+                            render();
+                            clearInterval(check);
+                        }
+                    }, 100);
+                    return () => clearInterval(check);
                 }
             }, [name, className]);
 
@@ -8225,6 +8233,127 @@
             );
         };
 
+        const CloudMonitor = () => {
+            const [diagnostics, setDiagnostics] = useState(null);
+            const [pendingCount, setPendingCount] = useState({ json: 0, media: 0 });
+            const [syncing, setSyncing] = useState(false);
+
+            const fetchDiagnostics = async () => {
+                try {
+                    const res = await fetch(`${API_BASE}/diagnostics`, {
+                        headers: { 'x-api-key': 'portel_secure_key_2025' }
+                    });
+                    if (res.ok) setDiagnostics(await res.json());
+                } catch (e) {
+                    setDiagnostics({ s3_connected: false, error: 'Server Offline' });
+                }
+            };
+
+            const calculatePending = () => {
+                let json = 0;
+                let media = 0;
+                const dbKeys = ['se_batches', 'se_students', 'se_qps', 'se_nos', 'se_pcs', 'se_ssc', 'se_responses', 'se_question_papers'];
+                
+                dbKeys.forEach(key => {
+                    const items = JSON.parse(localStorage.getItem(key) || '[]');
+                    items.forEach(item => {
+                        if (!item.synced) json++;
+                        if (item.evidence) {
+                            media += item.evidence.filter(ev => (ev.storage === 'indexeddb' || ev.type === 'VIDEO_INDEXED_DB') && !ev.url && !ev._fileMissing).length;
+                        }
+                    });
+                });
+                setPendingCount({ json, media });
+            };
+
+            useEffect(() => {
+                fetchDiagnostics();
+                calculatePending();
+                const interval = setInterval(() => {
+                    fetchDiagnostics();
+                    calculatePending();
+                }, 10000);
+                window.addEventListener('cloud-sync-complete', calculatePending);
+                return () => {
+                    clearInterval(interval);
+                    window.removeEventListener('cloud-sync-complete', calculatePending);
+                };
+            }, []);
+
+            const handleSync = async () => {
+                setSyncing(true);
+                try {
+                    const statusBtn = document.getElementById('sync-status-text');
+                    if (statusBtn) {
+                        statusBtn.innerText = "Manual Sync Initiated...";
+                        statusBtn.classList.remove('translate-y-24', 'opacity-0');
+                    }
+                    
+                    await window.Utils.uploadToCloud(false);
+                    await window.Utils.downloadFromCloud(true);
+                    
+                    fetchDiagnostics();
+                    calculatePending();
+                } catch (e) {
+                    console.error("Manual Sync Failed", e);
+                } finally {
+                    setSyncing(false);
+                }
+            };
+
+            const isOnline = diagnostics?.s3_connected;
+
+            return (
+                <div className="glass rounded-3xl border border-white/50 p-6 shadow-xl relative overflow-hidden group">
+                    <div className={`absolute top-0 right-0 w-32 h-32 blur-3xl -mr-16 -mt-16 transition-colors duration-1000 ${isOnline ? 'bg-emerald-500/10' : 'bg-rose-500/10'}`}></div>
+                    
+                    <div className="flex justify-between items-start mb-6 relative z-10">
+                        <div>
+                            <h3 className="text-xs font-black text-gray-900 uppercase tracking-widest flex items-center gap-2">
+                                <Icons.Cloud className={isOnline ? 'text-primary-600' : 'text-gray-400'} /> Cloud Infrastructure
+                            </h3>
+                            <p className="text-[10px] text-gray-800 font-bold uppercase mt-1">AWS S3 Protocol Status</p>
+                        </div>
+                        <div className={`px-3 py-1 rounded-full border text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 ${isOnline ? 'bg-emerald-50 border-emerald-100 text-emerald-600' : 'bg-rose-50 border-rose-100 text-rose-600'}`}>
+                            <div className={`w-1.5 h-1.5 rounded-full ${isOnline ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'}`}></div>
+                            {isOnline ? 'Connected' : 'Offline'}
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4 mb-6 relative z-10">
+                        <div className="p-4 bg-gray-50/50 rounded-2xl border border-white">
+                            <p className="text-[10px] font-black text-gray-800 uppercase tracking-tighter mb-1">Queue (JSON)</p>
+                            <p className="text-xl font-black text-gray-900">{pendingCount.json} <span className="text-[10px] text-gray-800">Objects</span></p>
+                        </div>
+                        <div className="p-4 bg-gray-50/50 rounded-2xl border border-white">
+                            <p className="text-[10px] font-black text-gray-800 uppercase tracking-tighter mb-1">Queue (Media)</p>
+                            <p className="text-xl font-black text-gray-900">{pendingCount.media} <span className="text-[10px] text-gray-800">Files</span></p>
+                        </div>
+                    </div>
+
+                    <button 
+                        onClick={handleSync}
+                        disabled={syncing}
+                        className={`w-full py-4 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] transition-all flex items-center justify-center gap-2 group relative z-10 overflow-hidden ${syncing ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-primary-500 hover:bg-primary-600 text-gray-900 shadow-lg shadow-primary-500/20 active:scale-95'}`}
+                    >
+                        {syncing ? (
+                            <Icons.RefreshCw className="w-4 h-4 animate-spin" />
+                        ) : (
+                            <Icons.Zap className="w-4 h-4 group-hover:animate-bounce" />
+                        )}
+                        {syncing ? 'Synchronizing...' : 'Push to Cloud'}
+                    </button>
+                    
+                    {diagnostics?.bucket && (
+                        <div className="mt-4 pt-4 border-t border-white/40 flex justify-between items-center text-[9px] font-bold text-gray-700 uppercase tracking-tighter">
+                            <span>Bucket: {diagnostics.bucket}</span>
+                            <span>{diagnostics.region}</span>
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
         const DashboardTab = () => {
             const [stats, setStats] = useState({ batches: 0, students: 0, qps: 0, assessors: 0 });
             const [recentBatches, setRecentBatches] = useState([]);
@@ -8331,8 +8460,10 @@
                             </div>
                         </div>
 
-                        {/* System Maintenance */}
-                        <div className="space-y-6">
+                        {/* System Governance & Cloud Integration */}
+                        <div className="space-y-8">
+                            <CloudMonitor />
+
                             <div className="glass rounded-3xl border border-rose-200/50 p-6 shadow-xl shadow-rose-500/5">
                                 <h3 className="text-xs font-black text-rose-600 uppercase tracking-widest mb-4 flex items-center gap-2">
                                     <Icons.TriangleAlert className="w-4 h-4" /> Danger Zone
@@ -9905,15 +10036,6 @@
                     </div>
                 );
 
-                {isLoading && (
-                    <div className="fixed inset-0 z-[200] bg-white/80 backdrop-blur-xl flex flex-col items-center justify-center animate-fade-in text-center p-8">
-                        <div className="w-24 h-24 bg-primary-50 rounded-4xl flex items-center justify-center mb-8 border border-primary-100 shadow-2xl animate-bounce">
-                            <Icons.RefreshCw className="w-12 h-12 text-primary-600 animate-spin" />
-                        </div>
-                        <h2 className="text-3xl font-black text-gray-900 mb-2">Syncing Exam Data...</h2>
-                        <p className="text-gray-600 font-medium max-w-sm">We're performing a deep cloud synchronization to recover your question paper. Please do not close this window.</p>
-                    </div>
-                )}
 
                 return (
                     <div className="flex h-screen fixed inset-0 z-50 bg-secondary-50 animate-fade-in overflow-hidden">
@@ -10459,7 +10581,7 @@
 
                     </div>
                 );
-            };
+            }
 
 
             // VIEW 2: SELECT BATCH (Common for both flows)

@@ -113,6 +113,31 @@ app.get('/health', (req, res) => {
     res.json({ status: 'ok', time: new Date().toISOString() });
 });
 
+// Health & Cloud Diagnostics (v82.1)
+app.get('/api/diagnostics', async (req, res) => {
+    const status = {
+        status: 'online',
+        timestamp: new Date().toISOString(),
+        adapter: s3 ? 's3' : 'local',
+        bucket: process.env.BUCKET_NAME || 'None',
+        region: process.env.AWS_REGION || 'eu-north-1',
+        s3_connected: false
+    };
+
+    if (s3) {
+        try {
+            await s3.headBucket({ Bucket: process.env.BUCKET_NAME }).promise();
+            status.s3_connected = true;
+        } catch (e) {
+            console.error("[S3] Diagnostics Failed:", e.message);
+            status.s3_connected = false;
+            status.error = e.message;
+        }
+    }
+
+    res.json(status);
+});
+
 // Apply Auth to API Routes
 app.use('/api', authMiddleware);
 
