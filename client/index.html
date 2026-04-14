@@ -6849,35 +6849,44 @@
                                 <table className="w-full text-left border-collapse">
                                     <thead className="bg-white text-[10px] font-black uppercase tracking-widest text-secondary-500 border-b border-secondary-100">
                                         <tr>
-                                            <th className="px-6 py-4">Student Details</th>
-                                            <th className="px-6 py-4">Father's Name</th>
-                                            <th className="px-6 py-4">Aadhar Number</th>
-                                            <th className="px-6 py-4">Identity Photos</th>
-                                            <th className="px-6 py-4 text-center">Status</th>
+                                            <th className="px-8 py-5">Personnel Subset</th>
+                                            <th className="px-8 py-5">Verification Detail</th>
+                                            <th className="px-8 py-5">Auth Status</th>
+                                            <th className="px-8 py-5 text-center">Diagnostics</th>
                                         </tr>
                                     </thead>
-                                    <tbody className="bg-white divide-y divide-secondary-100">
-                                        {students.map((s) => {
-                                            const verif = allResponses.find(r => (r.studentId === s.id || r.studentId === s.username) && r.examType.toUpperCase() === 'VERIFICATION');
-                                            const details = verif?.details || verif?.answers || {};
-                                            const selfie = verif?.evidence?.find(e => (e.type || '').toUpperCase().includes('SELFIE') || (e.type || '').toUpperCase().includes('PHOTO') && !(e.type || '').toUpperCase().includes('ID'));
-                                            const idcard = verif?.evidence?.find(e => (e.type || '').toUpperCase().includes('ID') || (e.type || '').toUpperCase().includes('AADHAR') || (e.type || '').toUpperCase().includes('CARD'));
+                                    <tbody className="divide-y divide-secondary-50">
+                                        {students.map((s, i) => {
+                                            const hasResponse = allResponses.some(r => r.studentId === s.id && r.examType === 'VERIFICATION');
+                                            const resp = allResponses.find(r => r.studentId === s.id && r.examType === 'VERIFICATION');
                                             return (
-                                                <tr key={s.id} className="hover:bg-primary-50/30 transition-colors">
-                                                    <td className="px-6 py-4">
-                                                        <span className="font-bold text-secondary-900">{s.name}</span>
-                                                        <p className="text-[10px] text-secondary-500 font-bold">User: {s.username}</p>
+                                                <tr key={s.id} className="group hover:bg-secondary-50 transition-all">
+                                                    <td className="px-8 py-6">
+                                                        <p className="text-sm font-black text-secondary-900">{s.name}</p>
+                                                        <p className="text-[10px] font-bold text-secondary-500 uppercase tracking-tighter mt-1">ID: {s.username}</p>
                                                     </td>
-                                                    <td className="px-6 py-4 text-sm font-bold text-secondary-700">{details.fatherName || <span className="text-secondary-300 italic">Pending</span>}</td>
-                                                    <td className="px-6 py-4 text-sm font-mono font-bold text-secondary-900">{details.aadharNumber || 'N/A'}</td>
-                                                    <td className="px-6 py-4">
-                                                        <div className="flex gap-2">
-                                                            {selfie ? <EvidenceImage item={selfie} /> : <div className="w-10 h-10 bg-secondary-100 rounded-lg flex items-center justify-center text-secondary-400"><Icons.User className="w-5 h-5" /></div>}
-                                                            {idcard ? <EvidenceImage item={idcard} /> : <div className="w-10 h-10 bg-secondary-100 rounded-lg flex items-center justify-center text-secondary-400"><Icons.UserCheck className="w-5 h-5" /></div>}
+                                                    <td className="px-8 py-6">
+                                                        {resp ? (
+                                                            <div className="space-y-1">
+                                                                <p className="text-xs font-bold text-secondary-700">Father: <span className="text-secondary-900">{resp.details?.fatherName || 'N/A'}</span></p>
+                                                                <p className="text-xs font-bold text-secondary-700">Aadhar: <span className="font-mono text-secondary-900">{resp.details?.aadharNumber || 'N/A'}</span></p>
+                                                            </div>
+                                                        ) : (
+                                                            <span className="text-xs text-secondary-400 italic">No verification data yet</span>
+                                                        )}
+                                                    </td>
+                                                    <td className="px-8 py-6">
+                                                        <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${hasResponse ? 'bg-emerald-100 text-emerald-700' : 'bg-secondary-100 text-secondary-400'}`}>
+                                                            {hasResponse ? <Icons.ShieldCheck className="w-3 h-3" /> : <Icons.ShieldAlert className="w-3 h-3" />}
+                                                            {hasResponse ? 'Verified' : 'Pending'}
                                                         </div>
                                                     </td>
-                                                    <td className="px-6 py-4 text-center">
-                                                        {verif ? <span className="bg-emerald-100 text-emerald-700 px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest inline-flex items-center gap-1"><Icons.CheckCircle className="w-3 h-3" /> Verified</span> : <span className="bg-amber-100 text-amber-700 px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest inline-flex items-center gap-1"><Icons.Clock className="w-3 h-3" /> Pending</span>}
+                                                    <td className="px-8 py-6">
+                                                        <div className="flex items-center justify-center gap-2">
+                                                            <button onClick={() => viewEvidence(s)} className="p-2 bg-white rounded-xl border border-secondary-200 text-secondary-600 hover:text-primary-600 hover:border-primary-200 transition-all shadow-sm active:scale-90">
+                                                                <Icons.Eye className="w-4 h-4" />
+                                                            </button>
+                                                        </div>
                                                     </td>
                                                 </tr>
                                             );
@@ -8985,7 +8994,7 @@
                                 </div>
                             </div>
 
-                             </div>
+                            <div className="flex items-center gap-6">
 
                                 {/* v45: Notification Bell */}
                                 <div className="relative">
@@ -10400,43 +10409,8 @@
                                     </div>
                                 </div>
                             </div>
-
-                            <div className="w-full h-px bg-secondary-100"></div>
-
-                            {/* Question Grid */}
-                            <div className="flex-1 overflow-y-auto p-6">
-                                <h4 className="text-[11px] font-black text-secondary-700 uppercase tracking-[0.2em] mb-6">Question Map</h4>
-                                <div className="grid grid-cols-5 gap-3">
-                                    {questions.map((_, i) => (
-                                        <div
-                                            key={i}
-                                            onClick={() => setCurrentQ(i)}
-                                            className={`h-10 flex items-center justify-center cursor-pointer rounded-xl font-bold text-sm transition-all duration-300 active:scale-90 shadow-sm ${currentQ === i ? 'bg-primary-600 text-gray-900 shadow-primary-200 -translate-y-1' : (answers[i] ? 'bg-emerald-100 text-emerald-700 border border-emerald-200' : 'bg-secondary-50 text-secondary-700 border border-secondary-100 hover:bg-secondary-100')}`}
-                                        >
-                                            {i + 1}
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-
-                            {/* Sidebar Footer */}
-                            <div className="p-6 bg-secondary-50 border-t border-secondary-100">
-                                <div className="bg-white p-4 rounded-2xl border border-secondary-200 flex items-center justify-between mb-4">
-                                    <span className="text-xs font-bold text-secondary-800">Completion</span>
-                                    <span className="text-sm font-black text-primary-600">
-                                        {questions.length > 0 ? Math.round((Object.keys(answers).length / questions.length) * 100) : 0}%
-                                    </span>
-                                </div>
-                                <div className="w-full bg-secondary-200 h-2 rounded-full overflow-hidden">
-                                    <div
-                                        className="h-full bg-primary-600 transition-all duration-500"
-                                        style={{ width: `${questions.length > 0 ? (Object.keys(answers).length / questions.length) * 100 : 0}%` }}
-                                    ></div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                );
+                </div>
+            );
             }
 
             return (
@@ -10693,7 +10667,7 @@
                                             </p>
                                         </div>
 
-                                        <button
+                                         <button
                                             onClick={() => {
                                                 // Save Evidence
                                                 window.Utils.saveResponse({
