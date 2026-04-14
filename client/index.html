@@ -8936,10 +8936,15 @@
                 window.addEventListener('notificationCreated', loadNotifications);
                 window.addEventListener('notificationUpdated', loadNotifications);
 
+                // Recycle Bin access from Storage Tab
+                const openTrashHandler = () => setShowTrashModal(true);
+                window.addEventListener('openTrashModal', openTrashHandler);
+
                 return () => {
                     window.removeEventListener('cloud-sync-complete', loadQPs);
                     window.removeEventListener('notificationCreated', loadNotifications);
                     window.removeEventListener('notificationUpdated', loadNotifications);
+                    window.removeEventListener('openTrashModal', openTrashHandler);
                 };
             }, []);
 
@@ -9092,14 +9097,6 @@
                             {activeTab === 'storage' && <StorageTab />}
                         </div>
                         <RecycleBinModal isOpen={showTrashModal} onClose={() => setShowTrashModal(false)} />
-                        {/* Event Listener for Storage Tab access */}
-                        <React.Fragment>
-                            {useEffect(() => {
-                                const handler = () => setShowTrashModal(true);
-                                window.addEventListener('openTrashModal', handler);
-                                return () => window.removeEventListener('openTrashModal', handler);
-                            }, [])}
-                        </React.Fragment>
                     </div>
                 </div >
             );
