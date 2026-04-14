@@ -4174,6 +4174,7 @@
             const [selectedQP, setSelectedQP] = useState(null);
             const [isGeneratingAI, setIsGeneratingAI] = useState(false);
             const [aiTotalQuestions, setAiTotalQuestions] = useState(0);
+            const [aiCustomInstructions, setAiCustomInstructions] = useState('');
 
             // New State for Filters
             const [sscList, setSSCList] = useState([]);
@@ -4473,7 +4474,8 @@
                             qpName: qpDef.name,
                             qpCode: qpDef.code,
                             pcs: pcsForAI,
-                            totalQuestions: aiTotalQuestions || pcsForAI.length
+                            totalQuestions: aiTotalQuestions || pcsForAI.length,
+                            customInstructions: aiCustomInstructions
                         })
                     });
 
@@ -4553,6 +4555,15 @@
                                         />
                                         <span className="text-xs text-gray-700 italic">Leaves blank to use 1:1 PC mapping (Default)</span>
                                     </div>
+
+                                    <label className="font-bold text-gray-700">AI Instructions (Write Here):</label>
+                                    <textarea
+                                        className="w-full p-2 border border-gray-300 rounded text-sm outline-none focus:border-blue-500 transition-all text-gray-800"
+                                        rows="2"
+                                        value={aiCustomInstructions}
+                                        onChange={e => setAiCustomInstructions(e.target.value)}
+                                        placeholder="e.g. Make questions scenario-based, focus on safety, or target specific topics..."
+                                    ></textarea>
                                 </>
                             )}
                         </div>

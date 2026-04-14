@@ -796,7 +796,7 @@ setTimeout(runCleanup, 10000);
 // AI Question Generation Route
 app.post('/api/generate-questions-ai', authMiddleware, async (req, res) => {
     try {
-        const { qpName, qpCode, pcs, totalQuestions } = req.body;
+        const { qpName, qpCode, pcs, totalQuestions, customInstructions } = req.body;
 
         if (!genAI) {
             return res.status(400).json({ error: 'AI Generation is disabled. Please add GEMINI_API_KEY to your .env file.' });
@@ -811,6 +811,8 @@ app.post('/api/generate-questions-ai', authMiddleware, async (req, res) => {
         const prompt = `
             You are an expert educational assessor. Generate a "Theory" exam paper for the Qualification Pack: "${qpName}" (Code: ${qpCode}).
             
+            ${customInstructions ? `USER CUSTOM INSTRUCTIONS: "${customInstructions}"` : ''}
+
             TARGET QUESTION COUNT: ${totalQuestions || pcs.length}
             TOTAL PCs TO COVER: ${pcs.length}
             
