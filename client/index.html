@@ -2469,7 +2469,18 @@
                             ].map(item => (
                                 <button
                                     key={item.id}
-                                    onClick={() => setActiveTab(item.id)}
+                                    onClick={() => {
+                                        if (item.id === 'storage') {
+                                            const pass = prompt('Enter Admin Password to access Storage Intelligence:');
+                                            if (pass === 'admin') {
+                                                setActiveTab(item.id);
+                                            } else if (pass !== null) {
+                                                alert('Access Denied: Incorrect Password');
+                                            }
+                                        } else {
+                                            setActiveTab(item.id);
+                                        }
+                                    }}
                                     className={`w-full flex items-center gap-4 px-4 py-3 rounded-2xl transition-all duration-300 group ${activeTab === item.id ? 'bg-white text-indigo-600 shadow-xl shadow-indigo-100 border border-indigo-100/50' : 'text-gray-800 hover:text-indigo-600 hover:bg-white/50'}`}
                                 >
                                     <span className={`${activeTab === item.id ? 'text-primary-700' : 'text-gray-800 group-hover:text-gray-600'} transition-colors`}>
