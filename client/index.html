@@ -5831,8 +5831,8 @@
 
                     {/* New Import Students Modal */}
                     {showImportModal && (
-                        <div className="fixed inset-0 bg-white/40 backdrop-blur-md flex items-center justify-center p-6 z-[100] animate-fade-in shadow-2xl">
-                            <div className="bg-white border border-gray-100 w-full max-w-4xl rounded-[40px] shadow-[0_32px_64px_-16px_rgba(0,0,0,0.15)] overflow-hidden relative">
+                        <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-md flex items-center justify-center p-6 z-[100] animate-fade-in" onClick={() => setShowImportModal(false)}>
+                            <div className="bg-white border border-gray-100 w-full max-w-4xl rounded-[40px] shadow-[0_32px_64px_-16px_rgba(0,0,0,0.15)] overflow-hidden relative" onClick={e => e.stopPropagation()}>
                                 {/* Decorative Background */}
                                 <div className="absolute top-0 right-0 w-96 h-96 bg-primary-50/50 blur-[120px] -mr-48 -mt-48"></div>
                                 <div className="absolute bottom-0 left-0 w-96 h-96 bg-indigo-50/50 blur-[120px] -ml-48 -mb-48"></div>
@@ -5936,8 +5936,8 @@
                     )}
 
                     {showCreateModal && (
-                        <div className="fixed inset-0 bg-white/40 backdrop-blur-md flex items-center justify-center p-4 md:p-6 z-[100] animate-fade-in font-sans">
-                            <div className="bg-white border border-gray-100 w-full h-full max-w-[1600px] max-h-[92vh] rounded-[32px] shadow-[0_32px_64px_-16px_rgba(0,0,0,0.15)] overflow-hidden relative flex flex-col">
+                        <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-md flex items-center justify-center p-4 md:p-6 z-[100] animate-fade-in font-sans" onClick={() => setShowCreateModal(false)}>
+                            <div className="bg-white border border-gray-100 w-full h-full max-w-[1600px] max-h-[92vh] rounded-[32px] shadow-[0_32px_64px_-16px_rgba(0,0,0,0.15)] overflow-hidden relative flex flex-col" onClick={e => e.stopPropagation()}>
                                 {/* Decorative Background */}
                                 <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-primary-500/10 blur-[130px] -mr-48 -mt-48 pointer-events-none"></div>
                                 <div className="absolute bottom-0 left-0 w-[500px] h-[500px] bg-fuchsia-500/10 blur-[130px] -ml-48 -mb-48 pointer-events-none"></div>
@@ -6115,8 +6115,8 @@
                     )}
 
                     {showAssignModal && (
-                        <div className="fixed inset-0 bg-white/40 backdrop-blur-md flex items-center justify-center p-6 z-[100] animate-fade-in font-sans">
-                            <div className="glass w-full max-w-xl rounded-[40px] shadow-2xl border border-white/60 overflow-hidden relative">
+                        <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-md flex items-center justify-center p-6 z-[100] animate-fade-in font-sans" onClick={() => setShowAssignModal(false)}>
+                            <div className="glass w-full max-w-xl rounded-[40px] shadow-2xl border border-white/60 overflow-hidden relative" onClick={e => e.stopPropagation()}>
                                 <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/5 blur-[80px] -mr-32 -mt-32"></div>
 
                                 <div className="relative z-10">
@@ -6211,8 +6211,8 @@
                     )}
 
                     {showStudentModal && (
-                        <div className="fixed inset-0 bg-white/40 backdrop-blur-md flex items-center justify-center p-6 z-[100] animate-fade-in font-sans">
-                            <div className="bg-white border border-gray-100 w-full max-w-6xl rounded-[40px] shadow-[0_32px_64px_-16px_rgba(0,0,0,0.25)] overflow-hidden relative">
+                        <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-md flex items-center justify-center p-6 z-[100] animate-fade-in font-sans" onClick={() => setShowStudentModal(false)}>
+                            <div className="bg-white border border-gray-100 w-full max-w-6xl rounded-[40px] shadow-[0_32px_64px_-16px_rgba(0,0,0,0.25)] overflow-hidden relative" onClick={e => e.stopPropagation()}>
                                 {/* Decorative elements */}
                                 <div className="absolute top-0 right-0 w-[600px] h-[600px] bg-primary-50/50 blur-[150px] -mr-64 -mt-64"></div>
                                 <div className="absolute bottom-0 left-0 w-[600px] h-[600px] bg-indigo-50/50 blur-[150px] -ml-64 -mb-64"></div>
@@ -6644,8 +6644,8 @@
                     )}
 
                     {showCreateModal && (
-                        <div className="fixed inset-0 bg-white/40 backdrop-blur-md flex items-center justify-center p-4 z-50">
-                            <div className="bg-white w-full max-w-2xl shadow-2xl rounded-xl overflow-hidden animate-scale-in">
+                        <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-md flex items-center justify-center p-4 z-50" onClick={() => setShowCreateModal(false)}>
+                            <div className="bg-white w-full max-w-2xl shadow-2xl rounded-xl overflow-hidden animate-scale-in" onClick={e => e.stopPropagation()}>
                                 <div className="bg-gray-50 px-8 py-5 flex justify-between items-center border-b">
                                     <h3 className="text-xl font-bold text-gray-800">Create New Assessor</h3>
                                     <button onClick={() => setShowCreateModal(false)} className="text-gray-700 hover:text-red-500 transition-colors">
@@ -8612,8 +8612,8 @@
             if (!isOpen) return null;
 
             return (
-                <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md flex items-center justify-center p-4 z-[100] animate-fade-in">
-                    <div className="bg-white rounded-[2rem] w-full max-w-4xl max-h-[85vh] flex flex-col shadow-2xl border border-white/20 animate-scale-in">
+                <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md flex items-center justify-center p-4 z-[100] animate-fade-in" onClick={onClose}>
+                    <div className="bg-white rounded-[2rem] w-full max-w-4xl max-h-[85vh] flex flex-col shadow-2xl border border-white/20 animate-scale-in" onClick={e => e.stopPropagation()}>
                         {/* Header */}
                         <div className="p-8 border-b border-gray-100 flex justify-between items-center bg-gray-50/50 rounded-t-[2rem]">
                             <div>
@@ -8634,12 +8634,15 @@
                         {/* Content */}
                         <div className="flex-1 overflow-y-auto p-8 bg-white overflow-x-hidden">
                             {trashItems.length === 0 ? (
-                                <div className="py-20 text-center">
-                                    <div className="w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-6 text-gray-300">
-                                        <Icons.Trash2 className="w-12 h-12" />
+                                <div className="text-center py-20 bg-gray-50/50">
+                                    <div className="w-20 h-20 bg-white rounded-full flex items-center justify-center mx-auto mb-6 shadow-sm">
+                                        <Icons.Trash2 className="w-10 h-10 text-gray-200" />
                                     </div>
-                                    <p className="text-gray-900 font-bold text-lg">Your Recycle Bin is empty</p>
-                                    <p className="text-gray-500 text-sm mt-1">Deleted items will appear here for recovery.</p>
+                                    <p className="text-gray-700 font-bold">Trash is Empty</p>
+                                    <p className="text-xs text-gray-500 mt-1 mb-8">Nothing to recover at the moment.</p>
+                                    <button onClick={onClose} className="px-10 py-4 bg-gray-900 text-white rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] hover:bg-black transition-all shadow-xl">
+                                        Return to Dashboard
+                                    </button>
                                 </div>
                             ) : (
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -8808,17 +8811,22 @@
 
                                     {/* Notification Panel */}
                                     {showNotifications && (
-                                        <div className="absolute right-0 mt-4 w-96 glass rounded-3xl shadow-2xl border border-white/60 z-50 max-h-[500px] overflow-hidden flex flex-col animate-fade-in-up">
-                                            <div className="p-5 border-b border-white/10 flex justify-between items-center bg-white/5">
+                                        <div className="absolute right-0 mt-4 w-96 glass rounded-3xl shadow-2xl border border-white/60 z-50 max-h-[500px] overflow-hidden flex flex-col animate-fade-in-up" onClick={() => setShowNotifications(false)}>
+                                            <div className="p-5 border-b border-white/10 flex justify-between items-center bg-white/5" onClick={e => e.stopPropagation()}>
                                                 <h3 className="font-black text-gray-900 text-sm uppercase tracking-widest">Notifications</h3>
-                                                {unreadCount > 0 && (
-                                                    <button
-                                                        onClick={() => window.Utils.markAllNotificationsRead()}
-                                                        className="text-[10px] font-black text-primary-700 hover:text-primary-600 uppercase tracking-tighter"
-                                                    >
-                                                        Mark all read
+                                                <div className="flex items-center gap-4">
+                                                    {unreadCount > 0 && (
+                                                        <button
+                                                            onClick={() => window.Utils.markAllNotificationsRead()}
+                                                            className="text-[10px] font-black text-primary-700 hover:text-primary-600 uppercase tracking-tighter"
+                                                        >
+                                                            Mark all read
+                                                        </button>
+                                                    )}
+                                                    <button onClick={() => setShowNotifications(false)} className="text-gray-500 hover:text-rose-500 transition-colors">
+                                                        <Icons.X className="w-5 h-5" />
                                                     </button>
-                                                )}
+                                                </div>
                                             </div>
                                             <div className="overflow-y-auto flex-1 custom-scrollbar">
                                                 {notifications.length === 0 ? (
