@@ -2681,6 +2681,12 @@
                     {showModal && (
                         <div className="fixed inset-0 bg-white/40 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-fade-in text-gray-900">
                             <div className="bg-white rounded-[40px] p-10 w-full max-w-md border border-gray-100 shadow-[0_32px_64px_-16px_rgba(0,0,0,0.25)] animate-scale-in relative overflow-hidden">
+                                <button
+                                    onClick={() => setShowModal(false)}
+                                    className="absolute top-6 right-6 w-10 h-10 rounded-2xl bg-gray-50 flex items-center justify-center text-gray-400 hover:bg-rose-50 hover:text-rose-600 transition-all z-20"
+                                >
+                                    <Icons.X className="w-5 h-5" />
+                                </button>
                                 {/* Decorative elements */}
                                 <div className="absolute top-0 left-0 w-full h-2 premium-gradient"></div>
                                 
@@ -3525,8 +3531,14 @@
                         </table>
                     </div>
                     {showModal && (
-                        <div className="fixed inset-0 bg-white/40 backdrop-blur-md flex items-center justify-center p-4 z-50 overflow-y-auto">
-                            <div className="bg-white rounded-xl p-8 w-full max-w-4xl my-8">
+                        <div className="fixed inset-0 bg-white/40 backdrop-blur-md flex items-center justify-center p-4 z-50 overflow-y-auto" onClick={() => setShowModal(false)}>
+                            <div className="bg-white rounded-xl p-8 w-full max-w-4xl my-8 relative" onClick={e => e.stopPropagation()}>
+                                <button
+                                    onClick={() => setShowModal(false)}
+                                    className="absolute top-6 right-6 w-10 h-10 rounded-xl bg-gray-50 flex items-center justify-center text-gray-400 hover:bg-rose-50 hover:text-rose-600 transition-all z-20"
+                                >
+                                    <Icons.X className="w-5 h-5" />
+                                </button>
                                 <h3 className="text-2xl font-bold mb-6 text-gray-800">{newQP.id ? 'Edit Qualification Pack' : 'Add Qualification Pack'}</h3>
                                 <form onSubmit={handleCreate} className="space-y-6">
                                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -4023,8 +4035,14 @@
                     {/* Modals with Glass Styling */}
 
                     {showUploadNOSModal && (
-                        <div className="fixed inset-0 bg-white/40 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-fade-in">
-                            <div className="glass rounded-[40px] p-10 w-full max-w-lg border border-white/60 shadow-2xl animate-scale-in">
+                        <div className="fixed inset-0 bg-white/40 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-fade-in" onClick={() => setShowUploadNOSModal(false)}>
+                            <div className="glass rounded-[40px] p-10 w-full max-w-lg border border-white/60 shadow-2xl animate-scale-in relative" onClick={e => e.stopPropagation()}>
+                                <button
+                                    onClick={() => setShowUploadNOSModal(false)}
+                                    className="absolute top-8 right-8 w-10 h-10 rounded-2xl bg-gray-50 flex items-center justify-center text-gray-400 hover:bg-rose-50 hover:text-rose-600 transition-all z-20"
+                                >
+                                    <Icons.X className="w-5 h-5" />
+                                </button>
                                 <div className="text-center mb-10">
                                     <div className="w-20 h-20 bg-emerald-500/10 rounded-[32px] flex items-center justify-center mx-auto mb-6">
                                         <Icons.UploadCloud className="w-10 h-10 text-emerald-600" />
@@ -4074,8 +4092,14 @@
                     )}
 
                     {showNOSModal && (
-                        <div className="fixed inset-0 bg-white/40 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-fade-in">
-                            <div className="glass rounded-[40px] p-10 w-full max-w-2xl border border-white/60 shadow-2xl animate-scale-in">
+                        <div className="fixed inset-0 bg-white/40 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-fade-in" onClick={() => setShowNOSModal(false)}>
+                            <div className="glass rounded-[40px] p-10 w-full max-w-2xl border border-white/60 shadow-2xl animate-scale-in relative" onClick={e => e.stopPropagation()}>
+                                <button
+                                    onClick={() => setShowNOSModal(false)}
+                                    className="absolute top-10 right-10 w-10 h-10 rounded-2xl bg-gray-50 flex items-center justify-center text-gray-400 hover:bg-rose-50 hover:text-rose-600 transition-all z-20"
+                                >
+                                    <Icons.X className="w-5 h-5" />
+                                </button>
                                 <div className="text-center mb-10">
                                     <div className="w-20 h-20 bg-primary-500/10 rounded-[32px] flex items-center justify-center mx-auto mb-6">
                                         <Icons.Plus className="w-10 h-10 text-primary-700" />
@@ -4116,8 +4140,14 @@
                     )}
 
                     {showPCModal && (
-                        <div className="fixed inset-0 bg-white/40 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-fade-in">
-                            <div className="glass rounded-[40px] p-10 w-full max-w-xl border border-white/60 shadow-2xl animate-scale-in">
+                        <div className="fixed inset-0 bg-white/40 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-fade-in" onClick={() => setShowPCModal(false)}>
+                            <div className="glass rounded-[40px] p-10 w-full max-w-xl border border-white/60 shadow-2xl animate-scale-in relative" onClick={e => e.stopPropagation()}>
+                                <button
+                                    onClick={() => setShowPCModal(false)}
+                                    className="absolute top-10 right-10 w-10 h-10 rounded-2xl bg-gray-50 flex items-center justify-center text-gray-400 hover:bg-rose-50 hover:text-rose-600 transition-all z-20"
+                                >
+                                    <Icons.X className="w-5 h-5" />
+                                </button>
                                 <div className="text-center mb-8">
                                     <div className="w-16 h-16 bg-primary-500/20 rounded-2xl flex items-center justify-center mx-auto mb-4">
                                         <Icons.Link className="w-8 h-8 text-primary-700" />
@@ -4439,11 +4469,11 @@
                     <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-10 gap-4">
                         <div>
                             <h2 className="text-3xl font-extrabold text-[#1e293b] tracking-tight">Question Paper <span className="text-primary-600">Forge</span></h2>
-                            <p className="text-[#64748b] text-sm mt-1 font-medium">Create and manage assessment blueprints with AI precision.</p>
+                            <p className="text-[#64748b] text-sm mt-1 font-medium">Create and manage assessment blueprints with professional accuracy.</p>
                         </div>
                         <div className="flex items-center gap-3 bg-white/40 backdrop-blur-md px-4 py-2 rounded-2xl border border-white/60 shadow-sm">
                             <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
-                            <span className="text-[10px] font-black uppercase tracking-widest text-gray-700">AI Node Ready</span>
+                            <span className="text-[10px] font-black uppercase tracking-widest text-gray-700">System Node Ready</span>
                         </div>
                     </div>
 
@@ -4551,7 +4581,7 @@
                                 <div className="bg-gray-50 px-8 py-5 flex justify-between items-center border-b">
                                     <h3 className="text-xl font-bold text-gray-800">Upload Question Paper</h3>
                                     <button onClick={() => setShowUploadModal(false)} className="text-gray-700 hover:text-red-500 transition-colors">
-                                        <Icons.XCircle className="w-6 h-6" />
+                                        <Icons.X className="w-6 h-6" />
                                     </button>
                                 </div>
 
@@ -5975,7 +6005,7 @@
                                                         <div className="flex gap-2">
                                                             <input autoFocus type="text" className="w-full bg-white border border-gray-100 rounded-2xl px-5 py-3.5 text-gray-900 text-sm font-bold outline-none focus:border-primary-500/50 shadow-sm"
                                                                 placeholder="New Project Name" value={newBatch.project} onChange={e => setNewBatch({ ...newBatch, project: e.target.value })} />
-                                                            <button type="button" onClick={() => setShowNewProjectInput(false)} className="px-4 rounded-2xl bg-gray-50 text-gray-700 hover:text-rose-500 transition-colors border border-gray-100 shadow-sm"><Icons.XCircle className="w-5 h-5" /></button>
+                                                            <button type="button" onClick={() => setShowNewProjectInput(false)} className="px-4 rounded-2xl bg-gray-50 text-gray-700 hover:text-rose-500 transition-colors border border-gray-100 shadow-sm"><Icons.X className="w-5 h-5" /></button>
                                                         </div>
                                                     ) : (
                                                         <>
@@ -6653,7 +6683,7 @@
                                 <div className="bg-gray-50 px-8 py-5 flex justify-between items-center border-b">
                                     <h3 className="text-xl font-bold text-gray-800">Create New Assessor</h3>
                                     <button onClick={() => setShowCreateModal(false)} className="text-gray-700 hover:text-red-500 transition-colors">
-                                        <Icons.XCircle className="w-6 h-6" />
+                                        <Icons.X className="w-6 h-6" />
                                     </button>
                                 </div>
                                 <div className="p-8 space-y-6">
@@ -9356,7 +9386,7 @@
                                 <div className="mt-auto border-2 border-dashed border-gray-300 rounded-lg p-2 relative bg-white">
                                     <img src={photoUrl} className="w-full h-32 object-cover rounded" />
                                     <button onClick={() => { setPhotoUrl(null); onAnswer({ ...answer, photo: null }); }} className="absolute -top-2 -right-2 bg-red-500 text-gray-900 rounded-full p-1 shadow hover:bg-red-600">
-                                        <Icons.XCircle className="w-4 h-4" />
+                                        <Icons.X className="w-4 h-4" />
                                     </button>
                                 </div>
                             )}
