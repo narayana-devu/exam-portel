@@ -288,65 +288,100 @@
         }
 
         /* Legacy Dashboard Styles */
-        .legacy-dashboard-container {
-            background-color: #f3f3f3;
-            min-height: 100%;
-            padding: 20px;
+        /* Modern Classic Dashboard Styles */
+        .modern-dashboard-container {
+            padding: 32px;
+            animation: fade-in-up 0.8s ease-out;
         }
 
-        .legacy-title-bar {
-            background-color: #ededed;
-            border-bottom: 2px solid #dedede;
-            padding: 8px 15px;
-            font-weight: 900;
-            font-size: 14px;
-            color: #333;
-            margin-bottom: 20px;
-        }
-
-        .legacy-card {
-            background: white;
-            border: 1px solid #d1d1d1;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-            margin-bottom: 20px;
-            display: flex;
-            flex-direction: column;
-        }
-
-        .legacy-card-header {
-            padding: 8px 12px;
-            color: white;
-            font-weight: 700;
-            font-size: 13px;
-            display: flex;
+        .system-status-pill {
+            display: inline-flex;
             align-items: center;
             gap: 8px;
+            padding: 6px 16px;
+            background: rgba(16, 185, 129, 0.1);
+            border: 1px solid rgba(16, 185, 129, 0.2);
+            border-radius: 99px;
+            color: #059669;
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
         }
 
-        .legacy-card-body {
-            padding: 20px;
+        .neon-dot {
+            width: 8px;
+            height: 8px;
+            background-color: #10b981;
+            border-radius: 50%;
+            box-shadow: 0 0 10px #10b981;
+            animation: pulse-glow 2s infinite;
+        }
+
+        @keyframes pulse-glow {
+            0% { box-shadow: 0 0 5px #10b981; opacity: 0.7; }
+            50% { box-shadow: 0 0 15px #10b981; opacity: 1; }
+            100% { box-shadow: 0 0 5px #10b981; opacity: 0.7; }
+        }
+
+        .modern-stat-card {
+            background: rgba(255, 255, 255, 0.7);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.4);
+            border-radius: 24px;
+            padding: 24px;
             display: flex;
-            justify-content: center;
             align-items: center;
-            flex: 1;
+            gap: 20px;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 4px 20px -5px rgba(0, 0, 0, 0.05);
         }
 
-        .legacy-stat-number {
-            font-size: 42px;
-            font-weight: 400;
+        .modern-stat-card:hover {
+            transform: translateY(-5px) scale(1.02);
+            background: rgba(255, 255, 255, 0.85);
+            box-shadow: 0 20px 40px -15px rgba(99, 102, 241, 0.15);
+            border-color: rgba(99, 102, 241, 0.3);
         }
 
-        .legacy-header-green { background-color: #27ae60; }
-        .legacy-header-blue { background-color: #2980b9; }
-        .legacy-header-orange { background-color: #f39c12; }
-        .legacy-header-red { background-color: #e67e22; } /* Matches screenshot's reddish orange */
-        .legacy-header-chart { background-color: #ff6347; } /* Tomato/Orange for chart */
+        .stat-icon-wrapper {
+            width: 56px;
+            height: 56px;
+            border-radius: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+        }
 
-        .legacy-chart-container {
-            background: white;
-            border: 1px solid #3498db;
-            padding: 10px;
-            border-radius: 4px;
+        .card-emerald .stat-icon-wrapper { background: rgba(16, 185, 129, 0.1); color: #059669; }
+        .card-blue .stat-icon-wrapper { background: rgba(59, 130, 246, 0.1); color: #2563eb; }
+        .card-amber .stat-icon-wrapper { background: rgba(245, 158, 11, 0.1); color: #d97706; }
+        .card-rose .stat-icon-wrapper { background: rgba(244, 63, 94, 0.1); color: #e11d48; }
+
+        .modern-stat-value {
+            font-size: 32px;
+            font-weight: 800;
+            color: #1e293b;
+            line-height: 1;
+        }
+
+        .modern-stat-label {
+            font-size: 11px;
+            font-weight: 700;
+            color: #64748b;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-top: 4px;
+        }
+
+        .modern-chart-card {
+            background: rgba(255, 255, 255, 0.7);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.4);
+            border-radius: 32px;
+            padding: 32px;
+            box-shadow: 0 10px 40px -15px rgba(0, 0, 0, 0.05);
         }
 
         /* Custom Scrollbar Global */
@@ -8427,18 +8462,13 @@
                 const batches = window.Utils.getBatches();
                 const students = window.Utils.getStudents();
                 const ssc = window.Utils.getSSC ? window.Utils.getSSC() : [];
-                
-                // Count unique assessors assigned to batches
                 const assessors = new Set(batches.map(b => b.assessorUsername).filter(u => u)).size;
 
-                // Process Month-wise chart data
                 const monthlyCounts = new Array(12).fill(0);
                 batches.forEach(b => {
                     if (b.startDate) {
                         const date = new Date(b.startDate);
-                        if (!isNaN(date.getTime())) {
-                            monthlyCounts[date.getMonth()] += 1;
-                        }
+                        if (!isNaN(date.getTime())) monthlyCounts[date.getMonth()] += 1;
                     }
                 });
 
@@ -8463,44 +8493,57 @@
 
                 if (chartRef.current) chartRef.current.destroy();
 
+                const gradient = ctx.getContext('2d').createLinearGradient(0, 0, 0, 400);
+                gradient.addColorStop(0, 'rgba(99, 102, 241, 0.4)');
+                gradient.addColorStop(1, 'rgba(99, 102, 241, 0.0)');
+
                 chartRef.current = new Chart(ctx, {
                     type: 'line',
                     data: {
                         labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
                         datasets: [{
-                            label: 'Month',
+                            label: 'Monthly Assessments',
                             data: stats.chartData,
-                            borderColor: '#ff6347',
-                            backgroundColor: '#ff6347',
+                            borderColor: '#6366f1',
+                            borderWidth: 3,
+                            fill: true,
+                            backgroundColor: gradient,
                             tension: 0.4,
-                            pointRadius: 4,
-                            pointBackgroundColor: '#ff6347',
-                            borderWidth: 2
+                            pointRadius: 6,
+                            pointHoverRadius: 8,
+                            pointBackgroundColor: '#fff',
+                            pointBorderColor: '#6366f1',
+                            pointBorderWidth: 2
                         }]
                     },
                     options: {
                         responsive: true,
                         maintainAspectRatio: false,
                         plugins: {
-                            legend: {
-                                display: true,
-                                position: 'bottom',
-                                labels: { boxWidth: 12, font: { size: 10 } }
-                            },
+                            legend: { display: false },
+                            tooltip: {
+                                backgroundColor: 'rgba(255, 255, 255, 0.9)',
+                                titleColor: '#1e293b',
+                                bodyColor: '#6366f1',
+                                borderColor: '#e2e8f0',
+                                borderWidth: 1,
+                                padding: 12,
+                                boxPadding: 6,
+                                usePointStyle: true,
+                                callbacks: {
+                                    label: (context) => ` ${context.parsed.y} Assessments`
+                                }
+                            }
                         },
                         scales: {
                             y: {
                                 beginAtZero: true,
-                                ticks: { 
-                                    font: { size: 10 },
-                                    callback: (v) => v >= 1000 ? (v / 1000) + 'k' : v
-                                },
-                                grid: { color: '#f0f0f0' },
-                                title: { display: true, text: 'Assessments', font: { size: 10, weight: 'bold' } }
+                                grid: { color: 'rgba(0, 0, 0, 0.03)', drawBorder: false },
+                                ticks: { font: { family: 'Outfit', size: 11 }, color: '#94a3b8' }
                             },
                             x: {
-                                ticks: { font: { size: 10 } },
-                                grid: { color: '#f0f0f0' }
+                                grid: { display: false },
+                                ticks: { font: { family: 'Outfit', size: 11 }, color: '#94a3b8' }
                             }
                         }
                     }
@@ -8508,69 +8551,64 @@
             }, [stats.chartData]);
 
             return (
-                <div className="legacy-dashboard-container animate-fade-in">
-                    <div className="legacy-title-bar">Dashboard</div>
+                <div className="modern-dashboard-container">
+                    {/* Modern Header */}
+                    <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-10 gap-4">
+                        <div>
+                            <h2 className="text-3xl font-extrabold text-[#1e293b] tracking-tight">System Status</h2>
+                            <p className="text-[#64748b] text-sm mt-1 font-medium">Real-time performance analytics and assessment metrics.</p>
+                        </div>
+                        <div className="system-status-pill">
+                            <div className="neon-dot"></div>
+                            Infrastructure Node Active
+                        </div>
+                    </div>
 
-                    <div className="flex flex-col lg:flex-row gap-6">
-                        {/* Left Column: Stat Cards */}
-                        <div className="w-full lg:w-72 flex flex-col">
-                            <div className="legacy-card">
-                                <div className="legacy-card-header legacy-header-green">
-                                    <Icons.Eye className="w-4 h-4" /> Active Assessors
-                                </div>
-                                <div className="legacy-card-body">
-                                    <span className="legacy-stat-number text-[#27ae60]">{stats.assessors}</span>
-                                </div>
-                            </div>
-
-                            <div className="legacy-card">
-                                <div className="legacy-card-header legacy-header-blue">
-                                    <Icons.Eye className="w-4 h-4" /> Total Batches
-                                </div>
-                                <div className="legacy-card-body">
-                                    <span className="legacy-stat-number text-[#2980b9]">{stats.batches}</span>
-                                </div>
-                            </div>
-
-                            <div className="legacy-card">
-                                <div className="legacy-card-header legacy-header-orange">
-                                    <Icons.Eye className="w-4 h-4" /> Total SSC
-                                </div>
-                                <div className="legacy-card-body">
-                                    <span className="legacy-stat-number text-[#f39c12]">{stats.ssc}</span>
-                                </div>
-                            </div>
-
-                            <div className="legacy-card">
-                                <div className="legacy-card-header legacy-header-red">
-                                    <Icons.Eye className="w-4 h-4" /> Total Students
-                                </div>
-                                <div className="legacy-card-body">
-                                    <span className="legacy-stat-number text-[#e67e22]">{stats.students}</span>
-                                </div>
+                    {/* Stats Grid */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
+                        <div className="modern-stat-card card-emerald">
+                            <div className="stat-icon-wrapper"><Icons.ShieldCheck className="w-6 h-6" /></div>
+                            <div>
+                                <div className="modern-stat-value">{stats.assessors}</div>
+                                <div className="modern-stat-label">Active Assessors</div>
                             </div>
                         </div>
-
-                        {/* Right Column: Chart */}
-                        <div className="flex-1">
-                            <div className="legacy-card h-[500px]">
-                                <div className="legacy-card-header legacy-header-chart flex justify-between items-center">
-                                    <div className="flex items-center gap-2">
-                                        <Icons.Clock className="w-4 h-4" /> Month Wise Assessments Count
-                                    </div>
-                                    <div className="flex items-center gap-1">
-                                        <div className="w-4 h-0.5 bg-white opacity-50"></div>
-                                    </div>
-                                </div>
-                                <div className="p-4 flex-1 flex flex-col">
-                                    <div className="legacy-chart-container flex-1 flex flex-col">
-                                        <h4 className="text-center text-[11px] font-bold text-gray-700 mb-2">Month Wise Assessments</h4>
-                                        <div className="flex-1 relative">
-                                            <canvas id="assessmentChart"></canvas>
-                                        </div>
-                                    </div>
-                                </div>
+                        <div className="modern-stat-card card-blue">
+                            <div className="stat-icon-wrapper"><Icons.Layers className="w-6 h-6" /></div>
+                            <div>
+                                <div className="modern-stat-value">{stats.batches}</div>
+                                <div className="modern-stat-label">Total Batches</div>
                             </div>
+                        </div>
+                        <div className="modern-stat-card card-amber">
+                            <div className="stat-icon-wrapper"><Icons.Globe className="w-6 h-6" /></div>
+                            <div>
+                                <div className="modern-stat-value">{stats.ssc}</div>
+                                <div className="modern-stat-label">Operational SSC</div>
+                            </div>
+                        </div>
+                        <div className="modern-stat-card card-rose">
+                            <div className="stat-icon-wrapper"><Icons.Users className="w-6 h-6" /></div>
+                            <div>
+                                <div className="modern-stat-value">{stats.students}</div>
+                                <div className="modern-stat-label">Total Students</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Chart Card */}
+                    <div className="modern-chart-card">
+                        <div className="flex justify-between items-center mb-8">
+                            <div>
+                                <h3 className="text-lg font-bold text-[#1e293b]">Assessment Velocity</h3>
+                                <p className="text-xs text-[#94a3b8] font-medium">Monthly throughput of certified assessments</p>
+                            </div>
+                            <div className="px-4 py-2 bg-gray-50 rounded-xl border border-gray-100 text-[10px] font-bold text-gray-500 uppercase tracking-widest">
+                                Year To Date (2025)
+                            </div>
+                        </div>
+                        <div className="h-[400px] w-full">
+                            <canvas id="assessmentChart"></canvas>
                         </div>
                     </div>
                 </div>
