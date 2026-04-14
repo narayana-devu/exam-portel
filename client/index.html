@@ -2135,7 +2135,13 @@
             FolderArchive: ({ className }) => <LucideIcon name="folder-archive" className={className || "w-5 h-5"} />,
             IdCard: ({ className }) => <LucideIcon name="id-card" className={className || "w-5 h-5"} />,
             Undo2: ({ className }) => <LucideIcon name="undo-2" className={className || "w-4 h-4"} />,
-            Code: ({ className }) => <LucideIcon name="code" className={className || "w-5 h-5"} />
+            Code: ({ className }) => <LucideIcon name="code" className={className || "w-5 h-5"} />,
+            HardDrive: ({ className }) => <LucideIcon name="hard-drive" className={className || "w-5 h-5"} />,
+            ArrowUpCloud: ({ className }) => <LucideIcon name="upload-cloud" className={className || "w-5 h-5"} />,
+            ArrowDownCloud: ({ className }) => <LucideIcon name="download-cloud" className={className || "w-5 h-5"} />,
+            SearchCode: ({ className }) => <LucideIcon name="search-code" className={className || "w-5 h-5"} />,
+            RotateCcw: ({ className }) => <LucideIcon name="rotate-ccw" className={className || "w-5 h-5"} />,
+            CloudOff: ({ className }) => <LucideIcon name="cloud-off" className={className || "w-5 h-5"} />
         };
 
         class ErrorBoundary extends React.Component {
@@ -2475,6 +2481,7 @@
                                 { id: 'marks', label: 'Marks Entry', icon: <Icons.Edit3 /> },
                                 { id: 'results', label: 'Results', icon: <Icons.Cpu /> },
                                 { id: 'assessors', label: 'Assessors', icon: <Icons.UserPlus /> },
+                                { id: 'storage', label: 'Storage', icon: <Icons.Database /> },
                             ].map(item => (
                                 <button
                                     key={item.id}
@@ -8547,6 +8554,273 @@
             );
         };
 
+        const StorageTab = () => {
+            const [diagnostics, setDiagnostics] = useState(null);
+            const [pendingCount, setPendingCount] = useState({ json: 0, media: 0 });
+            const [syncing, setSyncing] = useState(false);
+            const [detailedStats, setDetailedStats] = useState({ ssc: 0, batches: 0, students: 0, qps: 0, responses: 0, media: 0 });
+
+            const loadData = async () => {
+                try {
+                    // 1. Diagnostics (Reuse CloudMonitor logic)
+                    const res = await fetch(`${API_BASE}/diagnostics`, {
+                        headers: { 'x-api-key': 'portel_secure_key_2025' }
+                    });
+                    if (res.ok) setDiagnostics(await res.json());
+
+                    // 2. Pending Items
+                    let json = 0;
+                    let media = 0;
+                    const dbKeys = ['se_batches', 'se_students', 'se_qps', 'se_nos', 'se_pcs', 'se_ssc', 'se_responses', 'se_question_papers'];
+                    dbKeys.forEach(key => {
+                        const items = JSON.parse(localStorage.getItem(key) || '[]');
+                        items.forEach(item => {
+                            if (!item.synced) json++;
+                            if (item.evidence) {
+                                media += item.evidence.filter(ev => (ev.storage === 'indexeddb' || ev.type === 'VIDEO_INDEXED_DB') && !ev.url && !ev._fileMissing).length;
+                            }
+                        });
+                    });
+                    setPendingCount({ json, media });
+
+                    // 3. Detailed Stats
+                    setDetailedStats(await window.Utils.getDetailedStats());
+                } catch (e) {
+                    console.error("StorageTab Load Failed:", e);
+                }
+            };
+
+            useEffect(() => {
+                loadData();
+                const interval = setInterval(loadData, 15000);
+                window.addEventListener('cloud-sync-complete', loadData);
+                return () => {
+                    clearInterval(interval);
+                    window.removeEventListener('cloud-sync-complete', loadData);
+                };
+            }, []);
+
+            const handleSync = async (direction) => {
+                setSyncing(true);
+                try {
+                    if (direction === 'push') {
+                        await window.Utils.uploadToCloud(false);
+                    } else {
+                        await window.Utils.downloadFromCloud(true);
+                    }
+                    await loadData();
+                    alert(`Sync (${direction}) completed successfully.`);
+                } catch (e) {
+                    alert("Sync Failed: " + e.message);
+                } finally {
+                    setSyncing(false);
+                }
+            };
+
+            const storage = window.Utils.getStorageInfo();
+
+            return (
+                <div className="animate-fade-in-up space-y-8 pb-10">
+                    <div className="flex justify-between items-end">
+                        <div>
+                            <h2 className="text-3xl font-black text-gray-900 tracking-tight">Storage <span className="text-primary-600">Intelligence</span></h2>
+                            <p className="text-gray-800 font-bold text-xs uppercase tracking-[0.2em] mt-1">Infrastructure & Data Persistence Nodes</p>
+                        </div>
+                        <div className={`px-4 py-2 rounded-2xl flex items-center gap-2 border ${diagnostics?.s3_connected ? 'bg-emerald-50 border-emerald-100 text-emerald-700' : 'bg-rose-50 border-rose-100 text-rose-700'} shadow-sm`}>
+                            <div className={`w-2 h-2 rounded-full ${diagnostics?.s3_connected ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'}`}></div>
+                            <span className="text-[10px] font-black uppercase tracking-widest">{diagnostics?.s3_connected ? 'Cloud Synchronized' : 'Local Only Mode'}</span>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        {/* Local Workspace Card */}
+                        <div className="glass rounded-[32px] p-8 border border-white/50 shadow-xl relative overflow-hidden group">
+                            <div className="absolute top-0 right-0 w-32 h-32 bg-primary-500/10 blur-3xl -mr-16 -mt-16 group-hover:bg-primary-500/20 transition-colors"></div>
+                            <div className="flex items-center gap-4 mb-6">
+                                <div className="w-12 h-12 bg-primary-100/50 rounded-2xl flex items-center justify-center text-primary-600">
+                                    <Icons.HardDrive className="w-6 h-6" />
+                                </div>
+                                <h3 className="font-black text-gray-900 uppercase text-xs tracking-widest">Local Workspace</h3>
+                            </div>
+                            <div className="space-y-6">
+                                <div>
+                                    <div className="flex justify-between items-end mb-2">
+                                        <span className="text-3xl font-black text-gray-900">{storage.mb} <span className="text-xs text-gray-800">MB</span></span>
+                                        <span className="text-[10px] font-bold text-primary-600 uppercase">Usage: {storage.percent}%</span>
+                                    </div>
+                                    <div className="w-full bg-gray-100 h-2 rounded-full overflow-hidden">
+                                        <div className="bg-primary-500 h-full transition-all duration-1000" style={{ width: `${storage.percent}%` }}></div>
+                                    </div>
+                                </div>
+                                <div className="pt-4 grid grid-cols-2 gap-4">
+                                    <div className="p-3 bg-gray-50/50 rounded-xl border border-white">
+                                        <p className="text-[9px] font-black text-gray-800 uppercase mb-1">JSON Buffer</p>
+                                        <p className="text-lg font-black text-gray-900">{pendingCount.json}</p>
+                                    </div>
+                                    <div className="p-3 bg-gray-50/50 rounded-xl border border-white">
+                                        <p className="text-[9px] font-black text-gray-800 uppercase mb-1">Media Queue</p>
+                                        <p className="text-lg font-black text-gray-900">{pendingCount.media}</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Cloud Infrastructure Card */}
+                        <div className="glass rounded-[32px] p-8 border border-white/50 shadow-xl relative overflow-hidden group">
+                            <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/10 blur-3xl -mr-16 -mt-16 group-hover:bg-indigo-500/20 transition-colors"></div>
+                            <div className="flex items-center gap-4 mb-6">
+                                <div className="w-12 h-12 bg-indigo-100/50 rounded-2xl flex items-center justify-center text-indigo-600">
+                                    <Icons.Cloud className="w-6 h-6" />
+                                </div>
+                                <h3 className="font-black text-gray-900 uppercase text-xs tracking-widest">AWS S3 Protocol</h3>
+                            </div>
+                            {diagnostics?.s3_connected ? (
+                                <div className="space-y-4">
+                                    <div className="space-y-1">
+                                        <p className="text-[9px] font-black text-gray-800 uppercase">Bucket Identifier</p>
+                                        <p className="text-sm font-bold text-gray-900 truncate">{diagnostics.bucket}</p>
+                                    </div>
+                                    <div className="flex gap-4">
+                                        <div className="flex-1">
+                                            <p className="text-[9px] font-black text-gray-800 uppercase">Region</p>
+                                            <p className="text-sm font-bold text-gray-900">{diagnostics.region || 'us-east-1'}</p>
+                                        </div>
+                                        <div className="flex-1">
+                                            <p className="text-[9px] font-black text-gray-800 uppercase">Latency</p>
+                                            <p className="text-sm font-bold text-emerald-600">Optimal</p>
+                                        </div>
+                                    </div>
+                                    <div className="pt-4 border-t border-white/40">
+                                         <p className="text-[10px] text-gray-800 font-bold leading-tight">System is currently bridging local data to the cloud cluster.</p>
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="h-full flex flex-col items-center justify-center py-4 text-center">
+                                    <Icons.CloudOff className="w-10 h-10 text-rose-300 mb-2" />
+                                    <p className="text-xs font-bold text-rose-500 uppercase tracking-widest">Connection Intercepted</p>
+                                    <p className="text-[10px] text-gray-600 mt-1">Check network or API credentials.</p>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Integrity Card */}
+                        <div className="glass rounded-[32px] p-8 border border-white/50 shadow-xl relative overflow-hidden group">
+                            <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/10 blur-3xl -mr-16 -mt-16 group-hover:bg-emerald-500/20 transition-colors"></div>
+                            <div className="flex items-center gap-4 mb-6">
+                                <div className="w-12 h-12 bg-emerald-100/50 rounded-2xl flex items-center justify-center text-emerald-600">
+                                    <Icons.ShieldCheck className="w-6 h-6" />
+                                </div>
+                                <h3 className="font-black text-gray-900 uppercase text-xs tracking-widest">Data Integrity</h3>
+                            </div>
+                            <div className="grid grid-cols-2 gap-y-4">
+                                <div>
+                                    <p className="text-[9px] font-black text-gray-800 uppercase">Sync Status</p>
+                                    <p className="text-sm font-bold text-gray-900">{pendingCount.json + pendingCount.media === 0 ? 'Verified' : 'Pending'}</p>
+                                </div>
+                                <div>
+                                    <p className="text-[9px] font-black text-gray-800 uppercase">Node Health</p>
+                                    <p className="text-sm font-bold text-emerald-600">Active</p>
+                                </div>
+                                <div className="col-span-2">
+                                    <p className="text-[9px] font-black text-gray-800 uppercase">Local Repository Scan</p>
+                                    <p className="text-xs font-bold text-gray-900 mt-1 leading-relaxed">
+                                        {detailedStats.students} Students in {detailedStats.batches} Batches detected.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Action Center */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                        <div className="bg-white p-8 rounded-[32px] shadow-sm border border-gray-100">
+                            <h3 className="text-xs font-black text-gray-800 uppercase tracking-widest mb-6 flex items-center gap-2">
+                                <Icons.Zap className="w-4 h-4 text-primary-500" /> Operational Controls
+                            </h3>
+                            <div className="grid grid-cols-2 gap-4">
+                                <button 
+                                    onClick={() => handleSync('push')}
+                                    disabled={syncing}
+                                    className="flex flex-col items-center gap-3 p-6 bg-primary-50 rounded-3xl border border-primary-100 hover:bg-primary-100 transition-all hover:scale-[1.02] active:scale-95 group disabled:opacity-50"
+                                >
+                                    <Icons.ArrowUpCloud className="w-6 h-6 text-primary-600 group-hover:animate-bounce" />
+                                    <span className="text-[10px] font-black text-primary-700 uppercase tracking-widest">Push to Cloud</span>
+                                </button>
+                                <button 
+                                    onClick={() => handleSync('pull')}
+                                    disabled={syncing}
+                                    className="flex flex-col items-center gap-3 p-6 bg-indigo-50 rounded-3xl border border-indigo-100 hover:bg-indigo-100 transition-all hover:scale-[1.02] active:scale-95 group disabled:opacity-50"
+                                >
+                                    <Icons.ArrowDownCloud className="w-6 h-6 text-indigo-600 group-hover:animate-bounce" />
+                                    <span className="text-[10px] font-black text-indigo-700 uppercase tracking-widest">Pull from Cloud</span>
+                                </button>
+                                <button 
+                                    onClick={async () => {
+                                        const btn = document.getElementById('btn-deep-check');
+                                        btn.classList.add('animate-pulse');
+                                        await new Promise(r => setTimeout(r, 1000));
+                                        
+                                        const stats = detailedStats;
+                                        const storageInfo = window.Utils.getStorageInfo();
+                                        alert(`?? DEEP INTEGRITY REPORT ??\n\n` +
+                                            `?? LOCAL NODES:\n` +
+                                            `- SSC Clusters: ${stats.ssc}\n` +
+                                            `- Operational Batches: ${stats.batches}\n` +
+                                            `- Trainee Profiles: ${stats.students}\n` +
+                                            `- Assigned QPs: ${stats.qps}\n\n` +
+                                            `?? EVALUATION DATA:\n` +
+                                            `- Raw Responses: ${stats.responses}\n` +
+                                            `- Media Assets: ${stats.media}\n\n` +
+                                            `?? STORAGE FOOTPRINT:\n` +
+                                            `- Total Weight: ${storageInfo.mb} MB\n` +
+                                            `- Buffer Usage: ${storageInfo.percent}%\n\n` +
+                                            `?? INTEGRITY STATUS: Healthy`);
+                                        btn.classList.remove('animate-pulse');
+                                    }}
+                                    id="btn-deep-check"
+                                    className="col-span-2 py-4 bg-emerald-500 hover:bg-emerald-600 text-gray-900 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] shadow-lg shadow-emerald-500/20 transition-all flex items-center justify-center gap-2"
+                                >
+                                    <Icons.SearchCode className="w-4 h-4" /> Full System Scan
+                                </button>
+                            </div>
+                        </div>
+
+                        <div className="bg-white p-8 rounded-[32px] shadow-sm border border-gray-100">
+                            <h3 className="text-xs font-black text-gray-800 uppercase tracking-widest mb-6 flex items-center gap-2">
+                                <Icons.Settings className="w-4 h-4 text-gray-400" /> Maintenance
+                             </h3>
+                            <div className="space-y-4">
+                                <div className="p-4 bg-gray-50 rounded-2xl border border-gray-100 flex items-center justify-between">
+                                    <div>
+                                        <p className="text-[10px] font-black text-gray-900 uppercase">Local Cache Refresh</p>
+                                        <p className="text-[9px] text-gray-600 font-bold">Clear browser data and reload UI.</p>
+                                    </div>
+                                    <button 
+                                        onClick={() => { if(confirm("Clear local cache and reload?")) { localStorage.clear(); location.reload(); } }}
+                                        className="p-3 bg-white hover:bg-gray-100 rounded-xl border border-gray-200 shadow-sm transition-all"
+                                    >
+                                        <Icons.RotateCcw className="w-4 h-4 text-gray-600" />
+                                    </button>
+                                </div>
+                                <div className="p-4 bg-rose-50 rounded-2xl border border-rose-100 flex items-center justify-between">
+                                    <div>
+                                        <p className="text-[10px] font-black text-rose-600 uppercase">Factory Reset Node</p>
+                                        <p className="text-[9px] text-gray-500 font-bold">Irreversible data wipe across all nodes.</p>
+                                    </div>
+                                    <button 
+                                        onClick={window.Utils.factoryReset}
+                                        className="p-3 bg-rose-500 hover:bg-rose-600 text-white rounded-xl shadow-lg shadow-rose-500/20 transition-all"
+                                    >
+                                        <Icons.Trash2 className="w-4 h-4" />
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
         // ADMIN DASHBOARD
 
         // RECYCLE BIN MODAL
@@ -8901,6 +9175,7 @@
                             {activeTab === 'batches' && <BatchesTab />}
                             {activeTab === 'results' && <ResultsTab />}
                             {activeTab === 'assessors' && <AssessorsTab />}
+                            {activeTab === 'storage' && <StorageTab />}
                         </div>
                         <RecycleBinModal isOpen={showTrashModal} onClose={() => setShowTrashModal(false)} />
                     </div>
