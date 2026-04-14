@@ -2181,6 +2181,7 @@
             Video: ({ className }) => <LucideIcon name="video" className={className || "w-5 h-5"} />,
             Square: ({ className }) => <LucideIcon name="square" className={className || "w-5 h-5"} />,
             BarChart2: ({ className }) => <LucideIcon name="bar-chart-2" className={className || "w-5 h-5"} />,
+            X: ({ className }) => <LucideIcon name="x" className={className || "w-5 h-5"} />,
             XCircle: ({ className }) => <LucideIcon name="x-circle" className={className || "w-5 h-5"} />,
             UploadCloud: ({ className }) => <LucideIcon name="upload-cloud" className={className || "w-12 h-12"} />,
             Save: ({ className }) => <LucideIcon name="save" className={className || "w-4 h-4"} />,
@@ -4580,8 +4581,8 @@
                             <div className="bg-white w-full max-w-4xl my-8 shadow-2xl rounded-xl overflow-hidden animate-scale-in">
                                 <div className="bg-gray-50 px-8 py-5 flex justify-between items-center border-b">
                                     <h3 className="text-xl font-bold text-gray-800">Upload Question Paper</h3>
-                                    <button onClick={() => setShowUploadModal(false)} className="text-gray-700 hover:text-red-500 transition-colors">
-                                        <Icons.X className="w-6 h-6" />
+                                    <button onClick={() => setShowUploadModal(false)} className="w-10 h-10 rounded-xl bg-white border border-gray-100 flex items-center justify-center text-gray-400 hover:bg-rose-50 hover:text-rose-600 transition-all shadow-sm">
+                                        <Icons.X className="w-5 h-5" />
                                     </button>
                                 </div>
 
@@ -6682,8 +6683,8 @@
                             <div className="bg-white w-full max-w-2xl shadow-2xl rounded-xl overflow-hidden animate-scale-in" onClick={e => e.stopPropagation()}>
                                 <div className="bg-gray-50 px-8 py-5 flex justify-between items-center border-b">
                                     <h3 className="text-xl font-bold text-gray-800">Create New Assessor</h3>
-                                    <button onClick={() => setShowCreateModal(false)} className="text-gray-700 hover:text-red-500 transition-colors">
-                                        <Icons.X className="w-6 h-6" />
+                                    <button onClick={() => setShowCreateModal(false)} className="w-10 h-10 rounded-xl bg-white border border-gray-100 flex items-center justify-center text-gray-400 hover:bg-rose-50 hover:text-rose-600 transition-all shadow-sm">
+                                        <Icons.X className="w-5 h-5" />
                                     </button>
                                 </div>
                                 <div className="p-8 space-y-6">
