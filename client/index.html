@@ -8131,7 +8131,6 @@
             useEffect(() => {
                 const loadEvents = () => {
                     const batches = window.Utils.getBatches();
-                    // Map batches to events
                     const evts = [];
                     batches.forEach(b => {
                         if (b.startDate) {
@@ -8139,19 +8138,8 @@
                             if (!isNaN(d.getTime())) {
                                 evts.push({
                                     date: d,
-                                    title: `Start: ${b.name}`,
+                                    title: b.name,
                                     type: 'start',
-                                    data: b
-                                });
-                            }
-                        }
-                        if (b.endDate) {
-                            const d = new Date(b.endDate);
-                            if (!isNaN(d.getTime())) {
-                                evts.push({
-                                    date: d,
-                                    title: `End: ${b.name}`,
-                                    type: 'end',
                                     data: b
                                 });
                             }
@@ -8198,7 +8186,7 @@
                             </div>
                             <div className="mt-1 space-y-1 overflow-hidden h-14">
                                 {dayEvents.map((ev, i) => (
-                                    <div key={i} className={`text-[10px] truncate px-1 rounded ${ev.type === 'start' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                                    <div key={i} className="text-[10px] truncate px-1 rounded bg-blue-100 text-blue-700 font-medium">
                                         {ev.title}
                                     </div>
                                 ))}
@@ -8238,8 +8226,8 @@
                             <div className="space-y-4">
                                 {selectedDateEvents.map((evt, idx) => (
                                     <div key={idx} className="p-4 rounded-lg bg-gray-50 border border-gray-200">
-                                        <div className={`text-xs font-bold uppercase mb-1 ${evt.type === 'start' ? 'text-green-600' : 'text-red-600'}`}>
-                                            {evt.type === 'start' ? 'Batch Starting' : 'Batch Ending'}
+                                        <div className="text-xs font-bold uppercase mb-1 text-blue-600">
+                                            Active Batch
                                         </div>
                                         <h4 className="font-bold text-gray-800">{evt.data.name}</h4>
                                         <p className="text-xs text-gray-800 mt-1">{evt.data.qpName || 'No QP Assigned'}</p>
