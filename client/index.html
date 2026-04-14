@@ -2405,22 +2405,6 @@
                             </div>
                         </div>
 
-                        <div className="grid grid-cols-2 gap-2 mt-6">
-                            <button
-                                onClick={() => { if (confirm("DANGER: This will wipe all local data for v84.3-Secure. Proceed?")) { localStorage.clear(); location.reload(); } }}
-                                className="text-[9px] bg-gray-100 hover:bg-rose-500/10 border border-gray-200 px-2 py-2 rounded-xl transition-all text-gray-600 font-bold uppercase tracking-tighter"
-                            >
-                                Reset Cache
-                            </button>
-                            <button
-                                onClick={() => {
-                                    const logs = window.__syncLogs || [];
-                                    alert("--- SYNC LOGS (v84.2) ---\n\n" + (logs.length ? logs.join('\n') : "No logs yet."));
-                                }}
-                                className="text-[9px] bg-gray-100 hover:bg-indigo-500/10 border border-gray-200 px-2 py-2 rounded-xl transition-all text-gray-600 font-bold uppercase tracking-tighter"
-                            >
-                                Sync Logs
-                            </button>
                         </div>
                     </div>
 
@@ -8538,14 +8522,75 @@
 
             return (
                 <div className="animate-fade-in-up space-y-8 pb-10">
-                    <div className="flex justify-between items-end">
+                     <div className="flex justify-between items-start">
                         <div>
                             <h2 className="text-3xl font-black text-gray-900 tracking-tight">Storage <span className="text-primary-600">Intelligence</span></h2>
                             <p className="text-gray-800 font-bold text-xs uppercase tracking-[0.2em] mt-1">Infrastructure & Data Persistence Nodes</p>
                         </div>
-                        <div className={`px-4 py-2 rounded-2xl flex items-center gap-2 border ${diagnostics?.s3_connected ? 'bg-emerald-50 border-emerald-100 text-emerald-700' : 'bg-rose-50 border-rose-100 text-rose-700'} shadow-sm`}>
-                            <div className={`w-2 h-2 rounded-full ${diagnostics?.s3_connected ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'}`}></div>
-                            <span className="text-[10px] font-black uppercase tracking-widest">{diagnostics?.s3_connected ? 'Cloud Synchronized' : 'Local Only Mode'}</span>
+                        
+                        <div className="flex items-center gap-3">
+                            {/* NEW OPERATIONAL TOOLBAR */}
+                            <div className="flex items-center gap-4 bg-white/40 backdrop-blur-md px-4 py-2 rounded-2xl border border-white/60 shadow-sm transition-all hover:bg-white/60 group">
+                                <button
+                                    onClick={() => {
+                                        const event = new CustomEvent('openTrashModal');
+                                        window.dispatchEvent(event);
+                                    }}
+                                    className="text-[10px] bg-white border border-gray-200 text-gray-700 px-3 py-1.5 rounded-xl hover:bg-gray-50 transition-all font-black uppercase tracking-wider shadow-sm active:scale-95 flex items-center gap-1.5"
+                                    title="View Deleted Items"
+                                >
+                                    <Icons.Trash2 className="w-3.5 h-3.5" />
+                                    Recycle Bin
+                                </button>
+                                <button
+                                    onClick={() => {
+                                        if (confirm("Force full backup of all local data to Cloud? This will overwrite cloud data with your current local state.")) {
+                                            window.Utils.uploadToCloud(false, null, null, true);
+                                        }
+                                    }}
+                                    className="text-[10px] bg-primary-500 text-gray-900 px-3 py-1.5 rounded-xl hover:bg-primary-600 transition-all font-black uppercase tracking-wider shadow-lg shadow-primary-500/20 active:scale-95"
+                                    title="Force Full Cloud Backup"
+                                >
+                                    Backup Now
+                                </button>
+                                <div className="flex flex-col border-l border-gray-200 pl-4 ml-2">
+                                     <span
+                                        className="text-[10px] font-black text-primary-700 cursor-help transition-colors uppercase tracking-widest flex items-center gap-1.5 group-hover:text-primary-800"
+                                        title="Click for Cloud Diagnostics"
+                                        onClick={async () => {
+                                            try {
+                                                const res = await fetch(`${API_BASE}/diagnostics`, {
+                                                    headers: { 'x-api-key': 'portel_secure_key_2025' }
+                                                });
+                                                if (res.ok) {
+                                                    const data = await res.json();
+                                                    alert(`?? CLOUD DIAGNOSTICS ??\n\n` +
+                                                        `? Storage: ${data.storage_type.toUpperCase()}\n` +
+                                                        `? S3 Status: ${data.s3_enabled ? 'CONNECTED' : 'OFFLINE'}\n` +
+                                                        `? Bucket: ${data.bucket_name}\n` +
+                                                        `? Server Time: ${new Date(data.time).toLocaleString()}`);
+                                                } else {
+                                                    alert("Diagnostics Failed: Could not reach server.");
+                                                }
+                                            } catch (e) { alert("Error: " + e.message); }
+                                        }}
+                                    >
+                                        <div className={`w-1.5 h-1.5 rounded-full ${diagnostics?.s3_connected ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'} `}></div>
+                                        {diagnostics?.s3_connected ? 'Live Sync' : 'Local Only'}
+                                    </span>
+                                </div>
+                            </div>
+                            
+                            <button
+                                onClick={() => {
+                                    const logs = window.__syncLogs || [];
+                                    alert("--- SYNC LOGS (v84.2) ---\n\n" + (logs.length ? logs.join('\n') : "No logs yet."));
+                                }}
+                                className="p-2.5 bg-white border border-gray-200 text-gray-600 rounded-2xl hover:bg-gray-50 transition-all shadow-sm group"
+                                title="Operation Logs"
+                            >
+                                <Icons.Terminal className="w-5 h-5 group-hover:text-indigo-600" />
+                            </button>
                         </div>
                     </div>
 
@@ -8935,56 +8980,7 @@
                                 </div>
                             </div>
 
-                            <div className="flex items-center gap-6">
-                                {/* CLOUD SYNC CONTROLS */}
-                                <div className="flex items-center gap-4 bg-white/40 backdrop-blur-md px-4 py-2 rounded-2xl border border-white/60 shadow-sm transition-all hover:bg-white/60 group">
-                                    <button
-                                        onClick={() => setShowTrashModal(true)}
-                                        className="text-[10px] bg-white border border-gray-200 text-gray-700 px-3 py-1.5 rounded-xl hover:bg-gray-50 transition-all font-black uppercase tracking-wider shadow-sm active:scale-95 flex items-center gap-1.5"
-                                        title="View Deleted Items"
-                                    >
-                                        <Icons.Trash2 className="w-3.5 h-3.5" />
-                                        Recycle Bin
-                                    </button>
-                                    <button
-                                        onClick={() => {
-                                            if (confirm("Force full backup of all local data to Cloud? This will overwrite cloud data with your current local state.")) {
-                                                window.Utils.uploadToCloud(false, null, null, true);
-                                            }
-                                        }}
-                                        className="text-[10px] bg-primary-500 text-gray-900 px-3 py-1.5 rounded-xl hover:bg-primary-600 transition-all font-black uppercase tracking-wider shadow-lg shadow-primary-500/20 active:scale-95"
-                                        title="Force Full Cloud Backup"
-                                    >
-                                        Backup Now
-                                    </button>
-                                    <div className="flex flex-col">
-                                        <span
-                                            id="sync-status-text"
-                                            className="text-[10px] font-black text-primary-700 cursor-help transition-colors uppercase tracking-widest flex items-center gap-1.5 group-hover:text-primary-800"
-                                            title="Click for Cloud Diagnostics"
-                                            onClick={async () => {
-                                                try {
-                                                    const res = await fetch(`${API_BASE}/diagnostics`, {
-                                                        headers: { 'x-api-key': 'portel_secure_key_2025' }
-                                                    });
-                                                    if (res.ok) {
-                                                        const data = await res.json();
-                                                        alert(`?? CLOUD DIAGNOSTICS ??\n\n` +
-                                                            `? Storage: ${data.storage_type.toUpperCase()}\n` +
-                                                            `? S3 Status: ${data.s3_enabled ? 'CONNECTED' : 'OFFLINE'}\n` +
-                                                            `? Bucket: ${data.bucket_name}\n` +
-                                                            `? Server Time: ${new Date(data.time).toLocaleString()}`);
-                                                    } else {
-                                                        alert("Diagnostics Failed: Could not reach server.");
-                                                    }
-                                                } catch (e) { alert("Error: " + e.message); }
-                                            }}
-                                        >
-                                            <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></div>
-                                            Live Sync
-                                        </span>
-                                    </div>
-                                </div>
+                             </div>
 
                                 {/* v45: Notification Bell */}
                                 <div className="relative">
@@ -9096,6 +9092,14 @@
                             {activeTab === 'storage' && <StorageTab />}
                         </div>
                         <RecycleBinModal isOpen={showTrashModal} onClose={() => setShowTrashModal(false)} />
+                        {/* Event Listener for Storage Tab access */}
+                        <React.Fragment>
+                            {useEffect(() => {
+                                const handler = () => setShowTrashModal(true);
+                                window.addEventListener('openTrashModal', handler);
+                                return () => window.removeEventListener('openTrashModal', handler);
+                            }, [])}
+                        </React.Fragment>
                     </div>
                 </div >
             );
