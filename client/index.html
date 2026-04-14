@@ -8420,13 +8420,47 @@
         };
 
         const DashboardTab = () => {
+            const [stats, setStats] = React.useState({ assessors: 0, batches: 0, ssc: 0, students: 0, chartData: [] });
             const chartRef = React.useRef(null);
+
+            const loadStats = () => {
+                const batches = window.Utils.getBatches();
+                const students = window.Utils.getStudents();
+                const ssc = window.Utils.getSSC ? window.Utils.getSSC() : [];
+                
+                // Count unique assessors assigned to batches
+                const assessors = new Set(batches.map(b => b.assessorUsername).filter(u => u)).size;
+
+                // Process Month-wise chart data
+                const monthlyCounts = new Array(12).fill(0);
+                batches.forEach(b => {
+                    if (b.startDate) {
+                        const date = new Date(b.startDate);
+                        if (!isNaN(date.getTime())) {
+                            monthlyCounts[date.getMonth()] += 1;
+                        }
+                    }
+                });
+
+                setStats({
+                    assessors: assessors,
+                    batches: batches.length,
+                    ssc: ssc.length,
+                    students: students.length,
+                    chartData: monthlyCounts
+                });
+            };
+
+            React.useEffect(() => {
+                loadStats();
+                window.addEventListener('cloud-sync-complete', loadStats);
+                return () => window.removeEventListener('cloud-sync-complete', loadStats);
+            }, []);
 
             React.useEffect(() => {
                 const ctx = document.getElementById('assessmentChart');
                 if (!ctx) return;
 
-                // Cleanup existing chart if any
                 if (chartRef.current) chartRef.current.destroy();
 
                 chartRef.current = new Chart(ctx, {
@@ -8435,7 +8469,7 @@
                         labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
                         datasets: [{
                             label: 'Month',
-                            data: [2800, 1650, 1150, 600, 50, 10, 5, 0, 0, 0, 0, 0],
+                            data: stats.chartData,
                             borderColor: '#ff6347',
                             backgroundColor: '#ff6347',
                             tension: 0.4,
@@ -8457,7 +8491,10 @@
                         scales: {
                             y: {
                                 beginAtZero: true,
-                                ticks: { font: { size: 10 }, stepSize: 1000, callback: (v) => v >= 1000 ? (v / 1000) + 'k' : v },
+                                ticks: { 
+                                    font: { size: 10 },
+                                    callback: (v) => v >= 1000 ? (v / 1000) + 'k' : v
+                                },
                                 grid: { color: '#f0f0f0' },
                                 title: { display: true, text: 'Assessments', font: { size: 10, weight: 'bold' } }
                             },
@@ -8468,7 +8505,7 @@
                         }
                     }
                 });
-            }, []);
+            }, [stats.chartData]);
 
             return (
                 <div className="legacy-dashboard-container animate-fade-in">
@@ -8482,7 +8519,7 @@
                                     <Icons.Eye className="w-4 h-4" /> Active Assessors
                                 </div>
                                 <div className="legacy-card-body">
-                                    <span className="legacy-stat-number text-[#27ae60]">61</span>
+                                    <span className="legacy-stat-number text-[#27ae60]">{stats.assessors}</span>
                                 </div>
                             </div>
 
@@ -8491,7 +8528,7 @@
                                     <Icons.Eye className="w-4 h-4" /> Total Batches
                                 </div>
                                 <div className="legacy-card-body">
-                                    <span className="legacy-stat-number text-[#2980b9]">3207</span>
+                                    <span className="legacy-stat-number text-[#2980b9]">{stats.batches}</span>
                                 </div>
                             </div>
 
@@ -8500,7 +8537,7 @@
                                     <Icons.Eye className="w-4 h-4" /> Total SSC
                                 </div>
                                 <div className="legacy-card-body">
-                                    <span className="legacy-stat-number text-[#f39c12]">45</span>
+                                    <span className="legacy-stat-number text-[#f39c12]">{stats.ssc}</span>
                                 </div>
                             </div>
 
@@ -8509,7 +8546,7 @@
                                     <Icons.Eye className="w-4 h-4" /> Total Students
                                 </div>
                                 <div className="legacy-card-body">
-                                    <span className="legacy-stat-number text-[#e67e22]">80978</span>
+                                    <span className="legacy-stat-number text-[#e67e22]">{stats.students}</span>
                                 </div>
                             </div>
                         </div>
