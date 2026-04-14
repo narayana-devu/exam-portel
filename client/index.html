@@ -4512,29 +4512,36 @@
 
             return (
                 <div className="animate-fade-in text-sm">
-                    {/* Breadcrumb */}
-                    <div className="flex items-center gap-2 text-xs text-green-600 mb-2">
-                        <span>Home</span>
-                        <span>/</span>
-                        <span className="text-gray-600">Question Papers</span>
+                    <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-10 gap-4">
+                        <div>
+                            <h2 className="text-3xl font-extrabold text-[#1e293b] tracking-tight">Question Paper <span className="text-primary-600">Forge</span></h2>
+                            <p className="text-[#64748b] text-sm mt-1 font-medium">Create and manage assessment blueprints with AI precision.</p>
+                        </div>
+                        <div className="flex items-center gap-3 bg-white/40 backdrop-blur-md px-4 py-2 rounded-2xl border border-white/60 shadow-sm">
+                            <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
+                            <span className="text-[10px] font-black uppercase tracking-widest text-gray-700">AI Node Ready</span>
+                        </div>
                     </div>
 
-                    <h3 className="text-2xl font-bold mb-6 text-gray-800">Question Papers</h3>
-
-                    <div className="bg-white p-8 rounded-none shadow-sm border border-gray-100 mb-8 max-w-5xl">
-                        <div className="grid grid-cols-[150px_1fr] gap-y-6 gap-x-8 items-center max-w-3xl">
-                            <label className="font-bold text-gray-700">Select Sector :</label>
-                            <select className="w-full p-2 border border-gray-300 rounded text-sm outline-none focus:border-blue-500 transition-all text-gray-600"
+                    <div className="glass rounded-[32px] p-8 border border-white/50 shadow-xl mb-10 max-w-5xl relative overflow-hidden group">
+                        <div className="absolute top-0 right-0 w-32 h-32 bg-primary-500/5 blur-3xl -mr-16 -mt-16 transition-colors"></div>
+                        <div className="grid grid-cols-1 md:grid-cols-[200px_1fr] gap-y-6 gap-x-8 items-center relative z-10">
+                            <label className="text-xs font-black text-gray-900 uppercase tracking-widest flex items-center gap-2">
+                                <Icons.Globe className="w-4 h-4 text-primary-500" /> Select Sector
+                            </label>
+                            <select className="w-full p-4 bg-gray-50/50 border border-gray-200 rounded-2xl text-sm outline-none focus:ring-4 focus:ring-primary-500/10 focus:border-primary-500 transition-all font-bold text-gray-800"
                                 value={selectedSSC} onChange={e => { setSelectedSSC(e.target.value); setFilterQPId(''); }}>
-                                <option value="">--Select Sector--</option>
+                                <option value="">-- Choose Industry Sector --</option>
                                 {sscList.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                             </select>
 
-                            <label className="font-bold text-gray-700">Qualification Pack:</label>
-                            <select className="w-full p-2 border border-gray-300 rounded text-sm outline-none focus:border-blue-500 transition-all text-gray-600"
+                            <label className="text-xs font-black text-gray-900 uppercase tracking-widest flex items-center gap-2">
+                                <Icons.Layers className="w-4 h-4 text-indigo-500" /> Qualification Pack
+                            </label>
+                            <select className="w-full p-4 bg-gray-50/50 border border-gray-200 rounded-2xl text-sm outline-none focus:ring-4 focus:ring-primary-500/10 focus:border-indigo-500 transition-all font-bold text-gray-800"
                                 value={filterQPId} onChange={e => setFilterQPId(e.target.value)}
                                 disabled={!selectedSSC}>
-                                <option value="">Select QP</option>
+                                <option value="">Select Qualification Blueprint</option>
                                 {masterQPList.filter(q => selectedSSC && q.sscId == selectedSSC).map(q => (
                                     <option key={q.id} value={q.id}>{q.name}</option>
                                 ))}
@@ -4542,71 +4549,74 @@
 
                             {filterQPId && (
                                 <>
-                                    <label className="font-bold text-gray-700">AI Total Questions:</label>
-                                    <div className="flex items-center gap-4">
-                                        <input
-                                            type="number"
-                                            className="w-24 p-2 border border-gray-300 rounded text-sm outline-none focus:border-blue-500 transition-all text-gray-600"
-                                            value={aiTotalQuestions || ''}
-                                            placeholder={masterQPList.find(q => q.id === filterQPId) ?
-                                                window.Utils.getPCsByNOS(window.Utils.getNOSByQP(filterQPId)[0]?.id).length : '...'
-                                            }
-                                            onChange={e => setAiTotalQuestions(parseInt(e.target.value))}
-                                        />
-                                        <span className="text-xs text-gray-700 italic">Leaves blank to use 1:1 PC mapping (Default)</span>
+                                    <div className="md:col-span-2 pt-4 border-t border-gray-100 mt-2">
+                                        <h4 className="text-[10px] font-black text-primary-600 uppercase tracking-[0.2em] mb-4">AI Configuration Node</h4>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                            <div>
+                                                <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2 block">Question Target</label>
+                                                <div className="flex items-center gap-3">
+                                                    <input
+                                                        type="number"
+                                                        className="w-full p-4 bg-white border border-gray-200 rounded-2xl text-sm font-bold text-gray-900 outline-none focus:border-primary-500 transition-all"
+                                                        value={aiTotalQuestions || ''}
+                                                        placeholder={masterQPList.find(q => q.id === filterQPId) ?
+                                                            window.Utils.getPCsByNOS(window.Utils.getNOSByQP(filterQPId)[0]?.id).length : 'Auto'
+                                                        }
+                                                        onChange={e => setAiTotalQuestions(parseInt(e.target.value))}
+                                                    />
+                                                </div>
+                                            </div>
+                                            <div>
+                                                <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2 block">Instructional Guidance (Write Here)</label>
+                                                <textarea
+                                                    className="w-full p-4 bg-white border border-gray-200 rounded-2xl text-sm font-medium text-gray-800 outline-none focus:border-primary-500 transition-all resize-none"
+                                                    rows="1"
+                                                    value={aiCustomInstructions}
+                                                    onChange={e => setAiCustomInstructions(e.target.value)}
+                                                    placeholder="e.g. Focus on practical safety standards..."
+                                                ></textarea>
+                                            </div>
+                                        </div>
                                     </div>
-
-                                    <label className="font-bold text-gray-700">AI Instructions (Write Here):</label>
-                                    <textarea
-                                        className="w-full p-2 border border-gray-300 rounded text-sm outline-none focus:border-blue-500 transition-all text-gray-800"
-                                        rows="2"
-                                        value={aiCustomInstructions}
-                                        onChange={e => setAiCustomInstructions(e.target.value)}
-                                        placeholder="e.g. Make questions scenario-based, focus on safety, or target specific topics..."
-                                    ></textarea>
                                 </>
                             )}
                         </div>
                     </div>
 
                     {/* Action Bar (Only visible if filters selected or if we want to allow upload always) */}
-                    <div className="flex justify-between items-center mb-4">
-                        <div className="text-gray-800 text-xs">
+                    {selectedSSC && filterQPId && (
+                        <div className="flex flex-wrap gap-4 mb-10">
+                            <button onClick={handleAIGenerate} disabled={isGeneratingAI}
+                                className={`flex-1 min-w-[200px] py-4 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] transition-all flex items-center justify-center gap-3 group relative overflow-hidden ${isGeneratingAI ? 'bg-gray-100 text-gray-400' : 'bg-primary-500 text-gray-900 shadow-lg shadow-primary-500/20 active:scale-95 hover:bg-primary-600'}`}>
+                                {isGeneratingAI ? (
+                                    <Icons.RefreshCw className="w-4 h-4 animate-spin" />
+                                ) : (
+                                    <Icons.Zap className="w-4 h-4 group-hover:animate-bounce" />
+                                )}
+                                {isGeneratingAI ? 'Forging Questions...' : 'AI Force Generation'}
+                            </button>
+                            
+                            <button onClick={handleAutoGenerate}
+                                className="px-8 py-4 bg-white border border-gray-200 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] text-gray-700 hover:bg-gray-50 transition-all active:scale-95 flex items-center justify-center gap-3">
+                                <Icons.Cpu className="w-4 h-4" /> Template Gen
+                            </button>
+                            
+                            <button onClick={() => setShowUploadModal(true)}
+                                className="px-8 py-4 bg-rose-500 text-white rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] shadow-lg shadow-rose-500/20 active:scale-95 hover:bg-rose-600 transition-all flex items-center justify-center gap-3">
+                                <Icons.Upload className="w-4 h-4" /> Import Excel
+                            </button>
 
+                            <button onClick={async () => {
+                                if (confirm("FORCE OVERWRITE CLOUD?\n\nThis will push 100% of your current local Question Papers to the server.")) {
+                                    const ok = await window.Utils.uploadToCloud(false, 'question_papers', null, true);
+                                    if (ok) alert("FORCE SYNC SUCCESS!");
+                                    setQPList(window.Utils.getQuestionPapers());
+                                }
+                            }} className="p-4 bg-white border border-gray-200 rounded-2xl text-gray-500 hover:text-indigo-600 transition-all" title="Force Cloud Override">
+                                <Icons.Cloud className="w-5 h-5" />
+                            </button>
                         </div>
-                        {selectedSSC && filterQPId && (
-                            <div className="flex gap-2">
-                                <button onClick={handleAIGenerate} disabled={isGeneratingAI}
-                                    className={`${isGeneratingAI ? 'bg-indigo-300' : 'bg-indigo-600 hover:bg-indigo-700'} text-gray-900 px-6 py-2 rounded-lg font-medium shadow-sm transition-colors flex items-center gap-2`}>
-                                    {isGeneratingAI ? (
-                                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                                    ) : (
-                                        <Icons.Cpu className="w-4 h-4" />
-                                    )}
-                                    {isGeneratingAI ? 'Generating via AI...' : 'AI Auto-Generate (Theory)'}
-                                </button>
-                                <button onClick={handleAutoGenerate}
-                                    className="bg-indigo-600 hover:bg-indigo-700 text-gray-900 px-6 py-2 rounded-lg font-medium shadow-sm transition-colors flex items-center gap-2">
-                                    <Icons.Cpu className="w-4 h-4" /> Template Auto-Gen
-                                </button>
-                                <button onClick={() => setShowUploadModal(true)}
-                                    className="bg-red-500 hover:bg-red-600 text-gray-900 px-6 py-2 rounded-lg font-medium shadow-sm transition-colors flex items-center gap-2">
-                                    <Icons.Upload className="w-4 h-4" /> Upload Question Paper
-                                </button>
-                                <button onClick={async () => {
-                                    if (confirm("FORCE OVERWRITE CLOUD?\n\nThis will push 100% of your current local Question Papers to the server, overwriting any stale data. Use this if students see 'Zero Questions'.")) {
-                                        const btn = document.getElementById('sync-status-text');
-                                        if (btn) btn.innerText = "Initiating Force Push...";
-                                        const ok = await window.Utils.uploadToCloud(false, 'question_papers', null, true);
-                                        if (ok) alert("FORCE SYNC SUCCESS!\nAll papers are now active in the cloud.");
-                                        setQPList(window.Utils.getQuestionPapers()); // Refresh UI
-                                    }
-                                }} className="bg-gray-100 hover:bg-gray-200 text-gray-800 px-6 py-2 rounded-lg font-medium shadow-sm transition-colors flex items-center gap-2">
-                                    <Icons.Cloud className="w-4 h-4" /> Force Cloud Override
-                                </button>
-                            </div>
-                        )}
-                    </div>
+                    )}
 
                     <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-x-auto">
                         <table className="w-full text-left border-collapse">
