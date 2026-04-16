@@ -3394,14 +3394,9 @@
                                                     <tr key={s.id} className={`transition-all ${attendance[s.id] === false ? 'opacity-40 bg-gray-50 grayscale' : 'hover:bg-gray-50'}`}>
                                                         <td className="px-4 py-3 border-r sticky left-0 bg-inherit z-10">{idx + 1}</td>
                                                         <td className="px-4 py-3 border-r sticky left-16 bg-inherit z-10 text-center">
-                                                            <input type="checkbox"
-                                                                checked={attendance[s.id] !== false}
-                                                                onChange={e => handleAttendanceChange(s.id, e.target.checked)}
-                                                                className="w-5 h-5 text-emerald-600 rounded-md focus:ring-emerald-500 cursor-pointer"
-                                                            />
-                                                            <div className={`text-[10px] font-black mt-1 ${attendance[s.id] === false ? 'text-rose-600' : 'text-emerald-600'}`}>
+                                                            <span className={`inline-block px-2 py-1 rounded-full text-[10px] font-black ${attendance[s.id] === false ? 'bg-rose-100 text-rose-600' : 'bg-emerald-100 text-emerald-700'}`}>
                                                                 {attendance[s.id] === false ? 'ABSENT' : 'PRESENT'}
-                                                            </div>
+                                                            </span>
                                                         </td>
                                                         <td className="px-4 py-3 border-r sticky left-[192px] bg-inherit z-10 font-medium text-gray-800">
                                                             {s.name} <br /> <span className="text-xs text-gray-700">{s.id}</span>
