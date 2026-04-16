@@ -3043,10 +3043,10 @@
                         const pMax = parseInt(nos.practicalMarks) || 30;
                         const vMax = parseInt(nos.vivaMarks) || 30;
 
-                        // Helper to generate marks between 60% and 95% of max
+                        // Helper to generate marks between 45% and 75% of max
                         const getPassMark = (max) => {
-                            const minPass = Math.floor(max * 0.6);
-                            const topScore = Math.floor(max * 0.95);
+                            const minPass = Math.floor(max * 0.45);
+                            const topScore = Math.floor(max * 0.75);
                             return minPass + Math.floor(Math.random() * (topScore - minPass + 1));
                         };
 
