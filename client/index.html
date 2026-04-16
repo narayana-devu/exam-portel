@@ -3222,6 +3222,45 @@
                 window.Utils.saveResponse(response);
                 window.Utils.uploadToCloud(true);
                 alert("Saved successfully!");
+            const handleSaveAll = async () => {
+                if (!students.length) return;
+                if (!confirm(`Save all marks and attendance for ${students.length} students?`)) return;
+
+                let count = 0;
+                for (const student of students) {
+                    const studentMarks = {};
+                    let grandTotal = 0;
+
+                    nosList.forEach(nos => {
+                        const t = marksData[`${student.id}_${nos.id}_theory`];
+                        const p = marksData[`${student.id}_${nos.id}_practical`];
+                        const v = marksData[`${student.id}_${nos.id}_viva`];
+
+                        if (t) studentMarks[`${nos.id}_theory`] = t;
+                        if (p) studentMarks[`${nos.id}_practical`] = p;
+                        if (v) studentMarks[`${nos.id}_viva`] = v;
+
+                        grandTotal += (parseFloat(t) || 0) + (parseFloat(p) || 0) + (parseFloat(v) || 0);
+                    });
+
+                    const response = {
+                        id: window.Utils.generateId(),
+                        studentId: student.id,
+                        batchId: selectedBatch,
+                        qpId: selectedQP,
+                        examType: 'MarksEntry',
+                        nosMarks: studentMarks,
+                        attendance: attendance[student.id] !== false,
+                        totalMarks: grandTotal,
+                        submittedAt: new Date().toISOString(),
+                        status: 'Completed'
+                    };
+                    window.Utils.saveResponse(response);
+                    count++;
+                }
+
+                await window.Utils.uploadToCloud(true);
+                alert(`Successfully saved ${count} records!`);
             };
 
             return (
@@ -3245,6 +3284,9 @@
                                     <Icons.Zap className="w-4 h-4" /> Fill Random
                                 </button>
 
+                                <button onClick={handleSaveAll} className="bg-emerald-600 hover:bg-emerald-700 text-gray-900 px-4 py-2 rounded-lg font-bold shadow-sm flex items-center gap-2 text-sm transition-colors">
+                                    <Icons.Save className="w-4 h-4" /> Save All
+                                </button>
                                 {viewMode === 'grid' ? (
                                     <button onClick={() => setViewMode('cards')} className="bg-indigo-600 hover:bg-indigo-700 text-gray-900 px-4 py-2 rounded-lg font-bold shadow-sm flex items-center gap-2 text-sm transition-colors">
                                         <Icons.Plus className="w-4 h-4" /> Add Marks
