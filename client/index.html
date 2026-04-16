@@ -3011,9 +3011,12 @@
                             'Student Name': student.name,
                             'NOS Code': nos.code,
                             'NOS Name': nos.name,
-                            'Theory': '',
-                            'Practical': '',
-                            'Viva': '',
+                            'Theory (Max)': nos.theoryMarks || 0,
+                            'Theory (Obtained)': '',
+                            'Practical (Max)': nos.practicalMarks || 0,
+                            'Practical (Obtained)': '',
+                            'Viva (Max)': nos.vivaMarks || 0,
+                            'Viva (Obtained)': '',
                             'Attendance (P/A)': 'P'
                         });
                     });
@@ -3050,9 +3053,9 @@
                             // Match 'Enrollment No' or 'EnrollmentNo' or 'User ID'
                             const kId = findKey('Enrollment No') || findKey('EnrollmentNo') || findKey('User ID') || findKey('UserID');
                             const kNOS = findKey('NOS Code') || findKey('NOSCode');
-                            const kTheory = findKey('Theory');
-                            const kPractical = findKey('Practical');
-                            const kViva = findKey('Viva');
+                            const kTheory = findKey('Theory Obtained') || findKey('Theory(Obtained)') || findKey('Theory');
+                            const kPractical = findKey('Practical Obtained') || findKey('Practical(Obtained)') || findKey('Practical');
+                            const kViva = findKey('Viva Obtained') || findKey('Viva(Obtained)') || findKey('Viva');
                             const kAtt = findKey('Attendance') || findKey('Attendance (P/A)');
 
                             const enrollmentVal = row[kId];
