@@ -4417,78 +4417,7 @@
                 };
                 reader.readAsArrayBuffer(file);
             };
-            const handleAutoGenerate = () => {
-                if (!selectedSSC || !filterQPId) return alert("Please select a Sector and Qualification Pack first.");
 
-                const qpDef = masterQPList.find(q => q.id === filterQPId);
-                if (!qpDef) return alert("Invalid QP selected.");
-
-                if (!confirm(`Auto-Generate ${uploadPaperType} Questions for ${qpDef.code}?\nThis will create questions from all NOS/PCs.`)) return;
-
-                // 1. Fetch Content
-                const allNOS = window.Utils.getNOS();
-                const allPCs = window.Utils.getPCs();
-                const qpNOS = allNOS.filter(n => n.qpId === filterQPId);
-                const qpPCs = allPCs.filter(p => qpNOS.some(n => n.id === p.nosId));
-
-                if (qpPCs.length === 0) return alert("No PCs found for this Qualification Pack. Please add NOS and PCs first.");
-
-                // 2. Generate Questions
-                let generatedQuestions = [];
-                let totalMarks = 0;
-
-                qpPCs.forEach(pc => {
-                    let questionText = "";
-                    let marks = 0;
-                    let type = uploadPaperType; // THEORY, PRACTICAL, VIVA
-
-                    // Template Logic
-                    if (type === 'THEORY') {
-                        questionText = `Explain the following performance criteria: "${pc.name}"`;
-                        marks = parseFloat(pc.theoryMarks) || 0;
-                    } else if (type === 'PRACTICAL') {
-                        questionText = `Demonstrate the following task: "${pc.name}"`;
-                        marks = parseFloat(pc.practicalMarks) || 0;
-                    } else if (type === 'VIVA') {
-                        questionText = `Viva Question: What are the key aspects of "${pc.name}"?`;
-                        marks = parseFloat(pc.vivaMarks) || 0;
-                    }
-
-                    // Only add if marks > 0 (optional, but good for cleanup)
-                    if (marks > 0) {
-                        generatedQuestions.push({
-                            id: window.Utils.generateId(),
-                            question: questionText,
-                            questionType: type === 'THEORY' ? 'Subjective' : type, // Theory defaults to Subjective for auto-gen
-                            options: [],
-                            correctAnswer: '',
-                            totalMarks: marks,
-                            pcMapping: { [pc.id]: marks }
-                        });
-                        totalMarks += marks;
-                    }
-                });
-
-                if (generatedQuestions.length === 0) return alert(`No ${uploadPaperType} marks defined in the NOS/PC for this QP.`);
-
-                // 3. Save QP
-                const newQP = {
-                    id: window.Utils.generateId(),
-                    qpName: `${qpDef.name} - ${uploadPaperType} (Auto-Generated)`,
-                    questions: generatedQuestions,
-                    totalMarks: totalMarks,
-                    totalTime: 60,
-                    createdAt: new Date().toISOString(),
-                    sscId: selectedSSC,
-                    qpId: filterQPId,
-                    paperType: uploadPaperType
-                };
-
-                window.Utils.saveQuestionPaper(newQP);
-                window.Utils.uploadToCloud(true);
-                setQPList(window.Utils.getQuestionPapers());
-                alert(`Success! Generated ${generatedQuestions.length} questions with Total Marks: ${totalMarks}`);
-            };
 
 
             return (
@@ -4535,10 +4464,7 @@
                     {selectedSSC && filterQPId && (
                         <div className="flex flex-wrap gap-4 mb-10">
                             
-                            <button onClick={handleAutoGenerate}
-                                className="px-8 py-4 bg-white border border-gray-200 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] text-gray-700 hover:bg-gray-50 transition-all active:scale-95 flex items-center justify-center gap-3">
-                                <Icons.Cpu className="w-4 h-4" /> Template Gen
-                            </button>
+
                             
                             <button onClick={() => setShowUploadModal(true)}
                                 className="px-8 py-4 bg-rose-500 text-white rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] shadow-lg shadow-rose-500/20 active:scale-95 hover:bg-rose-600 transition-all flex items-center justify-center gap-3">
