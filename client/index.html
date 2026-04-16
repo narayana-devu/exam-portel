@@ -3025,7 +3025,9 @@
                 const ws = XLSX.utils.json_to_sheet(rows);
                 const wb = XLSX.utils.book_new();
                 XLSX.utils.book_append_sheet(wb, ws, "Marks Template");
-                XLSX.writeFile(wb, `Marks_Entry_Template_${selectedBatch}.xlsx`);
+                window.XLSX.writeFile(wb, `Marks_Entry_Template_${selectedBatch}.xlsx`);
+            };
+
             const fillRandomMarks = () => {
                 if (!students.length || !nosList.length) return alert("Select a batch first.");
                 if (!confirm("Populate all students with random marks?")) return;
