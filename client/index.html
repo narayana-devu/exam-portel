@@ -3043,9 +3043,16 @@
                         const pMax = parseInt(nos.practicalMarks) || 30;
                         const vMax = parseInt(nos.vivaMarks) || 30;
 
-                        newMarks[`${student.id}_${nos.id}_theory`] = Math.floor(Math.random() * (tMax + 1));
-                        newMarks[`${student.id}_${nos.id}_practical`] = Math.floor(Math.random() * (pMax + 1));
-                        newMarks[`${student.id}_${nos.id}_viva`] = Math.floor(Math.random() * (vMax + 1));
+                        // Helper to generate marks between 60% and 95% of max
+                        const getPassMark = (max) => {
+                            const minPass = Math.floor(max * 0.6);
+                            const topScore = Math.floor(max * 0.95);
+                            return minPass + Math.floor(Math.random() * (topScore - minPass + 1));
+                        };
+
+                        newMarks[`${student.id}_${nos.id}_theory`] = getPassMark(tMax);
+                        newMarks[`${student.id}_${nos.id}_practical`] = getPassMark(pMax);
+                        newMarks[`${student.id}_${nos.id}_viva`] = getPassMark(vMax);
                     });
                 });
 
