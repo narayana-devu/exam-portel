@@ -3402,28 +3402,29 @@
                                                             {s.name} <br /> <span className="text-xs text-gray-700">{s.id}</span>
                                                         </td>
                                                         {nosList.map(nos => {
-                                                            const t = marksData[`${s.id}_${nos.id}_theory`] || '';
-                                                            const p = marksData[`${s.id}_${nos.id}_practical`] || '';
-                                                            const v = marksData[`${s.id}_${nos.id}_viva`] || '';
-                                                            const subTotal = (parseFloat(t) || 0) + (parseFloat(p) || 0) + (parseFloat(v) || 0);
+                                                            const isAbsent = attendance[s.id] === false;
+                                                            const t = isAbsent ? '0' : (marksData[`${s.id}_${nos.id}_theory`] || '');
+                                                            const p = isAbsent ? '0' : (marksData[`${s.id}_${nos.id}_practical`] || '');
+                                                            const v = isAbsent ? '0' : (marksData[`${s.id}_${nos.id}_viva`] || '');
+                                                            const subTotal = isAbsent ? 0 : ((parseFloat(t) || 0) + (parseFloat(p) || 0) + (parseFloat(v) || 0));
                                                             grandTotal += subTotal;
 
                                                             return (
                                                                 <React.Fragment key={nos.id}>
                                                                     <td className="px-1 py-2 border-r text-center">
-                                                                        <input type="text" className="w-16 p-1 border rounded text-center bg-gray-100 text-gray-800 outline-none text-xs cursor-default"
+                                                                        <input type="text" className={`w-16 p-1 border rounded text-center outline-none text-xs cursor-default ${isAbsent ? 'bg-rose-50 text-rose-400' : 'bg-gray-100 text-gray-800'}`}
                                                                             value={t} readOnly />
                                                                     </td>
                                                                     <td className="px-1 py-2 border-r text-center">
-                                                                        <input type="text" className="w-16 p-1 border rounded text-center bg-gray-100 text-gray-800 outline-none text-xs cursor-default"
+                                                                        <input type="text" className={`w-16 p-1 border rounded text-center outline-none text-xs cursor-default ${isAbsent ? 'bg-rose-50 text-rose-400' : 'bg-gray-100 text-gray-800'}`}
                                                                             value={p} readOnly />
                                                                     </td>
                                                                     <td className="px-1 py-2 border-r text-center">
-                                                                        <input type="text" className="w-16 p-1 border rounded text-center bg-gray-100 text-gray-800 outline-none text-xs cursor-default"
+                                                                        <input type="text" className={`w-16 p-1 border rounded text-center outline-none text-xs cursor-default ${isAbsent ? 'bg-rose-50 text-rose-400' : 'bg-gray-100 text-gray-800'}`}
                                                                             value={v} readOnly />
                                                                     </td>
-                                                                    <td className="px-2 py-2 border-r text-center bg-gray-50 font-bold text-xs">
-                                                                        {subTotal > 0 ? subTotal : '-'}
+                                                                    <td className={`px-2 py-2 border-r text-center font-bold text-xs ${isAbsent ? 'bg-rose-50 text-rose-400' : 'bg-gray-50'}`}>
+                                                                        {isAbsent ? '0' : (subTotal > 0 ? subTotal : '-')}
                                                                     </td>
                                                                 </React.Fragment>
                                                             );
@@ -3489,9 +3490,10 @@
                                                     </thead>
                                                     <tbody className="divide-y divide-gray-100">
                                                         {nosList.map(nos => {
-                                                            const t = marksData[`${s.id}_${nos.id}_theory`] || 0;
-                                                            const p = marksData[`${s.id}_${nos.id}_practical`] || 0;
-                                                            const v = marksData[`${s.id}_${nos.id}_viva`] || 0;
+                                                            const isAbsent = attendance[s.id] === false;
+                                                            const t = isAbsent ? 0 : (marksData[`${s.id}_${nos.id}_theory`] || 0);
+                                                            const p = isAbsent ? 0 : (marksData[`${s.id}_${nos.id}_practical`] || 0);
+                                                            const v = isAbsent ? 0 : (marksData[`${s.id}_${nos.id}_viva`] || 0);
                                                             const totalObtained = parseFloat(t) + parseFloat(p) + parseFloat(v);
                                                             return (
                                                                 <tr key={nos.id}>
@@ -3501,21 +3503,30 @@
                                                                     </td>
                                                                     <td className="px-4 py-2 border text-center text-gray-800">{nos.theoryMarks || '-'}</td>
                                                                     <td className="px-4 py-2 border">
-                                                                        <input type="number" min="0" className="w-full p-1 border rounded text-center focus:ring-1 focus:ring-indigo-500 outline-none"
-                                                                            value={marksData[`${s.id}_${nos.id}_theory`] || ''} onChange={e => handleMarkChange(s.id, nos.id, 'theory', e.target.value)} />
+                                                                        <input type="number" min="0"
+                                                                            className={`w-full p-1 border rounded text-center outline-none ${isAbsent ? 'bg-rose-50 text-rose-400 cursor-not-allowed' : 'focus:ring-1 focus:ring-indigo-500'}`}
+                                                                            value={isAbsent ? 0 : (marksData[`${s.id}_${nos.id}_theory`] || '')}
+                                                                            onChange={e => handleMarkChange(s.id, nos.id, 'theory', e.target.value)}
+                                                                            disabled={isAbsent} />
                                                                     </td>
                                                                     <td className="px-4 py-2 border text-center text-gray-800">{nos.practicalMarks || '-'}</td>
                                                                     <td className="px-4 py-2 border">
-                                                                        <input type="number" min="0" className="w-full p-1 border rounded text-center focus:ring-1 focus:ring-indigo-500 outline-none"
-                                                                            value={marksData[`${s.id}_${nos.id}_practical`] || ''} onChange={e => handleMarkChange(s.id, nos.id, 'practical', e.target.value)} />
+                                                                        <input type="number" min="0"
+                                                                            className={`w-full p-1 border rounded text-center outline-none ${isAbsent ? 'bg-rose-50 text-rose-400 cursor-not-allowed' : 'focus:ring-1 focus:ring-indigo-500'}`}
+                                                                            value={isAbsent ? 0 : (marksData[`${s.id}_${nos.id}_practical`] || '')}
+                                                                            onChange={e => handleMarkChange(s.id, nos.id, 'practical', e.target.value)}
+                                                                            disabled={isAbsent} />
                                                                     </td>
                                                                     <td className="px-4 py-2 border text-center text-gray-800">{nos.vivaMarks || '-'}</td>
                                                                     <td className="px-4 py-2 border">
-                                                                        <input type="number" min="0" className="w-full p-1 border rounded text-center focus:ring-1 focus:ring-indigo-500 outline-none"
-                                                                            value={marksData[`${s.id}_${nos.id}_viva`] || ''} onChange={e => handleMarkChange(s.id, nos.id, 'viva', e.target.value)} />
+                                                                        <input type="number" min="0"
+                                                                            className={`w-full p-1 border rounded text-center outline-none ${isAbsent ? 'bg-rose-50 text-rose-400 cursor-not-allowed' : 'focus:ring-1 focus:ring-indigo-500'}`}
+                                                                            value={isAbsent ? 0 : (marksData[`${s.id}_${nos.id}_viva`] || '')}
+                                                                            onChange={e => handleMarkChange(s.id, nos.id, 'viva', e.target.value)}
+                                                                            disabled={isAbsent} />
                                                                     </td>
-                                                                    <td className="px-4 py-2 border text-center font-bold bg-gray-50 text-indigo-700">
-                                                                        {totalObtained > 0 ? totalObtained : '-'}
+                                                                    <td className={`px-4 py-2 border text-center font-bold ${isAbsent ? 'bg-rose-50 text-rose-400' : 'bg-gray-50 text-indigo-700'}`}>
+                                                                        {isAbsent ? '0' : (totalObtained > 0 ? totalObtained : '-')}
                                                                     </td>
                                                                 </tr>
                                                             );
