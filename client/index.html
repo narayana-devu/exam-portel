@@ -3222,6 +3222,8 @@
                 window.Utils.saveResponse(response);
                 window.Utils.uploadToCloud(true);
                 alert("Saved successfully!");
+            };
+
             const handleSaveAll = async () => {
                 if (!students.length) return;
                 if (!confirm(`Save all marks and attendance for ${students.length} students?`)) return;
