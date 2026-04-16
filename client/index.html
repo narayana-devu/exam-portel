@@ -3298,7 +3298,8 @@
                                         <thead className="text-xs text-gray-700 uppercase bg-gray-50 sticky top-0 z-10">
                                             <tr>
                                                 <th className="px-4 py-3 border-b border-r sticky left-0 bg-gray-50 z-20 w-16" rowSpan="2">#</th>
-                                                <th className="px-4 py-3 border-b border-r sticky left-16 bg-gray-50 z-20 w-64" rowSpan="2">Student</th>
+                                                <th className="px-4 py-3 border-b border-r sticky left-16 bg-gray-50 z-20 w-32 text-center" rowSpan="2">P/A</th>
+                                                <th className="px-4 py-3 border-b border-r sticky left-[192px] bg-gray-50 z-20 w-64" rowSpan="2">Student</th>
                                                 {nosList.map((nos) => (
                                                     <th key={nos.id} className="px-4 py-2 border-b border-r text-center bg-gray-100" colSpan="4" title={nos.name}>
                                                         <div className="font-bold text-indigo-700 truncate max-w-[200px] mx-auto">{nos.code}<br /><span className="text-[10px] text-gray-800 font-normal">{nos.name}</span></div>
@@ -3321,9 +3322,19 @@
                                             {students.map((s, idx) => {
                                                 let grandTotal = 0;
                                                 return (
-                                                    <tr key={s.id} className="hover:bg-gray-50 transition-colors">
-                                                        <td className="px-4 py-3 border-r sticky left-0 bg-white group-hover:bg-gray-50">{idx + 1}</td>
-                                                        <td className="px-4 py-3 border-r sticky left-16 bg-white group-hover:bg-gray-50 font-medium text-gray-800">
+                                                    <tr key={s.id} className={`transition-all ${attendance[s.id] === false ? 'opacity-40 bg-gray-50 grayscale' : 'hover:bg-gray-50'}`}>
+                                                        <td className="px-4 py-3 border-r sticky left-0 bg-inherit z-10">{idx + 1}</td>
+                                                        <td className="px-4 py-3 border-r sticky left-16 bg-inherit z-10 text-center">
+                                                            <input type="checkbox"
+                                                                checked={attendance[s.id] !== false}
+                                                                onChange={e => handleAttendanceChange(s.id, e.target.checked)}
+                                                                className="w-5 h-5 text-emerald-600 rounded-md focus:ring-emerald-500 cursor-pointer"
+                                                            />
+                                                            <div className={`text-[10px] font-black mt-1 ${attendance[s.id] === false ? 'text-rose-600' : 'text-emerald-600'}`}>
+                                                                {attendance[s.id] === false ? 'ABSENT' : 'PRESENT'}
+                                                            </div>
+                                                        </td>
+                                                        <td className="px-4 py-3 border-r sticky left-[192px] bg-inherit z-10 font-medium text-gray-800">
                                                             {s.name} <br /> <span className="text-xs text-gray-700">{s.id}</span>
                                                         </td>
                                                         {nosList.map(nos => {
