@@ -3403,9 +3403,9 @@
                                                         </td>
                                                         {nosList.map(nos => {
                                                             const isAbsent = attendance[s.id] === false;
-                                                            const t = isAbsent ? '0' : (marksData[`${s.id}_${nos.id}_theory`] || '');
-                                                            const p = isAbsent ? '0' : (marksData[`${s.id}_${nos.id}_practical`] || '');
-                                                            const v = isAbsent ? '0' : (marksData[`${s.id}_${nos.id}_viva`] || '');
+                                                            const t = isAbsent ? '0' : ((marksData[`${s.id}_${nos.id}_theory`] ?? '') + '');
+                                                            const p = isAbsent ? '0' : ((marksData[`${s.id}_${nos.id}_practical`] ?? '') + '');
+                                                            const v = isAbsent ? '0' : ((marksData[`${s.id}_${nos.id}_viva`] ?? '') + '');
                                                             const subTotal = isAbsent ? 0 : ((parseFloat(t) || 0) + (parseFloat(p) || 0) + (parseFloat(v) || 0));
                                                             grandTotal += subTotal;
 
@@ -3505,7 +3505,7 @@
                                                                     <td className="px-4 py-2 border">
                                                                         <input type="number" min="0"
                                                                             className={`w-full p-1 border rounded text-center outline-none ${isAbsent ? 'bg-rose-50 text-rose-400 cursor-not-allowed' : 'focus:ring-1 focus:ring-indigo-500'}`}
-                                                                            value={isAbsent ? 0 : (marksData[`${s.id}_${nos.id}_theory`] || '')}
+                                                                            value={isAbsent ? 0 : (marksData[`${s.id}_${nos.id}_theory`] ?? '')}
                                                                             onChange={e => handleMarkChange(s.id, nos.id, 'theory', e.target.value)}
                                                                             disabled={isAbsent} />
                                                                     </td>
@@ -3513,7 +3513,7 @@
                                                                     <td className="px-4 py-2 border">
                                                                         <input type="number" min="0"
                                                                             className={`w-full p-1 border rounded text-center outline-none ${isAbsent ? 'bg-rose-50 text-rose-400 cursor-not-allowed' : 'focus:ring-1 focus:ring-indigo-500'}`}
-                                                                            value={isAbsent ? 0 : (marksData[`${s.id}_${nos.id}_practical`] || '')}
+                                                                            value={isAbsent ? 0 : (marksData[`${s.id}_${nos.id}_practical`] ?? '')}
                                                                             onChange={e => handleMarkChange(s.id, nos.id, 'practical', e.target.value)}
                                                                             disabled={isAbsent} />
                                                                     </td>
@@ -3521,7 +3521,7 @@
                                                                     <td className="px-4 py-2 border">
                                                                         <input type="number" min="0"
                                                                             className={`w-full p-1 border rounded text-center outline-none ${isAbsent ? 'bg-rose-50 text-rose-400 cursor-not-allowed' : 'focus:ring-1 focus:ring-indigo-500'}`}
-                                                                            value={isAbsent ? 0 : (marksData[`${s.id}_${nos.id}_viva`] || '')}
+                                                                            value={isAbsent ? 0 : (marksData[`${s.id}_${nos.id}_viva`] ?? '')}
                                                                             onChange={e => handleMarkChange(s.id, nos.id, 'viva', e.target.value)}
                                                                             disabled={isAbsent} />
                                                                     </td>
