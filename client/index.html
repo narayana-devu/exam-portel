@@ -3039,13 +3039,13 @@
                 students.forEach(student => {
                     newAttendance[student.id] = true; // Mark present
                     nosList.forEach(nos => {
-                        const tMax = parseInt(nos.theoryMarks) || 0;
-                        const pMax = parseInt(nos.practicalMarks) || 0;
-                        const vMax = parseInt(nos.vivaMarks) || 0;
+                        const tMax = parseInt(nos.theoryMarks) || 30;
+                        const pMax = parseInt(nos.practicalMarks) || 30;
+                        const vMax = parseInt(nos.vivaMarks) || 30;
 
-                        if (tMax > 0) newMarks[`${student.id}_${nos.id}_theory`] = Math.floor(Math.random() * (tMax + 1));
-                        if (pMax > 0) newMarks[`${student.id}_${nos.id}_practical`] = Math.floor(Math.random() * (pMax + 1));
-                        if (vMax > 0) newMarks[`${student.id}_${nos.id}_viva`] = Math.floor(Math.random() * (vMax + 1));
+                        newMarks[`${student.id}_${nos.id}_theory`] = Math.floor(Math.random() * (tMax + 1));
+                        newMarks[`${student.id}_${nos.id}_practical`] = Math.floor(Math.random() * (pMax + 1));
+                        newMarks[`${student.id}_${nos.id}_viva`] = Math.floor(Math.random() * (vMax + 1));
                     });
                 });
 
