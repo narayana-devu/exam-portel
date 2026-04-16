@@ -3026,6 +3026,29 @@
                 const wb = XLSX.utils.book_new();
                 XLSX.utils.book_append_sheet(wb, ws, "Marks Template");
                 XLSX.writeFile(wb, `Marks_Entry_Template_${selectedBatch}.xlsx`);
+            const fillRandomMarks = () => {
+                if (!students.length || !nosList.length) return alert("Select a batch first.");
+                if (!confirm("Populate all students with random marks?")) return;
+
+                let newMarks = { ...marksData };
+                let newAttendance = { ...attendance };
+
+                students.forEach(student => {
+                    newAttendance[student.id] = true; // Mark present
+                    nosList.forEach(nos => {
+                        const tMax = parseInt(nos.theoryMarks) || 0;
+                        const pMax = parseInt(nos.practicalMarks) || 0;
+                        const vMax = parseInt(nos.vivaMarks) || 0;
+
+                        if (tMax > 0) newMarks[`${student.id}_${nos.id}_theory`] = Math.floor(Math.random() * (tMax + 1));
+                        if (pMax > 0) newMarks[`${student.id}_${nos.id}_practical`] = Math.floor(Math.random() * (pMax + 1));
+                        if (vMax > 0) newMarks[`${student.id}_${nos.id}_viva`] = Math.floor(Math.random() * (vMax + 1));
+                    });
+                });
+
+                setMarksData(newMarks);
+                setAttendance(newAttendance);
+                alert("Random marks populated successfully!");
             };
 
             // EXCEL MARKS UPLOAD
@@ -3214,6 +3237,10 @@
 
                                 <button onClick={downloadMarksTemplate} className="bg-white border text-gray-700 hover:bg-gray-50 px-4 py-2 rounded-lg font-bold shadow-sm flex items-center gap-2 text-sm transition-colors">
                                     <Icons.Download className="w-4 h-4" /> Template
+                                </button>
+
+                                <button onClick={fillRandomMarks} className="bg-amber-100 border-amber-200 text-amber-700 hover:bg-amber-200 px-4 py-2 rounded-lg font-bold shadow-sm flex items-center gap-2 text-sm transition-colors" title="Fill with sample marks for testing">
+                                    <Icons.Zap className="w-4 h-4" /> Fill Random
                                 </button>
 
                                 {viewMode === 'grid' ? (
