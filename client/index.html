@@ -2182,10 +2182,9 @@
             Square: ({ className }) => <LucideIcon name="square" className={className || "w-5 h-5"} />,
             BarChart2: ({ className }) => <LucideIcon name="bar-chart-2" className={className || "w-5 h-5"} />,
             X: ({ className }) => (
-                <svg className={className || "w-5 h-5"} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                    <line x1="18" y1="6" x2="6" y2="18"></line>
-                    <line x1="6" y1="6" x2="18" y2="18"></line>
-                </svg>
+                <div className={className || "w-5 h-5"} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'black', fontStyle: 'normal' }}>
+                   <span style={{ fontWeight: '900', fontSize: '1.2em' }}>✕</span>
+                </div>
             ),
             XCircle: ({ className }) => <LucideIcon name="x-circle" className={className || "w-5 h-5"} />,
             UploadCloud: ({ className }) => <LucideIcon name="upload-cloud" className={className || "w-12 h-12"} />,
@@ -2691,7 +2690,7 @@
                                     onClick={() => setShowModal(false)}
                                     className="absolute top-6 right-6 w-10 h-10 bg-gray-200 flex items-center justify-center text-black hover:bg-gray-300 transition-all z-20 border border-gray-300 rounded-lg"
                                 >
-                                    <Icons.X className="w-5 h-5 stroke-[3px]" />
+                                    <Icons.X className="w-5 h-5 " />
                                 </button>
                                 {/* Decorative elements */}
                                 <div className="absolute top-0 left-0 w-full h-2 premium-gradient"></div>
@@ -3543,7 +3542,7 @@
                                     onClick={() => setShowModal(false)}
                                     className="absolute top-6 right-6 w-10 h-10 bg-gray-200 flex items-center justify-center text-black hover:bg-gray-300 transition-all z-20 border border-gray-300 rounded-lg"
                                 >
-                                    <Icons.X className="w-5 h-5 stroke-[3px]" />
+                                    <Icons.X className="w-5 h-5 " />
                                 </button>
                                 <h3 className="text-2xl font-bold mb-6 text-gray-800">{newQP.id ? 'Edit Qualification Pack' : 'Add Qualification Pack'}</h3>
                                 <form onSubmit={handleCreate} className="space-y-6">
@@ -4047,7 +4046,7 @@
                                     onClick={() => setShowUploadNOSModal(false)}
                                     className="absolute top-8 right-8 w-10 h-10 bg-gray-200 flex items-center justify-center text-black hover:bg-gray-300 transition-all z-20 border border-gray-300 rounded-lg"
                                 >
-                                    <Icons.X className="w-5 h-5 stroke-[3px]" />
+                                    <Icons.X className="w-5 h-5 " />
                                 </button>
                                 <div className="text-center mb-10">
                                     <div className="w-20 h-20 bg-emerald-500/10 rounded-[32px] flex items-center justify-center mx-auto mb-6">
@@ -4104,7 +4103,7 @@
                                     onClick={() => setShowNOSModal(false)}
                                     className="absolute top-10 right-10 w-10 h-10 bg-gray-200 flex items-center justify-center text-black hover:bg-gray-300 transition-all z-20 border border-gray-300 rounded-lg"
                                 >
-                                    <Icons.X className="w-5 h-5 stroke-[3px]" />
+                                    <Icons.X className="w-5 h-5 " />
                                 </button>
                                 <div className="text-center mb-10">
                                     <div className="w-20 h-20 bg-primary-500/10 rounded-[32px] flex items-center justify-center mx-auto mb-6">
@@ -4152,7 +4151,7 @@
                                     onClick={() => setShowPCModal(false)}
                                     className="absolute top-10 right-10 w-10 h-10 bg-gray-200 flex items-center justify-center text-black hover:bg-gray-300 transition-all z-20 border border-gray-300 rounded-lg"
                                 >
-                                    <Icons.X className="w-5 h-5 stroke-[3px]" />
+                                    <Icons.X className="w-5 h-5 " />
                                 </button>
                                 <div className="text-center mb-8">
                                     <div className="w-16 h-16 bg-primary-500/20 rounded-2xl flex items-center justify-center mx-auto mb-4">
@@ -4587,7 +4586,7 @@
                                 <div className="bg-gray-50 px-8 py-5 flex justify-between items-center border-b">
                                     <h3 className="text-xl font-bold text-gray-800">Upload Question Paper</h3>
                                     <button onClick={() => setShowUploadModal(false)} className="w-10 h-10 bg-gray-200 flex items-center justify-center text-black hover:bg-gray-300 transition-all border border-gray-300 rounded-lg">
-                                        <Icons.X className="w-5 h-5 stroke-[3px]" />
+                                        <Icons.X className="w-5 h-5 " />
                                     </button>
                                 </div>
 
@@ -5885,7 +5884,7 @@
                                             <p className="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] mt-1">Excel Data Synchronizer</p>
                                         </div>
                                         <button onClick={() => setShowImportModal(false)} className="w-10 h-10 bg-gray-200 flex items-center justify-center text-black hover:bg-gray-300 transition-all border border-gray-300 rounded-lg">
-                                            <Icons.X className="w-5 h-5 stroke-[3px]" />
+                                            <Icons.X className="w-5 h-5 " />
                                         </button>
                                     </div>
 
@@ -5991,7 +5990,7 @@
                                         <p className="text-[10px] font-black text-gray-800 uppercase tracking-[0.3em] mt-1">Operational Environment Configurator</p>
                                     </div>
                                     <button onClick={() => setShowCreateModal(false)} className="w-10 h-10 bg-gray-200 flex items-center justify-center text-black hover:bg-gray-300 transition-all border border-gray-300 rounded-lg">
-                                        <Icons.X className="w-5 h-5 stroke-[3px]" />
+                                        <Icons.X className="w-5 h-5 " />
                                     </button>
                                 </div>
 
@@ -6011,7 +6010,7 @@
                                                         <div className="flex gap-2">
                                                             <input autoFocus type="text" className="w-full bg-white border border-gray-100 rounded-2xl px-5 py-3.5 text-gray-900 text-sm font-bold outline-none focus:border-primary-500/50 shadow-sm"
                                                                 placeholder="New Project Name" value={newBatch.project} onChange={e => setNewBatch({ ...newBatch, project: e.target.value })} />
-                                                            <button type="button" onClick={() => setShowNewProjectInput(false)} className="w-10 h-10 bg-gray-200 text-black hover:bg-gray-300 transition-all border border-gray-300 rounded-lg flex items-center justify-center"><Icons.X className="w-5 h-5 stroke-[3px]" /></button>
+                                                            <button type="button" onClick={() => setShowNewProjectInput(false)} className="w-10 h-10 bg-gray-200 text-black hover:bg-gray-300 transition-all border border-gray-300 rounded-lg flex items-center justify-center"><Icons.X className="w-5 h-5 " /></button>
                                                         </div>
                                                     ) : (
                                                         <>
@@ -6166,7 +6165,7 @@
                                             <p className="text-[10px] font-black text-gray-800 uppercase tracking-widest mt-1">{assignmentType} Protocol Binding</p>
                                         </div>
                                         <button onClick={() => setShowAssignModal(false)} className="w-10 h-10 bg-gray-200 flex items-center justify-center text-black hover:bg-gray-300 transition-all border border-gray-300 rounded-lg">
-                                            <Icons.X className="w-5 h-5 stroke-[3px]" />
+                                            <Icons.X className="w-5 h-5 " />
                                         </button>
                                     </div>
 
@@ -6273,7 +6272,7 @@
                                                 <p className="text-lg font-black text-gray-900">{selectedBatch ? window.Utils.getStudentsByBatch(selectedBatch.id).length : 0} <span className="text-sm text-gray-800 font-bold ml-1">Trainees</span></p>
                                             </div>
                                             <button onClick={() => setShowStudentModal(false)} className="w-10 h-10 bg-gray-200 text-black hover:bg-gray-300 transition-all border border-gray-300 rounded-lg flex items-center justify-center shadow-sm">
-                                                <Icons.X className="w-6 h-6 stroke-[3px]" />
+                                                <Icons.X className="w-6 h-6 " />
                                             </button>
                                         </div>
                                     </div>
@@ -6689,7 +6688,7 @@
                                 <div className="bg-gray-50 px-8 py-5 flex justify-between items-center border-b">
                                     <h3 className="text-xl font-bold text-gray-800">Create New Assessor</h3>
                                     <button onClick={() => setShowCreateModal(false)} className="w-10 h-10 bg-gray-200 flex items-center justify-center text-black hover:bg-gray-300 transition-all border border-gray-300 rounded-lg">
-                                        <Icons.X className="w-5 h-5 stroke-[3px]" />
+                                        <Icons.X className="w-5 h-5 " />
                                     </button>
                                 </div>
                                 <div className="p-8 space-y-6">
@@ -8952,7 +8951,7 @@
                                 {trashItems.length > 0 && (
                                     <button onClick={handleClearTrash} className="text-xs font-black text-rose-500 hover:text-rose-600 px-4 py-2 bg-rose-50 rounded-xl transition-all">Empty Bin</button>
                                 )}
-                                <button onClick={onClose} className="w-10 h-10 bg-gray-200 text-black hover:bg-gray-300 transition-all border border-gray-300 rounded-lg flex items-center justify-center shadow-sm"><Icons.X className="w-5 h-5 stroke-[3px]"/></button>
+                                <button onClick={onClose} className="w-10 h-10 bg-gray-200 text-black hover:bg-gray-300 transition-all border border-gray-300 rounded-lg flex items-center justify-center shadow-sm"><Icons.X className="w-5 h-5 "/></button>
                             </div>
                         </div>
 
@@ -9104,7 +9103,7 @@
                                                         </button>
                                                     )}
                                                     <button onClick={() => setShowNotifications(false)} className="w-10 h-10 bg-gray-200 text-black hover:bg-gray-300 border border-gray-300 rounded-lg transition-all flex items-center justify-center">
-                                                        <Icons.X className="w-5 h-5 stroke-[3px]" />
+                                                        <Icons.X className="w-5 h-5 " />
                                                     </button>
                                                 </div>
                                             </div>
