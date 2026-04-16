@@ -1344,16 +1344,25 @@
 
             getSSC: () => JSON.parse(localStorage.getItem(DB_KEYS.SSC) || '[]'),
             saveSSC: (ssc) => {
-                const list = window.Utils.getSSC();
-                if (!ssc.id) ssc.id = Date.now().toString(36) + Math.random().toString(36).substr(2);
-                ssc.synced = false;
+                try {
+                    const list = window.Utils.getSSC();
+                    if (!ssc.id) ssc.id = Date.now().toString(36) + Math.random().toString(36).substr(2);
+                    ssc.synced = false;
 
-                const existingIndex = list.findIndex(item => item.id === ssc.id);
-                if (existingIndex >= 0) list[existingIndex] = ssc;
-                else list.push(ssc);
+                    const existingIndex = list.findIndex(item => item.id === ssc.id);
+                    if (existingIndex >= 0) list[existingIndex] = ssc;
+                    else list.push(ssc);
 
-                localStorage.setItem(DB_KEYS.SSC, JSON.stringify(list));
-                window.Utils.uploadToCloud(true, 'ssc');
+                    localStorage.setItem(DB_KEYS.SSC, JSON.stringify(list));
+                    console.log("[SSC] Saved to LocalStorage:", ssc.id);
+                    
+                    // Fire-and-forget cloud sync
+                    window.Utils.uploadToCloud(true, 'ssc').catch(e => console.warn("[Sync] Initial upload failed, will sync later", e));
+                } catch (err) {
+                    console.error("[SSC] SAVE ERROR", err);
+                    alert("Local Storage Error: " + err.message);
+                    throw err;
+                }
             },
             deleteSSC: (id) => {
                 window.Utils.deleteFromCloud('ssc', id);
@@ -2181,11 +2190,7 @@
             Video: ({ className }) => <LucideIcon name="video" className={className || "w-5 h-5"} />,
             Square: ({ className }) => <LucideIcon name="square" className={className || "w-5 h-5"} />,
             BarChart2: ({ className }) => <LucideIcon name="bar-chart-2" className={className || "w-5 h-5"} />,
-            X: ({ className }) => (
-                <div className={className || "w-5 h-5"} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'black', fontStyle: 'normal' }}>
-                   <span style={{ fontWeight: '900', fontSize: '1.2em' }}>✕</span>
-                </div>
-            ),
+            X: ({ className }) => <span className={className} style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', color: '#000', fontWeight: 'bold !important', fontSize: '1.2em' }}>✕</span>,
             XCircle: ({ className }) => <LucideIcon name="x-circle" className={className || "w-5 h-5"} />,
             UploadCloud: ({ className }) => <LucideIcon name="upload-cloud" className={className || "w-12 h-12"} />,
             Save: ({ className }) => <LucideIcon name="save" className={className || "w-4 h-4"} />,
@@ -2614,12 +2619,22 @@
             useEffect(() => setSSCList(window.Utils.getSSC()), []);
 
             const handleCreate = (e) => {
-                e.preventDefault();
-                const ssc = { ...newSSC, id: window.Utils.generateId(), createdAt: new Date().toISOString() };
-                window.Utils.saveSSC(ssc);
-                setSSCList(window.Utils.getSSC());
-                setShowModal(false);
-                setNewSSC({ name: '', code: '' });
+                try {
+                    e.preventDefault();
+                    if (!newSSC.name || !newSSC.code) {
+                        alert("Both Name and Code are required!");
+                        return;
+                    }
+                    const ssc = { ...newSSC, id: window.Utils.generateId(), createdAt: new Date().toISOString() };
+                    window.Utils.saveSSC(ssc);
+                    setSSCList(window.Utils.getSSC());
+                    setShowModal(false);
+                    setNewSSC({ name: '', code: '' });
+                    console.log("SSC registered successfully:", ssc);
+                } catch (err) {
+                    console.error("Failed to create SSC:", err);
+                    alert("System Error: Could not save SSC. " + err.message);
+                }
             };
 
             return (
@@ -2688,9 +2703,10 @@
                             <div className="bg-white rounded-[40px] p-10 w-full max-w-md border border-gray-100 shadow-[0_32px_64px_-16px_rgba(0,0,0,0.25)] animate-scale-in relative overflow-hidden">
                                 <button
                                     onClick={() => setShowModal(false)}
-                                    className="absolute top-6 right-6 w-10 h-10 bg-gray-200 flex items-center justify-center text-black hover:bg-gray-300 transition-all z-20 border border-gray-300 rounded-lg"
+                                    className="absolute top-6 right-6 w-10 h-10 bg-gray-200 flex items-center justify-center text-black hover:bg-gray-300 transition-all z-20 border border-gray-300 rounded-lg text-2xl font-black"
+                                    type="button"
                                 >
-                                    <Icons.X className="w-5 h-5 " />
+                                    ✕
                                 </button>
                                 {/* Decorative elements */}
                                 <div className="absolute top-0 left-0 w-full h-2 premium-gradient"></div>
