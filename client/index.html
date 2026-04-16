@@ -2974,6 +2974,7 @@
             const [marksData, setMarksData] = useState({});
             const [attendance, setAttendance] = useState({});
             const [viewMode, setViewMode] = useState('grid'); // 'grid' | 'cards'
+            const [isBulkEntry, setIsBulkEntry] = useState(false); // Only show Save All when randomizing or importing
 
             useEffect(() => {
                 setSSCList(window.Utils.getSSC());
@@ -3051,6 +3052,7 @@
                 setMarksData(newMarks);
                 setAttendance(newAttendance);
                 alert("Random marks populated successfully!");
+                setIsBulkEntry(true);
             };
 
             // EXCEL MARKS UPLOAD
@@ -3120,6 +3122,7 @@
                         setMarksData(newMarks);
                         setAttendance(newAttendance);
                         alert(`Successfully imported marks for ${count} entries!`);
+                        setIsBulkEntry(true);
                         e.target.value = null; // Reset input
 
                     } catch (err) {
@@ -3131,6 +3134,7 @@
             };
 
             const handleLoadGrid = () => {
+                setIsBulkEntry(false);
                 if (!selectedBatch || !selectedQP) return;
 
                 // 1. Fetch Students
@@ -3262,6 +3266,7 @@
                 }
 
                 await window.Utils.uploadToCloud(true);
+                setIsBulkEntry(false);
                 alert(`Successfully saved ${count} records!`);
             };
 
@@ -3286,9 +3291,11 @@
                                     <Icons.Zap className="w-4 h-4" /> Fill Random
                                 </button>
 
-                                <button onClick={handleSaveAll} className="bg-emerald-600 hover:bg-emerald-700 text-gray-900 px-4 py-2 rounded-lg font-bold shadow-sm flex items-center gap-2 text-sm transition-colors">
-                                    <Icons.Save className="w-4 h-4" /> Save All
-                                </button>
+                                {isBulkEntry && (
+                                    <button onClick={handleSaveAll} className="bg-emerald-600 hover:bg-emerald-700 text-gray-900 px-4 py-2 rounded-lg font-bold shadow-sm flex items-center gap-2 text-sm transition-colors animate-pulse">
+                                        <Icons.Save className="w-4 h-4" /> Save All
+                                    </button>
+                                )}
                                 {viewMode === 'grid' ? (
                                     <button onClick={() => setViewMode('cards')} className="bg-indigo-600 hover:bg-indigo-700 text-gray-900 px-4 py-2 rounded-lg font-bold shadow-sm flex items-center gap-2 text-sm transition-colors">
                                         <Icons.Plus className="w-4 h-4" /> Add Marks
