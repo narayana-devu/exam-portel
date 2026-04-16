@@ -3043,8 +3043,11 @@
                         const pMax = parseInt(nos.practicalMarks) || 30;
                         const vMax = parseInt(nos.vivaMarks) || 30;
 
-                        // Always give exactly 75% of max marks
-                        const getPassMark = (max) => Math.floor(max * 0.75);
+                        // Generate marks between 75% and 100% of max
+                        const getPassMark = (max) => {
+                            const minMark = Math.floor(max * 0.75);
+                            return minMark + Math.floor(Math.random() * (max - minMark + 1));
+                        };
 
                         newMarks[`${student.id}_${nos.id}_theory`] = getPassMark(tMax);
                         newMarks[`${student.id}_${nos.id}_practical`] = getPassMark(pMax);
