@@ -3192,6 +3192,19 @@
 
             const handleAttendanceChange = (studentId, checked) => {
                 setAttendance(prev => ({ ...prev, [studentId]: checked }));
+                
+                // v85.4: If marked absent, force marks to 0
+                if (!checked) {
+                    setMarksData(prev => {
+                        const next = { ...prev };
+                        nosList.forEach(nos => {
+                            next[`${studentId}_${nos.id}_theory`] = 0;
+                            next[`${studentId}_${nos.id}_practical`] = 0;
+                            next[`${studentId}_${nos.id}_viva`] = 0;
+                        });
+                        return next;
+                    });
+                }
             };
 
             const handleSaveStudent = (studentId) => {
@@ -3237,14 +3250,18 @@
                     const studentMarks = {};
                     let grandTotal = 0;
 
-                    nosList.forEach(nos => {
-                        const t = marksData[`${student.id}_${nos.id}_theory`];
-                        const p = marksData[`${student.id}_${nos.id}_practical`];
-                        const v = marksData[`${student.id}_${nos.id}_viva`];
+                    const isAbsent = attendance[student.id] === false;
 
-                        if (t) studentMarks[`${nos.id}_theory`] = t;
-                        if (p) studentMarks[`${nos.id}_practical`] = p;
-                        if (v) studentMarks[`${nos.id}_viva`] = v;
+                    nosList.forEach(nos => {
+                        let t = marksData[`${student.id}_${nos.id}_theory`];
+                        let p = marksData[`${student.id}_${nos.id}_practical`];
+                        let v = marksData[`${student.id}_${nos.id}_viva`];
+
+                        if (isAbsent) { t = 0; p = 0; v = 0; }
+
+                        if (t !== undefined) studentMarks[`${nos.id}_theory`] = t;
+                        if (p !== undefined) studentMarks[`${nos.id}_practical`] = p;
+                        if (v !== undefined) studentMarks[`${nos.id}_viva`] = v;
 
                         grandTotal += (parseFloat(t) || 0) + (parseFloat(p) || 0) + (parseFloat(v) || 0);
                     });
