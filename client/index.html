@@ -823,9 +823,24 @@
                     let completed = 0;
                     for (const s of students) {
                         onProgress(`Collecting ${category} Photos: ${s.name} (${completed + 1} / ${students.length})`);
-                        const resp = allResponses.find(r => r.studentId === s.id && r.examType.toLowerCase() === category.toLowerCase());
-                        if (resp && resp.evidence && resp.evidence.length > 0) {
-                            for (const item of resp.evidence) {
+                        
+                        // v85.3 Special Handle for 'Photo' (Manual Uploads)
+                        let targetEvidences = [];
+                        if (category.toLowerCase() === 'photo') {
+                            const studentRes = allResponses.filter(r => r.studentId === s.id || r.studentId === s.username);
+                            studentRes.forEach(r => {
+                                if (r.evidence) {
+                                    const manualPhotos = r.evidence.filter(e => (e.type || '').toUpperCase().includes('MANUAL'));
+                                    targetEvidences.push(...manualPhotos);
+                                }
+                            });
+                        } else {
+                            const resp = allResponses.find(r => (r.studentId === s.id || r.studentId === s.username) && r.examType.toLowerCase() === category.toLowerCase());
+                            if (resp && resp.evidence) targetEvidences = resp.evidence;
+                        }
+
+                        if (targetEvidences.length > 0) {
+                            for (const item of targetEvidences) {
                                 try {
                                     const blob = await window.Utils.fetchEvidenceAsBlob(item);
                                     if (blob) {
@@ -924,6 +939,60 @@
                     }
                 }
                 return blob;
+            },
+
+            // v85.4: COMPREHENSIVE Student-Specific Download (All Exams + Identity)
+            downloadStudentFullEvidenceZip: async (studentId, batchId, onProgress) => {
+                try {
+                    const student = window.Utils.getStudents().find(s => s.id === studentId || s.username === studentId);
+                    const batch = window.Utils.getBatches().find(b => b.id === batchId);
+                    if (!student || !batch) throw new Error("Student or Batch not found.");
+                    
+                    const allResponses = window.Utils.getResponses().filter(r => r.studentId === studentId || r.studentId === student.username);
+                    const zip = new JSZip();
+                    const root = zip.folder(`${student.name}_${student.username}_Complete_Evidence`);
+
+                    let totalPhotos = 0;
+                    for (const resp of allResponses) {
+                        if (resp.evidence && resp.evidence.length > 0) {
+                            const subFolder = root.folder(resp.examType);
+                            for (const item of resp.evidence) {
+                                try {
+                                    const blob = await window.Utils.fetchEvidenceAsBlob(item);
+                                    if (blob) {
+                                        const label = (item.type || 'Evidence').replace(/[^a-zA-Z0-9_]/g, '_');
+                                        const time = (item.time || new Date().toISOString()).slice(0,19).replace(/:/g, '-');
+                                        const fileName = `${resp.examType}_${label}_${time}.jpg`.replace(/ /g, '_');
+                                        subFolder.file(fileName, blob);
+                                        totalPhotos++;
+                                        if (onProgress) onProgress(`Zipping: ${resp.examType} - ${label}`);
+                                    }
+                                } catch (e) { console.warn(`Error zipping evidence for student:`, e); }
+                            }
+                        }
+                    }
+
+                    if (totalPhotos === 0) {
+                        alert("No evidence photos found for this student.");
+                        if (onProgress) onProgress(null);
+                        return;
+                    }
+
+                    if (onProgress) onProgress("Finalizing Dossier ZIP...");
+                    const content = await zip.generateAsync({ type: "blob" });
+                    const link = document.createElement("a");
+                    link.href = URL.createObjectURL(content);
+                    link.download = `${student.name}_Full_Evidence_Backup.zip`;
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    if (onProgress) onProgress(null);
+                    alert(`✅ Full Evidence Dossier Downloaded: ${student.name}\nTotal Items: ${totalPhotos}`);
+                } catch (err) {
+                    console.error("Student ZIP Error:", err);
+                    alert("Error: " + err.message);
+                    if (onProgress) onProgress(null);
+                }
             },
 
             downloadSampleFormat: () => {
@@ -3029,6 +3098,43 @@
                 window.XLSX.writeFile(wb, `Marks_Entry_Template_${selectedBatch}.xlsx`);
             };
 
+            const downloadMarksResult = () => {
+                if (!students.length || !nosList.length) {
+                    alert("Please select a Batch with Students and QP content first.");
+                    return;
+                }
+                const rows = [];
+                students.forEach(student => {
+                    const isAbsent = attendance[student.id] === false;
+                    nosList.forEach(nos => {
+                        const t = isAbsent ? 0 : (marksData[`${student.id}_${nos.id}_theory`] ?? '');
+                        const p = isAbsent ? 0 : (marksData[`${student.id}_${nos.id}_practical`] ?? '');
+                        const v = isAbsent ? 0 : (marksData[`${student.id}_${nos.id}_viva`] ?? '');
+                        const total = (parseFloat(t) || 0) + (parseFloat(p) || 0) + (parseFloat(v) || 0);
+
+                        rows.push({
+                            'Enrollment No': student.username || student.id,
+                            'Student Name': student.name,
+                            'NOS Code': nos.code,
+                            'NOS Name': nos.name,
+                            'Theory (Max)': nos.theoryMarks || 0,
+                            'Theory (Obtained)': t,
+                            'Practical (Max)': nos.practicalMarks || 0,
+                            'Practical (Obtained)': p,
+                            'Viva (Max)': nos.vivaMarks || 0,
+                            'Viva (Obtained)': v,
+                            'Total (Obtained)': total,
+                            'Attendance (P/A)': isAbsent ? 'A' : 'P'
+                        });
+                    });
+                });
+
+                const ws = XLSX.utils.json_to_sheet(rows);
+                const wb = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(wb, ws, "Marks Result");
+                window.XLSX.writeFile(wb, `Marks_Result_${selectedBatch}.xlsx`);
+            };
+
             const fillRandomMarks = () => {
                 if (!students.length || !nosList.length) return alert("Select a batch first.");
                 if (!confirm("Populate all students with random marks?")) return;
@@ -3353,13 +3459,22 @@
                                 {batches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
                             </select>
                             {selectedBatch && (
-                                <button
-                                    onClick={() => window.Utils.exportVerificationData(selectedBatch)}
-                                    className="mt-2 w-full bg-green-600 hover:bg-green-700 text-gray-900 px-3 py-2 rounded-lg flex items-center justify-center gap-2 text-sm font-bold transition-colors shadow-sm"
-                                >
-                                    <Icons.Download className="w-4 h-4" />
-                                    Export Verification Data (Excel)
-                                </button>
+                                <>
+                                    <button
+                                        onClick={() => window.Utils.exportVerificationData(selectedBatch)}
+                                        className="mt-2 w-full bg-green-600 hover:bg-green-700 text-gray-900 px-3 py-2 rounded-lg flex items-center justify-center gap-2 text-sm font-bold transition-colors shadow-sm"
+                                    >
+                                        <Icons.Download className="w-4 h-4" />
+                                        Export Verification Data (Excel)
+                                    </button>
+                                    <button
+                                        onClick={downloadMarksResult}
+                                        className="mt-2 w-full bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-lg flex items-center justify-center gap-2 text-sm font-bold transition-colors shadow-sm"
+                                    >
+                                        <Icons.Download className="w-4 h-4" />
+                                        Download Marks Result (Excel)
+                                    </button>
+                                </>
                             )}
                         </div>
                     </div>
@@ -7367,6 +7482,7 @@
             const [selectedEvidence, setSelectedEvidence] = useState([]); // v30.7: Bulk Delete State
             const [isFlashing, setIsFlashing] = useState(false); // v84.9.4: Shutter Effect
             const [lastCaptureToast, setLastCaptureToast] = useState(null); // v84.9.4: Success Notification
+            const [zipStatus, setZipStatus] = useState(null); // v85.4: Student Dossier Progress
 
             // Camera State
             const [isCamActive, setIsCamActive] = useState(false);
@@ -7765,16 +7881,24 @@
             return (
                 <div>
                     <div className="flex justify-between items-center mb-4">
-                        <button onClick={onBack} className="text-indigo-600 font-medium flex items-center gap-1"><Icons.ChevronDown className="rotate-90" /> Back</button>
+                        <button onClick={onBack} className="text-indigo-600 font-medium flex items-center gap-1"><Icons.ChevronLeft className="w-5 h-5" /> Back</button>
                         <h3 className="text-xl font-bold">{captureOnly ? 'Capture Evidence: ' : 'Evidence: '}{student.name}</h3>
                         <div className="flex gap-2">
+                            {zipStatus ? (
+                                <div className="bg-primary-50 border border-primary-200 px-4 py-2 rounded-xl flex items-center gap-3">
+                                    <Icons.Loader className="w-4 h-4 animate-spin text-primary-600" />
+                                    <span className="text-[10px] font-black text-primary-700 uppercase">{zipStatus}</span>
+                                </div>
+                            ) : (
+                                <button onClick={() => window.Utils.downloadStudentFullEvidenceZip(student.id || student.username, batch.id, setZipStatus)} className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl flex items-center gap-2 font-black text-[10px] uppercase tracking-widest shadow-lg transition-transform hover:scale-105" title="Download ALL records for this specific student across all exams">
+                                    <Icons.Download className="w-4 h-4" /> Download Student Dossier (ZIP)
+                                </button>
+                            )}
 
                             <button onClick={() => setShowGallery(!showGallery)} className="bg-gray-200 text-gray-700 px-4 py-2 rounded shadow hover:bg-gray-300 flex items-center gap-2 font-bold">
                                 {showGallery ? <Icons.EyeOff className="w-4 h-4" /> : <Icons.Eye className="w-4 h-4" />} {showGallery ? 'Hide Gallery' : 'View Gallery'}
                             </button>
-                            <button onClick={downloadAllEvidence} className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded shadow flex items-center gap-2 font-bold transition-all hover:scale-105" title="Download all evidence photos as ZIP">
-                                <Icons.Download className="w-4 h-4" /> Download Evidence
-                            </button>
+                            
                             {!captureOnly && (
                                 <>
                                     <button onClick={saveGrades} className="bg-indigo-600 text-gray-900 px-4 py-2 rounded shadow hover:bg-indigo-700 flex items-center gap-2 font-bold transition-transform hover:scale-105">
