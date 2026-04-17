@@ -3073,23 +3073,22 @@
                     alert("Please select a Batch with Students and QP content first.");
                     return;
                 }
-                const rows = [];
-                students.forEach(student => {
+                const rows = students.map((student, i) => {
+                    const row = {
+                        '#': i + 1,
+                        'P/A': 'PRESENT',
+                        'STUDENT': `${student.name}\n${student.username || student.id}`
+                    };
+
                     nosList.forEach(nos => {
-                        rows.push({
-                            'Enrollment No': student.username || student.id,
-                            'Student Name': student.name,
-                            'NOS Code': nos.code,
-                            'NOS Name': nos.name,
-                            'Theory (Max)': nos.theoryMarks || 0,
-                            'Theory (Obtained)': '',
-                            'Practical (Max)': nos.practicalMarks || 0,
-                            'Practical (Obtained)': '',
-                            'Viva (Max)': nos.vivaMarks || 0,
-                            'Viva (Obtained)': '',
-                            'Attendance (P/A)': 'P'
-                        });
+                        const code = nos.code || 'NOS';
+                        row[`${code} THEORY`] = "";
+                        row[`${code} PRACTICAL`] = "";
+                        row[`${code} VIVA`] = "";
+                        row[`${code} TOTAL`] = "0";
                     });
+
+                    return row;
                 });
 
                 const ws = XLSX.utils.json_to_sheet(rows);
@@ -3103,30 +3102,28 @@
                     alert("Please select a Batch with Students and QP content first.");
                     return;
                 }
-                const rows = [];
-                students.forEach(student => {
+                const rows = students.map((student, i) => {
                     const isAbsent = attendance[student.id] === false;
+                    const row = {
+                        '#': i + 1,
+                        'P/A': isAbsent ? 'ABSENT' : 'PRESENT',
+                        'STUDENT': `${student.name}\n${student.username || student.id}`
+                    };
+
                     nosList.forEach(nos => {
-                        const t = isAbsent ? 0 : (marksData[`${student.id}_${nos.id}_theory`] ?? '');
-                        const p = isAbsent ? 0 : (marksData[`${student.id}_${nos.id}_practical`] ?? '');
-                        const v = isAbsent ? 0 : (marksData[`${student.id}_${nos.id}_viva`] ?? '');
+                        const code = nos.code || 'NOS';
+                        const t = isAbsent ? 0 : (marksData[`${student.id}_${nos.id}_theory`] ?? 0);
+                        const p = isAbsent ? 0 : (marksData[`${student.id}_${nos.id}_practical`] ?? 0);
+                        const v = isAbsent ? 0 : (marksData[`${student.id}_${nos.id}_viva`] ?? 0);
                         const total = (parseFloat(t) || 0) + (parseFloat(p) || 0) + (parseFloat(v) || 0);
 
-                        rows.push({
-                            'Enrollment No': student.username || student.id,
-                            'Student Name': student.name,
-                            'NOS Code': nos.code,
-                            'NOS Name': nos.name,
-                            'Theory (Max)': nos.theoryMarks || 0,
-                            'Theory (Obtained)': t,
-                            'Practical (Max)': nos.practicalMarks || 0,
-                            'Practical (Obtained)': p,
-                            'Viva (Max)': nos.vivaMarks || 0,
-                            'Viva (Obtained)': v,
-                            'Total (Obtained)': total,
-                            'Attendance (P/A)': isAbsent ? 'A' : 'P'
-                        });
+                        row[`${code} THEORY`] = t;
+                        row[`${code} PRACTICAL`] = p;
+                        row[`${code} VIVA`] = v;
+                        row[`${code} TOTAL`] = total;
                     });
+
+                    return row;
                 });
 
                 const ws = XLSX.utils.json_to_sheet(rows);
