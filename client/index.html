@@ -2166,7 +2166,7 @@
                 } catch (e) { return timeStr; }
             },
 
-            // v85.5: CENTRALIZED MARKS EXCEL EXPORT (Uses QP Level Global Standards)
+            // v98: Official Result Sheet Format (Header + Summary Box)
             downloadMarksResult: (batchId, overrideMarks = null, overrideAttendance = null) => {
                 const batch = window.Utils.getBatches().find(b => b.id === batchId);
                 if (!batch) { alert("Batch not found."); return; }
@@ -2174,10 +2174,7 @@
                 const qps = window.Utils.getQPs();
                 const qp = qps.find(q => q.id === batch.qpId) || qps.find(q => q.name === batch.qpName);
                 
-                if (!qp) {
-                    alert("Qualification Pack mapping missing for this batch.");
-                    return;
-                }
+                if (!qp) { alert("Qualification Pack mapping missing."); return; }
 
                 const allNOS = window.Utils.getNOS();
                 const allPCs = window.Utils.getPCs();
@@ -2191,172 +2188,155 @@
                     };
                 });
 
-                if (!students.length) { alert("No students found in this batch."); return; }
-                if (!nosList.length) { alert("Qualification Pack has no NOS data defined."); return; }
-
                 const allResponses = window.Utils.getResponses();
                 const verifications = allResponses.filter(r => r.examType === 'VERIFICATION');
-                const marksResponses = allResponses.filter(r => r.batchId === batchId && r.examType === 'MarksEntry');
+                
+                // 1. CALCULATE SUMMARY STATS
+                let passCount = 0, failCount = 0, absentCount = 0;
+                let gradeACount = 0, gradeBCount = 0;
 
-                // Prepare Headers
-                const row1 = ["Sr.No", "Enrollment Number", "Candidate Name", "Father/Husband Name"];
-                const row2 = ["", "", "", ""];
-                const merges = [];
-
-                nosList.forEach((nos, idx) => {
-                    const startCol = 4 + (idx * 2);
-                    row1[startCol] = `${nos.code} ${nos.name}`;
-                    row1[startCol + 1] = "";
-                    row2[startCol] = `Theory (${parseFloat(nos.theoryMarks).toFixed(1)})`;
-                    row2[startCol + 1] = `Practical/Viva (${(parseFloat(nos.practicalMarks) + parseFloat(nos.vivaMarks || 0)).toFixed(1)})`;
-                    merges.push({ s: { r: 0, c: startCol }, e: { r: 0, c: startCol + 1 } });
-                });
-
-                const summaryStart = 4 + (nosList.length * 2);
-                row1[summaryStart] = "Theory Total";
-                row1[summaryStart + 1] = "Practical Total";
-                row1[summaryStart + 2] = "Grand Total";
-                row1[summaryStart + 3] = "Theory %";
-                row1[summaryStart + 4] = "Practical %";
-                row1[summaryStart + 5] = "Overall %";
-                row1[summaryStart + 6] = "Result";
-                row1[summaryStart + 7] = "Grade";
-
-                // MASTER MARKS FROM QP
                 const maxTheory = parseFloat(qp.theoryMarks) || 0;
                 const maxPractical = (parseFloat(qp.practicalMarks) || 0) + (parseFloat(qp.vivaMarks) || 0);
                 const maxGrand = parseFloat(qp.totalMarks) || (maxTheory + maxPractical);
 
-                row2[summaryStart] = maxTheory;
-                row2[summaryStart + 1] = maxPractical;
-                row2[summaryStart + 2] = maxGrand;
-                
-                // Base columns merge
-                [0, 1, 2, 3].forEach(c => merges.push({ s: { r: 0, c }, e: { r: 1, c } }));
-                // Summary columns merge (except the ones with values in row 2)
-                [3, 4, 5, 6, 7].forEach(io => merges.push({ s: { r: 0, c: summaryStart + io }, e: { r: 1, c: summaryStart + io } }));
-
-                const rows = [row1, row2];
-
-                students.forEach((student, i) => {
+                const studentDataRows = students.map((student, i) => {
                     const sResponses = allResponses.filter(r => r.studentId === student.id || r.studentId === student.username);
-                    const verif = verifications.find(v => v.studentId === student.id || v.studentId === student.username);
-                    const vDetails = verif?.details || verif?.answers || {};
                     const marksResp = sResponses.find(r => r.examType === 'MarksEntry');
-                    
-                    // v92: Attendance Requirement - Theory is Mandatory. If no Theory, student is Absent.
                     const hasAttempted = sResponses.some(r => r.examType.toUpperCase() === 'THEORY');
-                    const isAbsent = !hasAttempted;
-
-                    const dataRow = [
-                        i + 1,
-                        student.username || student.id,
-                        student.name,
-                        vDetails.fatherName || "N/A"
-                    ];
-
-                    // v94: Sum up totals from overrides/MarksEntry OR fallback to direct exam scores
+                    
                     let sTheoryTotal = 0, sPracticalTotal = 0, sVivaTotal = 0;
-
                     if (overrideMarks || (marksResp && marksResp.marks)) {
                         nosList.forEach(nos => {
-                            const t = overrideMarks ? overrideMarks[`${student.id}_${nos.id}_theory`] : (marksResp?.marks[`${nos.id}_theory`]);
-                            const p = overrideMarks ? overrideMarks[`${student.id}_${nos.id}_practical`] : (marksResp?.marks[`${nos.id}_practical`]);
-                            const v = overrideMarks ? overrideMarks[`${student.id}_${nos.id}_viva`] : (marksResp?.marks[`${nos.id}_viva`]);
-                            
-                            sTheoryTotal += parseFloat(t || 0);
-                            sPracticalTotal += parseFloat(p || 0);
-                            sVivaTotal += parseFloat(v || 0);
+                            const t = overrideMarks ? overrideMarks[`${student.id}_${nos.id}_theory`] : marksResp?.marks[`${nos.id}_theory`];
+                            const p = overrideMarks ? overrideMarks[`${student.id}_${nos.id}_practical`] : marksResp?.marks[`${nos.id}_practical`];
+                            const v = overrideMarks ? overrideMarks[`${student.id}_${nos.id}_viva`] : marksResp?.marks[`${nos.id}_viva`];
+                            sTheoryTotal += parseFloat(t || 0); sPracticalTotal += parseFloat(p || 0); sVivaTotal += parseFloat(v || 0);
                         });
                     } else {
                         sResponses.forEach(r => {
                             const type = (r.examType || '').toUpperCase();
                             let score = parseFloat(r.totalScore || r.score || r.marks || 0);
-                            if (score === 0 && r.assessorMarks) {
-                                score = Object.values(r.assessorMarks).reduce((a, b) => a + (parseFloat(b) || 0), 0);
-                            }
+                            if (score === 0 && r.assessorMarks) score = Object.values(r.assessorMarks).reduce((a, b) => a + (parseFloat(b) || 0), 0);
                             if (type === 'THEORY') sTheoryTotal += score;
                             else if (type === 'VIVA') sVivaTotal += score;
                             else if (type === 'PRACTICAL') sPracticalTotal += score;
                         });
                     }
 
-                    // v93: Map individual NOS marks from manual overrides or existing MarksEntry
-                    nosList.forEach((nos) => {
-                        let tVal = 0, pVal = 0, vVal = 0;
-                        
-                        if (overrideMarks) {
-                            tVal = parseFloat(overrideMarks[`${student.id}_${nos.id}_theory`] || 0);
-                            pVal = parseFloat(overrideMarks[`${student.id}_${nos.id}_practical`] || 0);
-                            vVal = parseFloat(overrideMarks[`${student.id}_${nos.id}_viva`] || 0);
-                        } else if (marksResp && marksResp.marks) {
-                            tVal = parseFloat(marksResp.marks[`${nos.id}_theory`] || 0);
-                            pVal = parseFloat(marksResp.marks[`${nos.id}_practical`] || 0);
-                            vVal = parseFloat(marksResp.marks[`${nos.id}_viva`] || 0);
-                        } else {
-                            // Proportional Fallback for automated exams without NOS breakdown
-                            const tMaxNos = parseFloat(nos.theoryMarks) || 0;
-                            const tRatio = maxTheory > 0 ? (sTheoryTotal / maxTheory) : 0;
-                            tVal = Math.round(tMaxNos * tRatio);
-
-                            const pvMaxNos = (parseFloat(nos.practicalMarks) || 0) + (parseFloat(nos.vivaMarks) || 0);
-                            const pvTotalScore = sPracticalTotal + sVivaTotal;
-                            const pvRatio = maxPractical > 0 ? (pvTotalScore / maxPractical) : 0;
-                            pVal = Math.round(pvMaxNos * pvRatio); // Combined Practical/Viva for this column
-                        }
-
-                        dataRow.push(tVal);
-                        dataRow.push(pVal + (vVal || 0)); // Column header is Theory | Practical/Viva
-                    });
-
                     const sGrandTotal = sTheoryTotal + sPracticalTotal + sVivaTotal;
-                    const tPct = maxTheory > 0 ? (sTheoryTotal / maxTheory) * 100 : 0;
-                    const pPct = maxPractical > 0 ? ((sPracticalTotal + sVivaTotal) / maxPractical) * 100 : 0;
                     const oPct = maxGrand > 0 ? (sGrandTotal / maxGrand) * 100 : 0;
-
-                    dataRow.push(sTheoryTotal);
-                    dataRow.push(sPracticalTotal + sVivaTotal);
-                    dataRow.push(sGrandTotal);
-                    dataRow.push(tPct.toFixed(2));
-                    dataRow.push(pPct.toFixed(2));
-                    dataRow.push(oPct.toFixed(2));
-
-                    // v91: Level-Specific Grades (L4+: A/B only, L1-3: A/B/C) + No Attendee Fail
-                    let result = hasAttempted ? "Pass" : "Fail (ABS)";
+                    
                     let grade = "-";
-
-                    if (!hasAttempted) {
-                        grade = "F";
-                    } else {
+                    if (!hasAttempted) { absentCount++; grade = "Absent"; }
+                    else {
+                        passCount++;
                         const level = parseInt(qp.level) || 1;
-                        if (level >= 4) {
-                            // Level 4 and Above: No Grade C. Below 85 is Grade B.
-                            if (oPct >= 85) grade = "A";
-                            else grade = "B";
-                        } else {
-                            // Level 1, 2, 3: A (85+), B (70+), C (Rest)
-                            if (oPct >= 85) grade = "A";
-                            else if (oPct >= 70) grade = "B";
-                            else grade = "C";
-                        }
+                        if (level >= 4) { if (oPct >= 85) { grade = "A"; gradeACount++; } else { grade = "B"; gradeBCount++; } }
+                        else { if (oPct >= 85) { grade = "A"; gradeACount++; } else if (oPct >= 70) { grade = "B"; gradeBCount++; } else grade = "C"; }
                     }
 
-                    dataRow.push(result);
-                    dataRow.push(grade);
-                    rows.push(dataRow);
+                    // Build Individual NOS Columns
+                    const nosMarksValues = [];
+                    nosList.forEach(nos => {
+                        let tV = 0, pV = 0, vV = 0;
+                        if (overrideMarks) {
+                            tV = parseFloat(overrideMarks[`${student.id}_${nos.id}_theory`] || 0);
+                            pV = parseFloat(overrideMarks[`${student.id}_${nos.id}_practical`] || 0);
+                            vV = parseFloat(overrideMarks[`${student.id}_${nos.id}_viva`] || 0);
+                        } else if (marksResp?.marks) {
+                            tV = parseFloat(marksResp.marks[`${nos.id}_theory`] || 0);
+                            pV = parseFloat(marksResp.marks[`${nos.id}_practical`] || 0);
+                            vV = parseFloat(marksResp.marks[`${nos.id}_viva`] || 0);
+                        }
+                        nosMarksValues.push(tV, pV + vV);
+                    });
+
+                    const verif = verifications.find(v => v.studentId === student.id || v.studentId === student.username);
+
+                    return [
+                        i + 1,
+                        verif?.details?.aadharNumber || "N/A",
+                        student.name,
+                        verif?.details?.fatherName || "N/A",
+                        ...nosMarksValues,
+                        sTheoryTotal, sPracticalTotal + sVivaTotal, sGrandTotal,
+                        (maxTheory > 0 ? (sTheoryTotal/maxTheory)*100 : 0).toFixed(2),
+                        (maxPractical > 0 ? ((sPracticalTotal+sVivaTotal)/maxPractical)*100 : 0).toFixed(2),
+                        oPct.toFixed(2),
+                        hasAttempted ? "Pass" : "Absent",
+                        grade
+                    ];
                 });
+
+                // 2. CONSTRUCT OFFICIAL HEADER
+                const rows = [];
+                const finalSummaryStartCol = 8 + (nosList.length * 2);
+
+                rows.push(["", "", "", "", "", "Result Sheet", "", "", "", ""]); // Row 1: Logo Space
+                rows.push(["", "", "", "", "", "", "", "", "", ""]); // Row 2
+                
+                const metaFields = [
+                    ["Name Of The Training Provider :", batch.tpName || "Andhra Pradesh State Skill Development Corporation", "", "", "", "", "", "Total", students.length, "", ""],
+                    ["Name Of The Training Center :", batch.trainingCentre || "Government Degree College", "", "", "", "", "", "", "", "", ""],
+                    ["Course Name :", `${qp.qpName} (${qp.qpCode})`, "", "", "", "Result", "", "Pass", passCount, "Grade A", gradeACount],
+                    ["Assessment Date :", `${batch.startDate}`, "", "", "", "Summary", "", "Fail", failCount, "Grade B", gradeBCount],
+                    ["Batch ID :", batch.batchId || batch.id, "", "", "", "", "", "Absent", absentCount, "", ""]
+                ];
+                metaFields.forEach(r => rows.push(r));
+                rows.push([]); // Padding row
+
+                // 3. TABLE HEADERS (Row 8-9 in Sheet)
+                const headerRow1 = ["Sr.No", "Aadhar Number", "Candidate Name", "Father/Husband Name"];
+                const headerRow2 = ["", "", "", ""];
+                const merges = [
+                    { s: { r: 0, c: 5 }, e: { r: 1, c: 5 } }, // Title
+                    { s: { r: 2, c: 0 }, e: { r: 2, c: 0 } }, // Label TP
+                    { s: { r: 2, c: 1 }, e: { r: 2, c: 6 } }, // Value TP
+                    { s: { r: 3, c: 1 }, e: { r: 3, c: 6 } }, // Value Center
+                    { s: { r: 4, c: 1 }, e: { r: 4, c: 6 } }, // Value Course
+                    { s: { r: 5, c: 1 }, e: { r: 5, c: 6 } }, // Value Date
+                    { s: { r: 6, c: 1 }, e: { r: 6, c: 6 } }, // Value BatchID
+                    // Summary Box Merges (Cols H-K)
+                    { s: { r: 2, c: 7 }, e: { r: 6, c: 7 } }, // "Result Summary" Vertical Text area
+                    { s: { r: 2, c: 8 }, e: { r: 2, c: 8 } }, { s: { r: 2, c: 9 }, e: { r: 2, c: 10 } },
+                    { s: { r: 3, c: 8 }, e: { r: 3, c: 10 } },
+                    { s: { r: 4, c: 8 }, e: { r: 4, c: 8 } }, { s: { r: 4, c: 9 }, e: { r: 4, c: 9 } }, { s: { r: 4, c: 10 }, e: { r: 4, c: 10 } },
+                    { s: { r: 5, c: 8 }, e: { r: 5, c: 8 } }, { s: { r: 5, c: 9 }, e: { r: 5, c: 9 } }, { s: { r: 5, c: 10 }, e: { r: 5, c: 10 } },
+                    { s: { r: 6, c: 8 }, e: { r: 6, c: 8 } }, { s: { r: 6, c: 9 }, e: { r: 6, c: 10 } }
+                ];
+
+                nosList.forEach((nos, idx) => {
+                    const sc = 4 + (idx * 2);
+                    headerRow1[sc] = `${nos.code} ${nos.name}`;
+                    headerRow2[sc] = `Theory (${nos.theoryMarks})`;
+                    headerRow2[sc + 1] = `Practical (${nos.practicalMarks + nos.vivaMarks})`;
+                    merges.push({ s: { r: 8, c: sc }, e: { r: 8, c: sc + 1 } });
+                });
+
+                const sStart = 4 + (nosList.length * 2);
+                headerRow1[sStart] = "Total Theory"; headerRow1[sStart + 1] = "Total Practical"; headerRow1[sStart + 2] = "Overall Total";
+                headerRow1[sStart + 3] = "Theory %"; headerRow1[sStart + 4] = "Practical %"; headerRow1[sStart + 5] = "Overall %";
+                headerRow1[sStart + 6] = "Result"; headerRow1[sStart + 7] = "Grade";
+                
+                headerRow2[sStart] = maxTheory; headerRow2[sStart + 1] = maxPractical; headerRow2[sStart + 2] = maxGrand;
+
+                [0, 1, 2, 3].forEach(c => merges.push({ s: { r: 8, c }, e: { r: 9, c } }));
+                [3, 4, 5, 6, 7].forEach(io => merges.push({ s: { r: 8, c: sStart + io }, e: { r: 9, c: sStart + io } }));
+
+                rows.push(headerRow1, headerRow2);
+                studentDataRows.forEach(dr => rows.push(dr));
 
                 const ws = XLSX.utils.aoa_to_sheet(rows);
                 ws['!merges'] = merges;
                 const wb = XLSX.utils.book_new();
-                XLSX.utils.book_append_sheet(wb, ws, "Marks Result");
+                XLSX.utils.book_append_sheet(wb, ws, "Official Results");
                 
                 const wscols = [{ wch: 6 }, { wch: 20 }, { wch: 25 }, { wch: 25 }];
-                nosList.forEach(() => { wscols.push({ wch: 10 }, { wch: 10 }); });
-                for(let k=0; k<8; k++) wscols.push({ wch: 15 });
+                nosList.forEach(() => { wscols.push({ wch: 12 }, { wch: 12 }); });
+                for(let k=0; k<12; k++) wscols.push({ wch: 12 });
                 ws['!cols'] = wscols;
 
-                window.XLSX.writeFile(wb, `Marks_Report_${batch.name}_${new Date().toISOString().slice(0,10)}.xlsx`);
+                window.XLSX.writeFile(wb, `Official_Report_${batch.name}_${new Date().toISOString().slice(0,10)}.xlsx`);
             }
         };
     </script>
@@ -7161,6 +7141,10 @@
             }, []);
 
             const loadResults = (type) => {
+                if (type === 'Excel') {
+                    window.Utils.downloadMarksResult(selectedBatch.id);
+                    return;
+                }
                 setExamType(type);
                 setStudents(window.Utils.getStudentsByBatch(selectedBatch.id));
             };
@@ -7466,10 +7450,10 @@
                             </div>
                         </div>
 
-                        <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
-                            {['Theory', 'Practical', 'Viva', 'Photo', 'Aad/Fat', 'MasterResult'].map(t => (
-                                <button key={t} onClick={() => loadResults(t)} className="bg-white p-8 rounded-3xl shadow-lg text-lg font-black text-secondary-800 hover:shadow-2xl border-2 border-secondary-50 hover:border-primary-300 transition-all transform hover:-translate-y-1">
-                                    {t === 'Aad/Fat' ? 'Identity Report' : (t === 'MasterResult' ? 'Master Result Sheet' : t)}
+                        <div className="grid grid-cols-2 md:grid-cols-6 lg:grid-cols-7 gap-4">
+                            {['Theory', 'Practical', 'Viva', 'Photo', 'Aad/Fat', 'MasterResult', 'Excel'].map(t => (
+                                <button key={t} onClick={() => loadResults(t)} className={`bg-white p-8 rounded-3xl shadow-lg text-lg font-black text-secondary-800 hover:shadow-2xl border-2 transition-all transform hover:-translate-y-1 ${t === 'Excel' ? 'border-emerald-200 bg-emerald-50/10' : 'border-secondary-50 hover:border-primary-300'}`}>
+                                    {t === 'Aad/Fat' ? 'Identity Report' : (t === 'MasterResult' ? 'Master Result Sheet' : (t === 'Excel' ? 'Excel Report' : t))}
                                 </button>
                             ))}
                         </div>
