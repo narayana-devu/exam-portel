@@ -2291,17 +2291,18 @@
                     dataRow.push(pPct.toFixed(2));
                     dataRow.push(oPct.toFixed(2));
 
-                    // v88: Only absentees fail. Attendees get at least 'C'.
+                    // v89: Level-Based + No Attendee Fail (Grace Grade C)
                     let result = hasAttempted ? "Pass" : "Fail (ABS)";
                     let grade = "-";
 
                     if (!hasAttempted) {
                         grade = "F";
                     } else {
-                        // All attendees pass
+                        const level = parseInt(qp.level) || 1;
                         if (oPct >= 85) grade = "A";
                         else if (oPct >= 70) grade = "B";
-                        else grade = "C";
+                        else if (level <= 3 && oPct >= 50) grade = "C";
+                        else grade = "C"; // v88 grace: attendees default to C if below thresholds
                     }
 
                     dataRow.push(result);
@@ -7315,16 +7316,18 @@
                                             const vPass = !qp?.isVivaCutoff || vPct >= cutoffViva;
                                             const oPass = !qp?.isOverallCutoff || oPct >= cutoffTotal;
                                             
-                                                                                         // v88: No attendee fails. Default to grade C.
+                                             // v89: Level-Based + No Attendee Fail (Grace Grade C)
                                              const isPass = hasAttempted; 
                                              
                                              let grade = "-";
                                              if (!hasAttempted) {
                                                  grade = "F";
                                              } else {
+                                                 const level = parseInt(qp?.level) || 1;
                                                  if (oPct >= 85) grade = "A";
                                                  else if (oPct >= 70) grade = "B";
-                                                 else grade = "C";
+                                                 else if (level <= 3 && oPct >= 50) grade = "C";
+                                                 else grade = "C"; // v88 grace: attendees default to C if below thresholds
                                              }
 
                                             return (
