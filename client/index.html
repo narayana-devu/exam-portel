@@ -2255,18 +2255,23 @@
                         vDetails.fatherName || "N/A"
                     ];
 
-                    let sTheoryTotal = 0;
-                    let sPracticalTotal = 0;
-                    let sVivaTotal = 0;
+                    // v86.1: Direct Score Sourcing (Ignore MarksEntry) + Fallback
+                                            let sTheoryTotal = 0;
+                                            let sPracticalTotal = 0;
+                                            let sVivaTotal = 0;
 
-                    // v86.0: Source marks from actual student attempts
-                    sResponses.forEach(r => {
-                        const type = (r.examType || '').toUpperCase();
-                        const score = parseFloat(r.totalScore || r.score || r.marks || 0);
-                        if (type === 'THEORY') sTheoryTotal += score;
-                        else if (type === 'VIVA') sVivaTotal += score;
-                        else if (type === 'PRACTICAL') sPracticalTotal += score;
-                    });
+                                            sResponses.forEach(r => {
+                                                const type = (r.examType || '').toUpperCase();
+                                                let score = parseFloat(r.totalScore || r.score || r.marks || 0);
+                                                
+                                                if (score === 0 && r.assessorMarks) {
+                                                    score = Object.values(r.assessorMarks).reduce((a, b) => a + (parseFloat(b) || 0), 0);
+                                                }
+
+                                                if (type === 'THEORY') sTheoryTotal += score;
+                                                else if (type === 'VIVA') sVivaTotal += score;
+                                                else if (type === 'PRACTICAL') sPracticalTotal += score;
+                                            });
 
                     // NOS breakdown is 0 because we are bypassing MarksEntry (the only place with NOS breakdown)
                     nosList.forEach(() => {
@@ -7291,10 +7296,15 @@
                                             
                                             let sTheory = 0, sPractical = 0, sViva = 0;
                                             
-                                            // v86.0: Direct Score Sourcing (Bypassing MarksEntry)
+                                            // v86.1: Direct Score Sourcing with AssessorMarks Fallback
                                             studentRes.forEach(r => {
                                                 const type = (r.examType || '').toUpperCase();
-                                                const score = parseFloat(r.totalScore || r.score || r.marks || 0);
+                                                let score = parseFloat(r.totalScore || r.score || r.marks || 0);
+                                                
+                                                // Fallback for automated exams missing totalScore field
+                                                if (score === 0 && r.assessorMarks) {
+                                                    score = Object.values(r.assessorMarks).reduce((a, b) => a + (parseFloat(b) || 0), 0);
+                                                }
                                                 
                                                 if (type === 'THEORY') sTheory += score;
                                                 else if (type === 'VIVA') sViva += score;
@@ -10566,11 +10576,14 @@
 
                     // 4. Construct Final Response
                     const durationSec = startTimeRef.current ? Math.floor((Date.now() - startTimeRef.current) / 1000) : 0;
+                    const totalScore = Object.values(autoGrades).reduce((acc, marks) => acc + (parseFloat(marks) || 0), 0);
+                    
                     const respObj = {
                         studentId: user.id,
                         examType: examMode,
                         answers,
                         assessorMarks: autoGrades,
+                        totalScore: totalScore, // v86.1: Added Total Score field for reporting
                         evidence: finalEvidence,
                         durationSec: durationSec,
                         submittedAt: new Date().toISOString()
