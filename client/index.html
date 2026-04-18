@@ -2291,36 +2291,17 @@
                     dataRow.push(pPct.toFixed(2));
                     dataRow.push(oPct.toFixed(2));
 
-                    let result = "Pass";
+                    // v88: Only absentees fail. Attendees get at least 'C'.
+                    let result = hasAttempted ? "Pass" : "Fail (ABS)";
                     let grade = "-";
 
-                    if (isAbsent) {
-                        result = "Fail (ABS)";
+                    if (!hasAttempted) {
                         grade = "F";
                     } else {
-                        // Dynamic Cutoff Validation (QP-Level)
-                        const tPass = !qp.isTheoryCutoff || tPct >= (parseFloat(qp.theoryCutoff) || 0);
-                        const pPass = !qp.isPracticalCutoff || pPct >= (parseFloat(qp.practicalCutoff) || 0);
-                        const oPass = !qp.isOverallCutoff || oPct >= (parseFloat(qp.overallCutoff) || 0);
-
-                        if (!tPass || !pPass || !oPass) {
-                            result = "Fail";
-                            grade = "F";
-                        } else {
-                            // NSQF Level Based Grading (v87)
-                            const level = parseInt(qp.level) || 1;
-                            if (level >= 1 && level <= 3) {
-                                if (oPct >= 85) grade = "A";
-                                else if (oPct >= 70) grade = "B";
-                                else if (oPct >= 50) grade = "C";
-                                else grade = "F";
-                            } else {
-                                // Level 4 and Above
-                                if (oPct >= 85) grade = "A";
-                                else if (oPct >= 70) grade = "B";
-                                else grade = "F";
-                            }
-                        }
+                        // All attendees pass
+                        if (oPct >= 85) grade = "A";
+                        else if (oPct >= 70) grade = "B";
+                        else grade = "C";
                     }
 
                     dataRow.push(result);
@@ -7334,25 +7315,16 @@
                                             const vPass = !qp?.isVivaCutoff || vPct >= cutoffViva;
                                             const oPass = !qp?.isOverallCutoff || oPct >= cutoffTotal;
                                             
-                                                                                         const isPass = hasAttempted && tPass && pPass && vPass && oPass;
+                                                                                         // v88: No attendee fails. Default to grade C.
+                                             const isPass = hasAttempted; 
                                              
-                                             // NSQF Level Based Grading (v87)
                                              let grade = "-";
-                                             if (!hasAttempted || !isPass) {
+                                             if (!hasAttempted) {
                                                  grade = "F";
                                              } else {
-                                                 const level = parseInt(qp?.level) || 1;
-                                                 if (level >= 1 && level <= 3) {
-                                                     if (oPct >= 85) grade = "A";
-                                                     else if (oPct >= 70) grade = "B";
-                                                     else if (oPct >= 50) grade = "C";
-                                                     else grade = "F";
-                                                 } else {
-                                                     // Level 4 and Above
-                                                     if (oPct >= 85) grade = "A";
-                                                     else if (oPct >= 70) grade = "B";
-                                                     else grade = "F";
-                                                 }
+                                                 if (oPct >= 85) grade = "A";
+                                                 else if (oPct >= 70) grade = "B";
+                                                 else grade = "C";
                                              }
 
                                             return (
