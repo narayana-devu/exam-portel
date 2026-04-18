@@ -2273,10 +2273,32 @@
                                                 else if (type === 'PRACTICAL') sPracticalTotal += score;
                                             });
 
-                    // NOS breakdown is 0 because we are bypassing MarksEntry (the only place with NOS breakdown)
-                    nosList.forEach(() => {
-                        dataRow.push(0); // Theory Placeholder
-                        dataRow.push(0); // Practical Placeholder
+                    // v93: Map individual NOS marks from manual overrides or existing MarksEntry
+                    nosList.forEach((nos) => {
+                        let tVal = 0, pVal = 0, vVal = 0;
+                        
+                        if (overrideMarks) {
+                            tVal = parseFloat(overrideMarks[`${student.id}_${nos.id}_theory`] || 0);
+                            pVal = parseFloat(overrideMarks[`${student.id}_${nos.id}_practical`] || 0);
+                            vVal = parseFloat(overrideMarks[`${student.id}_${nos.id}_viva`] || 0);
+                        } else if (marksResp && marksResp.marks) {
+                            tVal = parseFloat(marksResp.marks[`${nos.id}_theory`] || 0);
+                            pVal = parseFloat(marksResp.marks[`${nos.id}_practical`] || 0);
+                            vVal = parseFloat(marksResp.marks[`${nos.id}_viva`] || 0);
+                        } else {
+                            // Proportional Fallback for automated exams without NOS breakdown
+                            const tMaxNos = parseFloat(nos.theoryMarks) || 0;
+                            const tRatio = maxTheory > 0 ? (sTheoryTotal / maxTheory) : 0;
+                            tVal = Math.round(tMaxNos * tRatio);
+
+                            const pvMaxNos = (parseFloat(nos.practicalMarks) || 0) + (parseFloat(nos.vivaMarks) || 0);
+                            const pvTotalScore = sPracticalTotal + sVivaTotal;
+                            const pvRatio = maxPractical > 0 ? (pvTotalScore / maxPractical) : 0;
+                            pVal = Math.round(pvMaxNos * pvRatio); // Combined Practical/Viva for this column
+                        }
+
+                        dataRow.push(tVal);
+                        dataRow.push(pVal + (vVal || 0)); // Column header is Theory | Practical/Viva
                     });
 
                     const sGrandTotal = sTheoryTotal + sPracticalTotal + sVivaTotal;
@@ -3279,12 +3301,14 @@
                         }
                         perfRatio = score / maxTheoryTotal;
                     } else {
-                        // If no theory written, pick a random high performance (75-95%)
-                        perfRatio = 0.75 + (Math.random() * 0.20);
+                        // If no theory written, pick a random performance (75-95%)
+                        perfRatio = 0.70 + (Math.random() * 0.28);
                     }
 
-                    // 2. Protect ratio: Ensure it doesn't drop below 70% to maintain "no fail" spirit
-                    perfRatio = Math.max(0.70, Math.min(1.0, perfRatio));
+                    // v93: Grade Consistency Logic - Prac/Viva must match Theory grade bracket
+                    const isTheoryA = perfRatio >= 0.85;
+                    const level = parseInt(qp.level) || 1;
+                    const isTheoryB = level >= 4 ? (perfRatio < 0.85) : (perfRatio >= 0.70 && perfRatio < 0.85);
 
                     nosList.forEach(nos => {
                         const tMax = parseInt(nos.theoryMarks) || 30;
@@ -3292,10 +3316,12 @@
                         const vMax = parseInt(nos.vivaMarks) || 30;
 
                         const getConsistentMark = (max) => {
-                            // Apply +/- 5% variation to practical/viva compared to theory
-                            const variation = (Math.random() * 0.1) - 0.05;
-                            let ratio = perfRatio + variation;
-                            ratio = Math.max(0.70, Math.min(1.0, ratio));
+                            let minR, maxR;
+                            if (isTheoryA) { minR = 0.85; maxR = 0.98; }
+                            else if (isTheoryB) { minR = 0.70; maxR = 0.84; }
+                            else { minR = 0.50; maxR = 0.69; } // For L1-3 Grade C
+                            
+                            const ratio = minR + (Math.random() * (maxR - minR));
                             return Math.round(max * ratio);
                         };
 
