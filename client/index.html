@@ -2239,12 +2239,14 @@
                 const rows = [row1, row2];
 
                 students.forEach((student, i) => {
+                    const sResponses = allResponses.filter(r => r.studentId === student.id || r.studentId === student.username);
                     const verif = verifications.find(v => v.studentId === student.id || v.studentId === student.username);
                     const vDetails = verif?.details || verif?.answers || {};
-                    const marksResp = marksResponses.find(r => r.studentId === student.id || r.studentId === student.username);
+                    const marksResp = sResponses.find(r => r.examType === 'MarksEntry');
                     
-                    // Unified Attendance Check
-                    const isAbsent = overrideAttendance ? (overrideAttendance[student.id] === false) : (!marksResp || marksResp.attendance === false);
+                    // Absence Detection: Check if any real component was attempted OR if marked present in MarksEntry
+                    const hasAttempted = sResponses.some(r => ['THEORY', 'PRACTICAL', 'VIVA'].includes(r.examType.toUpperCase())) || (marksResp && marksResp.attendance !== false);
+                    const isAbsent = !hasAttempted;
 
                     const dataRow = [
                         i + 1,
@@ -2255,34 +2257,30 @@
 
                     let sTheoryTotal = 0;
                     let sPracticalTotal = 0;
+                    let sVivaTotal = 0;
 
-                    nosList.forEach(nos => {
-                        let t = 0, p = 0, v = 0;
-                        if (!isAbsent) {
-                            if (overrideMarks) {
-                                t = parseFloat(overrideMarks[`${student.id}_${nos.id}_theory`]) || 0;
-                                p = parseFloat(overrideMarks[`${student.id}_${nos.id}_practical`]) || 0;
-                                v = parseFloat(overrideMarks[`${student.id}_${nos.id}_viva`]) || 0;
-                            } else if (marksResp?.nosMarks) {
-                                t = parseFloat(marksResp.nosMarks[`${nos.id}_theory`]) || 0;
-                                p = parseFloat(marksResp.nosMarks[`${nos.id}_practical`]) || 0;
-                                v = parseFloat(marksResp.nosMarks[`${nos.id}_viva`]) || 0;
-                            }
-                        }
-                        
-                        dataRow.push(t);
-                        dataRow.push(p + v);
-                        sTheoryTotal += t;
-                        sPracticalTotal += (p + v);
+                    // v86.0: Source marks from actual student attempts
+                    sResponses.forEach(r => {
+                        const type = (r.examType || '').toUpperCase();
+                        const score = parseFloat(r.totalScore || r.score || r.marks || 0);
+                        if (type === 'THEORY') sTheoryTotal += score;
+                        else if (type === 'VIVA') sVivaTotal += score;
+                        else if (type === 'PRACTICAL') sPracticalTotal += score;
                     });
 
-                    const sGrandTotal = sTheoryTotal + sPracticalTotal;
+                    // NOS breakdown is 0 because we are bypassing MarksEntry (the only place with NOS breakdown)
+                    nosList.forEach(() => {
+                        dataRow.push(0); // Theory Placeholder
+                        dataRow.push(0); // Practical Placeholder
+                    });
+
+                    const sGrandTotal = sTheoryTotal + sPracticalTotal + sVivaTotal;
                     const tPct = maxTheory > 0 ? (sTheoryTotal / maxTheory) * 100 : 0;
-                    const pPct = maxPractical > 0 ? (sPracticalTotal / maxPractical) * 100 : 0;
+                    const pPct = maxPractical > 0 ? ((sPracticalTotal + sVivaTotal) / maxPractical) * 100 : 0;
                     const oPct = maxGrand > 0 ? (sGrandTotal / maxGrand) * 100 : 0;
 
                     dataRow.push(sTheoryTotal);
-                    dataRow.push(sPracticalTotal);
+                    dataRow.push(sPracticalTotal + sVivaTotal);
                     dataRow.push(sGrandTotal);
                     dataRow.push(tPct.toFixed(2));
                     dataRow.push(pPct.toFixed(2));
@@ -7292,14 +7290,16 @@
                                             const idcard = verif?.evidence?.find(e => (e.type || '').toUpperCase().includes('ID'));
                                             
                                             let sTheory = 0, sPractical = 0, sViva = 0;
-                                            if (marks?.nosMarks) {
-                                                Object.entries(marks.nosMarks).forEach(([key, val]) => {
-                                                    const v = parseFloat(val) || 0;
-                                                    if (key.includes('theory')) sTheory += v;
-                                                    else if (key.includes('practical')) sPractical += v;
-                                                    else if (key.includes('viva')) sViva += v;
-                                                });
-                                            }
+                                            
+                                            // v86.0: Direct Score Sourcing (Bypassing MarksEntry)
+                                            studentRes.forEach(r => {
+                                                const type = (r.examType || '').toUpperCase();
+                                                const score = parseFloat(r.totalScore || r.score || r.marks || 0);
+                                                
+                                                if (type === 'THEORY') sTheory += score;
+                                                else if (type === 'VIVA') sViva += score;
+                                                else if (type === 'PRACTICAL') sPractical += score;
+                                            });
                                             const sTotal = sTheory + sPractical + sViva;
                                             
                                             // v85.5: Percentage-based Cutoff Validation
