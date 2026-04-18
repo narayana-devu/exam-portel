@@ -2255,23 +2255,31 @@
                         vDetails.fatherName || "N/A"
                     ];
 
-                    // v86.1: Direct Score Sourcing (Ignore MarksEntry) + Fallback
-                                            let sTheoryTotal = 0;
-                                            let sPracticalTotal = 0;
-                                            let sVivaTotal = 0;
+                    // v94: Sum up totals from overrides/MarksEntry OR fallback to direct exam scores
+                    let sTheoryTotal = 0, sPracticalTotal = 0, sVivaTotal = 0;
 
-                                            sResponses.forEach(r => {
-                                                const type = (r.examType || '').toUpperCase();
-                                                let score = parseFloat(r.totalScore || r.score || r.marks || 0);
-                                                
-                                                if (score === 0 && r.assessorMarks) {
-                                                    score = Object.values(r.assessorMarks).reduce((a, b) => a + (parseFloat(b) || 0), 0);
-                                                }
-
-                                                if (type === 'THEORY') sTheoryTotal += score;
-                                                else if (type === 'VIVA') sVivaTotal += score;
-                                                else if (type === 'PRACTICAL') sPracticalTotal += score;
-                                            });
+                    if (overrideMarks || (marksResp && marksResp.marks)) {
+                        nosList.forEach(nos => {
+                            const t = overrideMarks ? overrideMarks[`${student.id}_${nos.id}_theory`] : (marksResp?.marks[`${nos.id}_theory`]);
+                            const p = overrideMarks ? overrideMarks[`${student.id}_${nos.id}_practical`] : (marksResp?.marks[`${nos.id}_practical`]);
+                            const v = overrideMarks ? overrideMarks[`${student.id}_${nos.id}_viva`] : (marksResp?.marks[`${nos.id}_viva`]);
+                            
+                            sTheoryTotal += parseFloat(t || 0);
+                            sPracticalTotal += parseFloat(p || 0);
+                            sVivaTotal += parseFloat(v || 0);
+                        });
+                    } else {
+                        sResponses.forEach(r => {
+                            const type = (r.examType || '').toUpperCase();
+                            let score = parseFloat(r.totalScore || r.score || r.marks || 0);
+                            if (score === 0 && r.assessorMarks) {
+                                score = Object.values(r.assessorMarks).reduce((a, b) => a + (parseFloat(b) || 0), 0);
+                            }
+                            if (type === 'THEORY') sTheoryTotal += score;
+                            else if (type === 'VIVA') sVivaTotal += score;
+                            else if (type === 'PRACTICAL') sPracticalTotal += score;
+                        });
+                    }
 
                     // v93: Map individual NOS marks from manual overrides or existing MarksEntry
                     nosList.forEach((nos) => {
