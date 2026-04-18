@@ -2202,21 +2202,44 @@
                 const studentDataRows = students.map((student, i) => {
                     const sResponses = allResponses.filter(r => r.studentId === student.id || r.studentId === student.username);
                     const marksResp = sResponses.find(r => r.examType === 'MarksEntry');
-                    const hasAttempted = sResponses.some(r => r.examType.toUpperCase() === 'THEORY');
+                    const hasAttempted = sResponses.some(r => ['THEORY', 'PRACTICAL', 'VIVA'].includes((r.examType || '').toUpperCase()));
                     
                     let sTheoryTotal = 0, sPracticalTotal = 0, sVivaTotal = 0;
-                    if (overrideMarks || (marksResp && marksResp.marks)) {
-                        nosList.forEach(nos => {
-                            const t = overrideMarks ? overrideMarks[`${student.id}_${nos.id}_theory`] : marksResp?.marks[`${nos.id}_theory`];
-                            const p = overrideMarks ? overrideMarks[`${student.id}_${nos.id}_practical`] : marksResp?.marks[`${nos.id}_practical`];
-                            const v = overrideMarks ? overrideMarks[`${student.id}_${nos.id}_viva`] : marksResp?.marks[`${nos.id}_viva`];
-                            sTheoryTotal += parseFloat(t || 0); sPracticalTotal += parseFloat(p || 0); sVivaTotal += parseFloat(v || 0);
-                        });
-                    } else {
+                    
+                    // Build Individual NOS Columns with smarter lookup
+                    const nosMarksValues = [];
+                    nosList.forEach(nos => {
+                        let tV = 0, pV = 0, vV = 0;
+                        if (overrideMarks) {
+                            tV = parseFloat(overrideMarks[`${student.id}_${nos.id}_theory`] || 0);
+                            pV = parseFloat(overrideMarks[`${student.id}_${nos.id}_practical`] || 0);
+                            vV = parseFloat(overrideMarks[`${student.id}_${nos.id}_viva`] || 0);
+                        } else {
+                            // Look through all responses for this student to find NOS-specific marks
+                            sResponses.forEach(r => {
+                                if (r.marks) {
+                                    tV += parseFloat(r.marks[`${nos.id}_theory`] || 0);
+                                    pV += parseFloat(r.marks[`${nos.id}_practical`] || 0);
+                                    vV += parseFloat(r.marks[`${nos.id}_viva`] || 0);
+                                }
+                                if (r.assessorMarks) {
+                                    tV += parseFloat(r.assessorMarks[`${nos.id}_theory`] || 0);
+                                    pV += parseFloat(r.assessorMarks[`${nos.id}_practical`] || 0);
+                                    vV += parseFloat(r.assessorMarks[`${nos.id}_viva`] || 0);
+                                }
+                            });
+                        }
+                        nosMarksValues.push(tV, pV + vV);
+                        sTheoryTotal += tV;
+                        sPracticalTotal += pV;
+                        sVivaTotal += vV;
+                    });
+
+                    // Fallback for legacy total scores
+                    if (sTheoryTotal === 0 && sPracticalTotal === 0 && sVivaTotal === 0) {
                         sResponses.forEach(r => {
                             const type = (r.examType || '').toUpperCase();
                             let score = parseFloat(r.totalScore || r.score || r.marks || 0);
-                            if (score === 0 && r.assessorMarks) score = Object.values(r.assessorMarks).reduce((a, b) => a + (parseFloat(b) || 0), 0);
                             if (type === 'THEORY') sTheoryTotal += score;
                             else if (type === 'VIVA') sVivaTotal += score;
                             else if (type === 'PRACTICAL') sPracticalTotal += score;
@@ -2227,29 +2250,29 @@
                     const oPct = maxGrand > 0 ? (sGrandTotal / maxGrand) * 100 : 0;
                     
                     let grade = "-";
-                    if (!hasAttempted) { absentCount++; grade = "Absent"; }
-                    else {
-                        passCount++;
-                        const level = parseInt(qp.level) || 1;
-                        if (level >= 4) { if (oPct >= 85) { grade = "A"; gradeACount++; } else { grade = "B"; gradeBCount++; } }
-                        else { if (oPct >= 85) { grade = "A"; gradeACount++; } else if (oPct >= 70) { grade = "B"; gradeBCount++; } else grade = "C"; }
-                    }
-
-                    // Build Individual NOS Columns
-                    const nosMarksValues = [];
-                    nosList.forEach(nos => {
-                        let tV = 0, pV = 0, vV = 0;
-                        if (overrideMarks) {
-                            tV = parseFloat(overrideMarks[`${student.id}_${nos.id}_theory`] || 0);
-                            pV = parseFloat(overrideMarks[`${student.id}_${nos.id}_practical`] || 0);
-                            vV = parseFloat(overrideMarks[`${student.id}_${nos.id}_viva`] || 0);
-                        } else if (marksResp?.marks) {
-                            tV = parseFloat(marksResp.marks[`${nos.id}_theory`] || 0);
-                            pV = parseFloat(marksResp.marks[`${nos.id}_practical`] || 0);
-                            vV = parseFloat(marksResp.marks[`${nos.id}_viva`] || 0);
+                    let resultStr = "Absent";
+                    if (!hasAttempted) { 
+                        absentCount++; 
+                        grade = "Absent"; 
+                    } else {
+                        if (oPct >= 35) {
+                            passCount++;
+                            resultStr = "Pass";
+                            const level = parseInt(qp.level) || 1;
+                            if (level >= 4) { 
+                                if (oPct >= 85) { grade = "A"; gradeACount++; } 
+                                else { grade = "B"; gradeBCount++; } 
+                            } else { 
+                                if (oPct >= 85) { grade = "A"; gradeACount++; } 
+                                else if (oPct >= 70) { grade = "B"; gradeBCount++; } 
+                                else grade = "C"; 
+                            }
+                        } else {
+                            failCount++;
+                            resultStr = "Fail";
+                            grade = "D";
                         }
-                        nosMarksValues.push(tV, pV + vV);
-                    });
+                    }
 
                     const verif = verifications.find(v => v.studentId === student.id || v.studentId === student.username);
 
@@ -2263,51 +2286,50 @@
                         (maxTheory > 0 ? (sTheoryTotal/maxTheory)*100 : 0).toFixed(2),
                         (maxPractical > 0 ? ((sPracticalTotal+sVivaTotal)/maxPractical)*100 : 0).toFixed(2),
                         oPct.toFixed(2),
-                        hasAttempted ? "Pass" : "Absent",
+                        resultStr,
                         grade
                     ];
                 });
 
                 // 2. CONSTRUCT OFFICIAL HEADER
                 const rows = [];
-                const finalSummaryStartCol = 8 + (nosList.length * 2);
+                const qpName = qp.qpName || qp.name || "N/A";
+                const qpCode = qp.qpCode || qp.code || "N/A";
 
-                rows.push(["", "", "", "", "", "Result Sheet", "", "", "", ""]); // Row 1: Logo Space
-                rows.push(["", "", "", "", "", "", "", "", "", ""]); // Row 2
+                rows.push(["", "", "", "", "", "Result Sheet", "", "", "", ""]);
+                rows.push(["", "", "", "", "", "", "", "", "", ""]);
                 
                 const metaFields = [
-                    ["Name Of The Training Provider :", batch.tpName || "Andhra Pradesh State Skill Development Corporation", "", "", "", "", "", "Total", students.length, "", ""],
-                    ["Name Of The Training Center :", batch.trainingCentre || "Government Degree College", "", "", "", "", "", "", "", "", ""],
-                    ["Course Name :", `${qp.qpName} (${qp.qpCode})`, "", "", "", "Result", "", "Pass", passCount, "Grade A", gradeACount],
+                    ["Name Of The Training Provider :", batch.tpName || "APSSDC Hub", "", "", "", "", "", "Total Candidates", students.length, "", ""],
+                    ["Name Of The Training Center :", batch.trainingCentre || "Assessment Center", "", "", "", "", "", "", "", "", ""],
+                    ["Course Name :", `${qpName} (${qpCode})`, "", "", "", "Result", "", "Pass", passCount, "Grade A", gradeACount],
                     ["Assessment Date :", `${batch.startDate}`, "", "", "", "Summary", "", "Fail", failCount, "Grade B", gradeBCount],
                     ["Batch ID :", batch.batchId || batch.id, "", "", "", "", "", "Absent", absentCount, "", ""]
                 ];
                 metaFields.forEach(r => rows.push(r));
-                rows.push([]); // Padding row
+                rows.push([]);
 
-                // 3. TABLE HEADERS (Row 8-9 in Sheet)
                 const headerRow1 = ["Sr.No", "Aadhar Number", "Candidate Name", "Father/Husband Name"];
                 const headerRow2 = ["", "", "", ""];
                 const merges = [
-                    { s: { r: 0, c: 5 }, e: { r: 1, c: 5 } }, // Title
-                    { s: { r: 2, c: 0 }, e: { r: 2, c: 0 } }, // Label TP
-                    { s: { r: 2, c: 1 }, e: { r: 2, c: 6 } }, // Value TP
-                    { s: { r: 3, c: 1 }, e: { r: 3, c: 6 } }, // Value Center
-                    { s: { r: 4, c: 1 }, e: { r: 4, c: 6 } }, // Value Course
-                    { s: { r: 5, c: 1 }, e: { r: 5, c: 6 } }, // Value Date
-                    { s: { r: 6, c: 1 }, e: { r: 6, c: 6 } }, // Value BatchID
-                    // Summary Box Merges (Cols H-K)
-                    { s: { r: 2, c: 7 }, e: { r: 6, c: 7 } }, // "Result Summary" Vertical Text area
-                    { s: { r: 2, c: 8 }, e: { r: 2, c: 8 } }, { s: { r: 2, c: 9 }, e: { r: 2, c: 10 } },
-                    { s: { r: 3, c: 8 }, e: { r: 3, c: 10 } },
-                    { s: { r: 4, c: 8 }, e: { r: 4, c: 8 } }, { s: { r: 4, c: 9 }, e: { r: 4, c: 9 } }, { s: { r: 4, c: 10 }, e: { r: 4, c: 10 } },
-                    { s: { r: 5, c: 8 }, e: { r: 5, c: 8 } }, { s: { r: 5, c: 9 }, e: { r: 5, c: 9 } }, { s: { r: 5, c: 10 }, e: { r: 5, c: 10 } },
-                    { s: { r: 6, c: 8 }, e: { r: 6, c: 8 } }, { s: { r: 6, c: 9 }, e: { r: 6, c: 10 } }
+                    { s: { r: 0, c: 5 }, e: { r: 1, c: 5 } },
+                    { s: { r: 2, c: 0 }, e: { r: 2, c: 0 } },
+                    { s: { r: 2, c: 1 }, e: { r: 2, c: 6 } },
+                    { s: { r: 3, c: 1 }, e: { r: 3, c: 6 } },
+                    { s: { r: 4, c: 1 }, e: { r: 4, c: 6 } },
+                    { s: { r: 5, c: 1 }, e: { r: 5, c: 6 } },
+                    { s: { r: 6, c: 1 }, e: { r: 6, c: 6 } },
+                    { s: { r: 2, c: 7 }, e: { r: 2, c: 7 } },
+                    { s: { r: 2, c: 8 }, e: { r: 2, c: 8 } },
+                    { s: { r: 4, c: 5 }, e: { r: 5, c: 5 } },
+                    { s: { r: 4, c: 7 }, e: { r: 4, c: 7 } }, { s: { r: 4, c: 8 }, e: { r: 4, c: 8 } },
+                    { s: { r: 5, c: 7 }, e: { r: 5, c: 7 } }, { s: { r: 5, c: 8 }, e: { r: 5, c: 8 } },
+                    { s: { r: 6, c: 7 }, e: { r: 6, c: 7 } }, { s: { r: 6, c: 8 }, e: { r: 6, c: 8 } }
                 ];
 
                 nosList.forEach((nos, idx) => {
                     const sc = 4 + (idx * 2);
-                    headerRow1[sc] = `${nos.code} ${nos.name}`;
+                    headerRow1[sc] = `${nos.code}: ${nos.name}`;
                     headerRow2[sc] = `Theory (${nos.theoryMarks})`;
                     headerRow2[sc + 1] = `Practical (${nos.practicalMarks + nos.vivaMarks})`;
                     merges.push({ s: { r: 8, c: sc }, e: { r: 8, c: sc + 1 } });
@@ -2321,10 +2343,11 @@
                 headerRow2[sStart] = maxTheory; headerRow2[sStart + 1] = maxPractical; headerRow2[sStart + 2] = maxGrand;
 
                 [0, 1, 2, 3].forEach(c => merges.push({ s: { r: 8, c }, e: { r: 9, c } }));
-                [3, 4, 5, 6, 7].forEach(io => merges.push({ s: { r: 8, c: sStart + io }, e: { r: 9, c: sStart + io } }));
+                [0, 1, 2, 3, 4, 5, 6, 7].forEach(io => merges.push({ s: { r: 8, c: sStart + io }, e: { r: 9, c: sStart + io } }));
 
                 rows.push(headerRow1, headerRow2);
                 studentDataRows.forEach(dr => rows.push(dr));
+
 
                 const ws = XLSX.utils.aoa_to_sheet(rows);
                 ws['!merges'] = merges;
