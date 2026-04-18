@@ -3086,34 +3086,122 @@
                     alert("Please select a Batch with Students and QP content first.");
                     return;
                 }
-                const rows = students.map((student, i) => {
-                    const isAbsent = attendance[student.id] === false;
-                    const row = {
-                        '#': i + 1,
-                        'P/A': isAbsent ? 'ABSENT' : 'PRESENT',
-                        'STUDENT': `${student.name}\n${student.username || student.id}`
-                    };
 
-                    nosList.forEach(nos => {
-                        const code = nos.code || 'NOS';
-                        const t = isAbsent ? 0 : (marksData[`${student.id}_${nos.id}_theory`] ?? 0);
-                        const p = isAbsent ? 0 : (marksData[`${student.id}_${nos.id}_practical`] ?? 0);
-                        const v = isAbsent ? 0 : (marksData[`${student.id}_${nos.id}_viva`] ?? 0);
-                        const total = (parseFloat(t) || 0) + (parseFloat(p) || 0) + (parseFloat(v) || 0);
+                const allResponses = window.Utils.getResponses();
+                const verifications = allResponses.filter(r => r.examType === 'VERIFICATION');
 
-                        row[`${code} THEORY`] = t;
-                        row[`${code} PRACTICAL`] = p;
-                        row[`${code} VIVA`] = v;
-                        row[`${code} TOTAL`] = total;
-                    });
+                // Prepare Headers
+                const row1 = ["Sr.No", "Aadhar Number", "Candidate Name", "Father/Husband Name"];
+                const row2 = ["", "", "", ""];
+                const merges = [];
 
-                    return row;
+                nosList.forEach((nos, idx) => {
+                    const startCol = 4 + (idx * 2);
+                    row1[startCol] = `${nos.code} ${nos.name}`;
+                    row1[startCol + 1] = "";
+                    row2[startCol] = `Theory (${parseFloat(nos.theoryMarks).toFixed(2)})`;
+                    row2[startCol + 1] = `Practical (${(parseFloat(nos.practicalMarks) + parseFloat(nos.vivaMarks || 0)).toFixed(2)})`;
+                    merges.push({ s: { r: 0, c: startCol }, e: { r: 0, c: startCol + 1 } });
                 });
 
-                const ws = XLSX.utils.json_to_sheet(rows);
+                const summaryStart = 4 + (nosList.length * 2);
+                row1[summaryStart] = "Total Theory";
+                row1[summaryStart + 1] = "Total Practical";
+                row1[summaryStart + 2] = "Overall Marks Theory+Practical";
+                row1[summaryStart + 3] = "Theory Percentage";
+                row1[summaryStart + 4] = "Practical Percentage";
+                row1[summaryStart + 5] = "Overall Percentage";
+                row1[summaryStart + 6] = "Result";
+                row1[summaryStart + 7] = "Grade";
+
+                const maxTheory = nosList.reduce((s, n) => s + (parseFloat(n.theoryMarks) || 0), 0);
+                const maxPractical = nosList.reduce((s, n) => s + (parseFloat(n.practicalMarks) || 0) + (parseFloat(n.vivaMarks) || 0), 0);
+                const maxGrand = maxTheory + maxPractical;
+
+                row2[summaryStart] = maxTheory;
+                row2[summaryStart + 1] = maxPractical;
+                row2[summaryStart + 2] = maxGrand;
+                row2[summaryStart + 3] = "";
+                row2[summaryStart + 4] = "";
+                row2[summaryStart + 5] = "";
+                row2[summaryStart + 6] = "";
+                row2[summaryStart + 7] = "";
+
+                // Base columns merge
+                [0, 1, 2, 3].forEach(c => merges.push({ s: { r: 0, c }, e: { r: 1, c } }));
+
+                const rows = [row1, row2];
+
+                students.forEach((student, i) => {
+                    const isAbsent = attendance[student.id] === false;
+                    const verif = verifications.find(v => v.studentId === student.id || v.studentId === student.username);
+                    const vDetails = verif?.details || verif?.answers || {};
+
+                    const dataRow = [
+                        i + 1,
+                        vDetails.aadharNumber || "N/A",
+                        student.name,
+                        vDetails.fatherName || "N/A"
+                    ];
+
+                    let sTheoryTotal = 0;
+                    let sPracticalTotal = 0;
+
+                    nosList.forEach(nos => {
+                        const t = isAbsent ? 0 : (parseFloat(marksData[`${student.id}_${nos.id}_theory`]) || 0);
+                        const p = isAbsent ? 0 : (parseFloat(marksData[`${student.id}_${nos.id}_practical`]) || 0);
+                        const v = isAbsent ? 0 : (parseFloat(marksData[`${student.id}_${nos.id}_viva`]) || 0);
+                        
+                        dataRow.push(t);
+                        dataRow.push(p + v);
+
+                        sTheoryTotal += t;
+                        sPracticalTotal += (p + v);
+                    });
+
+                    const sGrandTotal = sTheoryTotal + sPracticalTotal;
+                    const tPct = maxTheory > 0 ? (sTheoryTotal / maxTheory) * 100 : 0;
+                    const pPct = maxPractical > 0 ? (sPracticalTotal / maxPractical) * 100 : 0;
+                    const oPct = maxGrand > 0 ? (sGrandTotal / maxGrand) * 100 : 0;
+
+                    dataRow.push(sTheoryTotal);
+                    dataRow.push(sPracticalTotal);
+                    dataRow.push(sGrandTotal);
+                    dataRow.push(tPct.toFixed(2));
+                    dataRow.push(pPct.toFixed(2));
+                    dataRow.push(oPct.toFixed(2));
+
+                    let result = "Pass";
+                    let grade = "C";
+
+                    if (isAbsent) {
+                        result = "Absent";
+                        grade = "Absent";
+                    } else {
+                        if (oPct >= 85) grade = "A";
+                        else if (oPct >= 70) grade = "B";
+                        else if (oPct < 40) { result = "Fail"; grade = "F"; }
+                    }
+
+                    dataRow.push(result);
+                    dataRow.push(grade);
+                    rows.push(dataRow);
+                });
+
+                const ws = XLSX.utils.aoa_to_sheet(rows);
+                ws['!merges'] = merges;
                 const wb = XLSX.utils.book_new();
                 XLSX.utils.book_append_sheet(wb, ws, "Marks Result");
-                window.XLSX.writeFile(wb, `Marks_Result_${selectedBatch}.xlsx`);
+                
+                // Add column widths
+                const wscols = [
+                    { wch: 6 }, { wch: 20 }, { wch: 25 }, { wch: 25 }
+                ];
+                nosList.forEach(() => { wscols.push({ wch: 12 }); wscols.push({ wch: 12 }); });
+                for(let k=0; k<8; k++) wscols.push({ wch: 15 });
+                ws['!cols'] = wscols;
+
+                window.XLSX.writeFile(wb, `Marks_Report_${selectedBatch}.xlsx`);
             };
 
             const fillRandomMarks = () => {
