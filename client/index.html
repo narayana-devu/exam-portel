@@ -2244,8 +2244,8 @@
                     const vDetails = verif?.details || verif?.answers || {};
                     const marksResp = sResponses.find(r => r.examType === 'MarksEntry');
                     
-                    // Absence Detection: Check if any real component was attempted OR if marked present in MarksEntry
-                    const hasAttempted = sResponses.some(r => ['THEORY', 'PRACTICAL', 'VIVA'].includes(r.examType.toUpperCase())) || (marksResp && marksResp.attendance !== false);
+                    // v92: Attendance Requirement - Theory is Mandatory. If no Theory, student is Absent.
+                    const hasAttempted = sResponses.some(r => r.examType.toUpperCase() === 'THEORY');
                     const isAbsent = !hasAttempted;
 
                     const dataRow = [
@@ -7318,8 +7318,8 @@
                                             const verif = studentRes.find(r => r.examType === 'VERIFICATION');
                                             const marks = studentRes.find(r => r.examType === 'MarksEntry');
                                             
-                                            // Absence Detection: Check if they attempted any real component OR have a Present MarksEntry
-                                            const hasAttempted = marks ? (marks.attendance !== false) : studentRes.some(r => ['THEORY', 'PRACTICAL', 'VIVA'].includes(r.examType.toUpperCase()));
+                                            // v92: Attendance Requirement - Theory is Mandatory. If no Theory, student is Absent.
+                                            const hasAttempted = studentRes.some(r => r.examType.toUpperCase() === 'THEORY');
                                             
                                             const selfie = verif?.evidence?.find(e => (e.type || '').toUpperCase().includes('SELFIE'));
                                             const idcard = verif?.evidence?.find(e => (e.type || '').toUpperCase().includes('ID'));
