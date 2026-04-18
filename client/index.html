@@ -3220,7 +3220,7 @@
 
                         // Generate marks between 75% and 100% of max
                         const getPassMark = (max) => {
-                            const minMark = Math.floor(max * 0.75);
+                            const minMark = Math.ceil(max * 0.75);
                             return minMark + Math.floor(Math.random() * (max - minMark + 1));
                         };
 
