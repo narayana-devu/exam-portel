@@ -2164,6 +2164,168 @@
                     const h12 = hh % 12 || 12;
                     return `${h12}:${m} ${suffix}`;
                 } catch (e) { return timeStr; }
+            },
+
+            // v85.5: CENTRALIZED MARKS EXCEL EXPORT (Uses QP Level Global Standards)
+            downloadMarksResult: (batchId, overrideMarks = null, overrideAttendance = null) => {
+                const batch = window.Utils.getBatches().find(b => b.id === batchId);
+                if (!batch) { alert("Batch not found."); return; }
+                const students = window.Utils.getStudentsByBatch(batchId);
+                const qps = window.Utils.getQPs();
+                const qp = qps.find(q => q.id === batch.qpId) || qps.find(q => q.name === batch.qpName);
+                
+                if (!qp) {
+                    alert("Qualification Pack mapping missing for this batch.");
+                    return;
+                }
+
+                const allNOS = window.Utils.getNOS();
+                const allPCs = window.Utils.getPCs();
+                const nosList = allNOS.filter(n => n.qpId === qp.id).map(nos => {
+                    const myPCs = allPCs.filter(p => p.nosId === nos.id);
+                    return {
+                        ...nos,
+                        theoryMarks: myPCs.reduce((sum, p) => sum + (parseFloat(p.theoryMarks) || 0), 0),
+                        practicalMarks: myPCs.reduce((sum, p) => sum + (parseFloat(p.practicalMarks) || 0), 0),
+                        vivaMarks: myPCs.reduce((sum, p) => sum + (parseFloat(p.vivaMarks) || 0), 0),
+                    };
+                });
+
+                if (!students.length) { alert("No students found in this batch."); return; }
+                if (!nosList.length) { alert("Qualification Pack has no NOS data defined."); return; }
+
+                const allResponses = window.Utils.getResponses();
+                const verifications = allResponses.filter(r => r.examType === 'VERIFICATION');
+                const marksResponses = allResponses.filter(r => r.batchId === batchId && r.examType === 'MarksEntry');
+
+                // Prepare Headers
+                const row1 = ["Sr.No", "Enrollment Number", "Candidate Name", "Father/Husband Name"];
+                const row2 = ["", "", "", ""];
+                const merges = [];
+
+                nosList.forEach((nos, idx) => {
+                    const startCol = 4 + (idx * 2);
+                    row1[startCol] = `${nos.code} ${nos.name}`;
+                    row1[startCol + 1] = "";
+                    row2[startCol] = `Theory (${parseFloat(nos.theoryMarks).toFixed(1)})`;
+                    row2[startCol + 1] = `Practical/Viva (${(parseFloat(nos.practicalMarks) + parseFloat(nos.vivaMarks || 0)).toFixed(1)})`;
+                    merges.push({ s: { r: 0, c: startCol }, e: { r: 0, c: startCol + 1 } });
+                });
+
+                const summaryStart = 4 + (nosList.length * 2);
+                row1[summaryStart] = "Theory Total";
+                row1[summaryStart + 1] = "Practical Total";
+                row1[summaryStart + 2] = "Grand Total";
+                row1[summaryStart + 3] = "Theory %";
+                row1[summaryStart + 4] = "Practical %";
+                row1[summaryStart + 5] = "Overall %";
+                row1[summaryStart + 6] = "Result";
+                row1[summaryStart + 7] = "Grade";
+
+                // MASTER MARKS FROM QP
+                const maxTheory = parseFloat(qp.theoryMarks) || 0;
+                const maxPractical = (parseFloat(qp.practicalMarks) || 0) + (parseFloat(qp.vivaMarks) || 0);
+                const maxGrand = parseFloat(qp.totalMarks) || (maxTheory + maxPractical);
+
+                row2[summaryStart] = maxTheory;
+                row2[summaryStart + 1] = maxPractical;
+                row2[summaryStart + 2] = maxGrand;
+                
+                // Base columns merge
+                [0, 1, 2, 3].forEach(c => merges.push({ s: { r: 0, c }, e: { r: 1, c } }));
+                // Summary columns merge (except the ones with values in row 2)
+                [3, 4, 5, 6, 7].forEach(io => merges.push({ s: { r: 0, c: summaryStart + io }, e: { r: 1, c: summaryStart + io } }));
+
+                const rows = [row1, row2];
+
+                students.forEach((student, i) => {
+                    const verif = verifications.find(v => v.studentId === student.id || v.studentId === student.username);
+                    const vDetails = verif?.details || verif?.answers || {};
+                    const marksResp = marksResponses.find(r => r.studentId === student.id || r.studentId === student.username);
+                    
+                    // Unified Attendance Check
+                    const isAbsent = overrideAttendance ? (overrideAttendance[student.id] === false) : (!marksResp || marksResp.attendance === false);
+
+                    const dataRow = [
+                        i + 1,
+                        student.username || student.id,
+                        student.name,
+                        vDetails.fatherName || "N/A"
+                    ];
+
+                    let sTheoryTotal = 0;
+                    let sPracticalTotal = 0;
+
+                    nosList.forEach(nos => {
+                        let t = 0, p = 0, v = 0;
+                        if (!isAbsent) {
+                            if (overrideMarks) {
+                                t = parseFloat(overrideMarks[`${student.id}_${nos.id}_theory`]) || 0;
+                                p = parseFloat(overrideMarks[`${student.id}_${nos.id}_practical`]) || 0;
+                                v = parseFloat(overrideMarks[`${student.id}_${nos.id}_viva`]) || 0;
+                            } else if (marksResp?.nosMarks) {
+                                t = parseFloat(marksResp.nosMarks[`${nos.id}_theory`]) || 0;
+                                p = parseFloat(marksResp.nosMarks[`${nos.id}_practical`]) || 0;
+                                v = parseFloat(marksResp.nosMarks[`${nos.id}_viva`]) || 0;
+                            }
+                        }
+                        
+                        dataRow.push(t);
+                        dataRow.push(p + v);
+                        sTheoryTotal += t;
+                        sPracticalTotal += (p + v);
+                    });
+
+                    const sGrandTotal = sTheoryTotal + sPracticalTotal;
+                    const tPct = maxTheory > 0 ? (sTheoryTotal / maxTheory) * 100 : 0;
+                    const pPct = maxPractical > 0 ? (sPracticalTotal / maxPractical) * 100 : 0;
+                    const oPct = maxGrand > 0 ? (sGrandTotal / maxGrand) * 100 : 0;
+
+                    dataRow.push(sTheoryTotal);
+                    dataRow.push(sPracticalTotal);
+                    dataRow.push(sGrandTotal);
+                    dataRow.push(tPct.toFixed(2));
+                    dataRow.push(pPct.toFixed(2));
+                    dataRow.push(oPct.toFixed(2));
+
+                    let result = "Pass";
+                    let grade = "C";
+
+                    if (isAbsent) {
+                        result = "Fail (ABS)";
+                        grade = "F";
+                    } else {
+                        // Dynamic Cutoff Validation (QP-Level)
+                        const tPass = !qp.isTheoryCutoff || tPct >= (parseFloat(qp.theoryCutoff) || 0);
+                        const pPass = !qp.isPracticalCutoff || pPct >= (parseFloat(qp.practicalCutoff) || 0);
+                        const oPass = !qp.isOverallCutoff || oPct >= (parseFloat(qp.overallCutoff) || 0);
+
+                        if (!tPass || !pPass || !oPass) {
+                            result = "Fail";
+                            grade = "F";
+                        } else {
+                            if (oPct >= 85) grade = "A";
+                            else if (oPct >= 70) grade = "B";
+                            else grade = "C";
+                        }
+                    }
+
+                    dataRow.push(result);
+                    dataRow.push(grade);
+                    rows.push(dataRow);
+                });
+
+                const ws = XLSX.utils.aoa_to_sheet(rows);
+                ws['!merges'] = merges;
+                const wb = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(wb, ws, "Marks Result");
+                
+                const wscols = [{ wch: 6 }, { wch: 20 }, { wch: 25 }, { wch: 25 }];
+                nosList.forEach(() => { wscols.push({ wch: 10 }, { wch: 10 }); });
+                for(let k=0; k<8; k++) wscols.push({ wch: 15 });
+                ws['!cols'] = wscols;
+
+                window.XLSX.writeFile(wb, `Marks_Report_${batch.name}_${new Date().toISOString().slice(0,10)}.xlsx`);
             }
         };
     </script>
@@ -3081,126 +3243,8 @@
             };
 
             const downloadMarksResult = () => {
-                if (!students.length || !nosList.length) {
-                    alert("Please select a Batch with Students and QP content first.");
-                    return;
-                }
-
-                const allResponses = window.Utils.getResponses();
-                const verifications = allResponses.filter(r => r.examType === 'VERIFICATION');
-
-                // Prepare Headers
-                const row1 = ["Sr.No", "Aadhar Number", "Candidate Name", "Father/Husband Name"];
-                const row2 = ["", "", "", ""];
-                const merges = [];
-
-                nosList.forEach((nos, idx) => {
-                    const startCol = 4 + (idx * 2);
-                    row1[startCol] = `${nos.code} ${nos.name}`;
-                    row1[startCol + 1] = "";
-                    row2[startCol] = `Theory (${parseFloat(nos.theoryMarks).toFixed(2)})`;
-                    row2[startCol + 1] = `Practical (${(parseFloat(nos.practicalMarks) + parseFloat(nos.vivaMarks || 0)).toFixed(2)})`;
-                    merges.push({ s: { r: 0, c: startCol }, e: { r: 0, c: startCol + 1 } });
-                });
-
-                const summaryStart = 4 + (nosList.length * 2);
-                row1[summaryStart] = "Total Theory";
-                row1[summaryStart + 1] = "Total Practical";
-                row1[summaryStart + 2] = "Overall Marks Theory+Practical";
-                row1[summaryStart + 3] = "Theory Percentage";
-                row1[summaryStart + 4] = "Practical Percentage";
-                row1[summaryStart + 5] = "Overall Percentage";
-                row1[summaryStart + 6] = "Result";
-                row1[summaryStart + 7] = "Grade";
-
-                const maxTheory = nosList.reduce((s, n) => s + (parseFloat(n.theoryMarks) || 0), 0);
-                const maxPractical = nosList.reduce((s, n) => s + (parseFloat(n.practicalMarks) || 0) + (parseFloat(n.vivaMarks) || 0), 0);
-                const maxGrand = maxTheory + maxPractical;
-
-                row2[summaryStart] = maxTheory;
-                row2[summaryStart + 1] = maxPractical;
-                row2[summaryStart + 2] = maxGrand;
-                row2[summaryStart + 3] = "";
-                row2[summaryStart + 4] = "";
-                row2[summaryStart + 5] = "";
-                row2[summaryStart + 6] = "";
-                row2[summaryStart + 7] = "";
-
-                // Base columns merge
-                [0, 1, 2, 3].forEach(c => merges.push({ s: { r: 0, c }, e: { r: 1, c } }));
-
-                const rows = [row1, row2];
-
-                students.forEach((student, i) => {
-                    const isAbsent = attendance[student.id] === false;
-                    const verif = verifications.find(v => v.studentId === student.id || v.studentId === student.username);
-                    const vDetails = verif?.details || verif?.answers || {};
-
-                    const dataRow = [
-                        i + 1,
-                        vDetails.aadharNumber || "N/A",
-                        student.name,
-                        vDetails.fatherName || "N/A"
-                    ];
-
-                    let sTheoryTotal = 0;
-                    let sPracticalTotal = 0;
-
-                    nosList.forEach(nos => {
-                        const t = isAbsent ? 0 : (parseFloat(marksData[`${student.id}_${nos.id}_theory`]) || 0);
-                        const p = isAbsent ? 0 : (parseFloat(marksData[`${student.id}_${nos.id}_practical`]) || 0);
-                        const v = isAbsent ? 0 : (parseFloat(marksData[`${student.id}_${nos.id}_viva`]) || 0);
-                        
-                        dataRow.push(t);
-                        dataRow.push(p + v);
-
-                        sTheoryTotal += t;
-                        sPracticalTotal += (p + v);
-                    });
-
-                    const sGrandTotal = sTheoryTotal + sPracticalTotal;
-                    const tPct = maxTheory > 0 ? (sTheoryTotal / maxTheory) * 100 : 0;
-                    const pPct = maxPractical > 0 ? (sPracticalTotal / maxPractical) * 100 : 0;
-                    const oPct = maxGrand > 0 ? (sGrandTotal / maxGrand) * 100 : 0;
-
-                    dataRow.push(sTheoryTotal);
-                    dataRow.push(sPracticalTotal);
-                    dataRow.push(sGrandTotal);
-                    dataRow.push(tPct.toFixed(2));
-                    dataRow.push(pPct.toFixed(2));
-                    dataRow.push(oPct.toFixed(2));
-
-                    let result = "Pass";
-                    let grade = "C";
-
-                    if (isAbsent) {
-                        result = "Absent";
-                        grade = "Absent";
-                    } else {
-                        if (oPct >= 85) grade = "A";
-                        else if (oPct >= 70) grade = "B";
-                        else if (oPct < 40) { result = "Fail"; grade = "F"; }
-                    }
-
-                    dataRow.push(result);
-                    dataRow.push(grade);
-                    rows.push(dataRow);
-                });
-
-                const ws = XLSX.utils.aoa_to_sheet(rows);
-                ws['!merges'] = merges;
-                const wb = XLSX.utils.book_new();
-                XLSX.utils.book_append_sheet(wb, ws, "Marks Result");
-                
-                // Add column widths
-                const wscols = [
-                    { wch: 6 }, { wch: 20 }, { wch: 25 }, { wch: 25 }
-                ];
-                nosList.forEach(() => { wscols.push({ wch: 12 }); wscols.push({ wch: 12 }); });
-                for(let k=0; k<8; k++) wscols.push({ wch: 15 });
-                ws['!cols'] = wscols;
-
-                window.XLSX.writeFile(wb, `Marks_Report_${selectedBatch}.xlsx`);
+                if (!selectedBatch) return alert("Select a batch first.");
+                window.Utils.downloadMarksResult(selectedBatch, marksData, attendance);
             };
 
             const fillRandomMarks = () => {
@@ -5413,10 +5457,7 @@
                 captureImage: true,
                 cameraInterval: '60',
                 sscId: '', // Added
-                qpId: '',   // Added
-                maxTheory: '100', theoryCutoff: '70',
-                maxViva: '100', vivaCutoff: '70',
-                maxPractical: '100', practicalCutoff: '70'
+                qpId: ''   // Added
             });
 
             const [showNewProjectInput, setShowNewProjectInput] = useState(false);
@@ -6393,60 +6434,6 @@
                                         </div>
                                     </div>
 
-                                    {/* Section: Marks Weights & Cutoffs */}
-                                    <div className="bg-white/40 rounded-3xl p-6 border border-white/50 shadow-sm backdrop-blur-md">
-                                        <div className="flex items-center gap-3 mb-5">
-                                            <div className="w-1.5 h-5 bg-emerald-500 rounded-full"></div>
-                                            <h4 className="text-[11px] font-black text-gray-900 uppercase tracking-[0.3em]">Marks Weights & Cutoffs</h4>
-                                        </div>
-                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                                            <div className="bg-blue-50/50 p-4 rounded-2xl border border-blue-100 flex flex-col gap-3">
-                                                <p className="text-[10px] font-black text-blue-700 uppercase tracking-widest text-center border-b border-blue-100 pb-2">Theory Config</p>
-                                                <div className="grid grid-cols-2 gap-4">
-                                                    <div>
-                                                        <label className="text-[9px] font-black text-gray-800 uppercase tracking-widest">Max Theory</label>
-                                                        <input type="number" className="w-full bg-white border border-gray-100 rounded-xl px-4 py-2 text-gray-900 text-xs font-bold"
-                                                            value={newBatch.maxTheory} onChange={e => setNewBatch({...newBatch, maxTheory: e.target.value})} />
-                                                    </div>
-                                                    <div>
-                                                        <label className="text-[9px] font-black text-gray-800 uppercase tracking-widest">Cutoff Marks</label>
-                                                        <input type="number" className="w-full bg-white border border-gray-100 rounded-xl px-4 py-2 text-gray-900 text-xs font-bold"
-                                                            value={newBatch.theoryCutoff} onChange={e => setNewBatch({...newBatch, theoryCutoff: e.target.value})} />
-                                                    </div>
-                                                </div>
-                                            </div>
-                                            <div className="bg-amber-50/50 p-4 rounded-2xl border border-amber-100 flex flex-col gap-3">
-                                                <p className="text-[10px] font-black text-amber-700 uppercase tracking-widest text-center border-b border-amber-100 pb-2">Viva Config</p>
-                                                <div className="grid grid-cols-2 gap-4">
-                                                    <div>
-                                                        <label className="text-[9px] font-black text-gray-800 uppercase tracking-widest">Max Viva</label>
-                                                        <input type="number" className="w-full bg-white border border-gray-100 rounded-xl px-4 py-2 text-gray-900 text-xs font-bold"
-                                                            value={newBatch.maxViva} onChange={e => setNewBatch({...newBatch, maxViva: e.target.value})} />
-                                                    </div>
-                                                    <div>
-                                                        <label className="text-[9px] font-black text-gray-800 uppercase tracking-widest">Cutoff Marks</label>
-                                                        <input type="number" className="w-full bg-white border border-gray-100 rounded-xl px-4 py-2 text-gray-900 text-xs font-bold"
-                                                            value={newBatch.vivaCutoff} onChange={e => setNewBatch({...newBatch, vivaCutoff: e.target.value})} />
-                                                    </div>
-                                                </div>
-                                            </div>
-                                            <div className="bg-green-50/50 p-4 rounded-2xl border border-green-100 flex flex-col gap-3">
-                                                <p className="text-[10px] font-black text-green-700 uppercase tracking-widest text-center border-b border-green-100 pb-2">Practical Config</p>
-                                                <div className="grid grid-cols-2 gap-4">
-                                                    <div>
-                                                        <label className="text-[9px] font-black text-gray-800 uppercase tracking-widest">Max Practical</label>
-                                                        <input type="number" className="w-full bg-white border border-gray-100 rounded-xl px-4 py-2 text-gray-900 text-xs font-bold"
-                                                            value={newBatch.maxPractical} onChange={e => setNewBatch({...newBatch, maxPractical: e.target.value})} />
-                                                    </div>
-                                                    <div>
-                                                        <label className="text-[9px] font-black text-gray-800 uppercase tracking-widest">Cutoff Marks</label>
-                                                        <input type="number" className="w-full bg-white border border-gray-100 rounded-xl px-4 py-2 text-gray-900 text-xs font-bold"
-                                                            value={newBatch.practicalCutoff} onChange={e => setNewBatch({...newBatch, practicalCutoff: e.target.value})} />
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
                                 </div>
 
                                 {/* Action Footer */}
@@ -7246,15 +7233,16 @@
                     </div>
                 );
             } else if (examType === 'MasterResult') {
-                const maxTheory = parseFloat(selectedBatch.maxTheory) || 0;
-                const maxPractical = parseFloat(selectedBatch.maxPractical) || 0;
-                const maxViva = parseFloat(selectedBatch.maxViva) || 0;
-                const maxTotal = maxTheory + maxPractical + maxViva;
+                const qp = window.Utils.getQPs().find(q => q.id === selectedBatch.qpId);
+                const maxTheory = parseFloat(qp?.theoryMarks) || 0;
+                const maxPractical = parseFloat(qp?.practicalMarks) || 0;
+                const maxViva = parseFloat(qp?.vivaMarks) || 0;
+                const maxTotal = parseFloat(qp?.totalMarks) || (maxTheory + maxPractical + maxViva);
 
-                const cutoffTheory = parseFloat(selectedBatch.theoryCutoff) || 0;
-                const cutoffPractical = parseFloat(selectedBatch.practicalCutoff) || 0;
-                const cutoffViva = parseFloat(selectedBatch.vivaCutoff) || 0;
-                const cutoffTotal = cutoffTheory + cutoffPractical + cutoffViva;
+                const cutoffTheory = parseFloat(qp?.theoryCutoff) || 0;
+                const cutoffPractical = parseFloat(qp?.practicalCutoff) || 0;
+                const cutoffViva = parseFloat(qp?.vivaCutoff) || 0;
+                const cutoffTotal = parseFloat(qp?.overallCutoff) || (cutoffTheory + cutoffPractical + cutoffViva);
 
                 content = (
                     <div className="animate-fade-in">
@@ -7263,7 +7251,7 @@
                                 <Icons.ChevronLeft className="w-5 h-5" /> Back to Overview
                             </button>
                             <h3 className="text-xl font-extrabold text-secondary-900 uppercase">Master Result Matrix</h3>
-                            <button onClick={() => window.Utils.downloadMarksResult()} className="bg-emerald-600 text-white px-4 py-2 rounded-xl font-bold flex items-center gap-2 text-xs">
+                            <button onClick={() => window.Utils.downloadMarksResult(selectedBatch.id)} className="bg-emerald-600 text-white px-4 py-2 rounded-xl font-bold flex items-center gap-2 text-xs">
                                 <Icons.Download className="w-4 h-4" /> Export Excel
                             </button>
                         </div>
@@ -7297,8 +7285,8 @@
                                             const verif = studentRes.find(r => r.examType === 'VERIFICATION');
                                             const marks = studentRes.find(r => r.examType === 'MarksEntry');
                                             
-                                            // Absence Detection: Check if they attempted any real component
-                                            const hasAttempted = studentRes.some(r => ['THEORY', 'PRACTICAL', 'VIVA'].includes(r.examType.toUpperCase()));
+                                            // Absence Detection: Check if they attempted any real component OR have a Present MarksEntry
+                                            const hasAttempted = marks ? (marks.attendance !== false) : studentRes.some(r => ['THEORY', 'PRACTICAL', 'VIVA'].includes(r.examType.toUpperCase()));
                                             
                                             const selfie = verif?.evidence?.find(e => (e.type || '').toUpperCase().includes('SELFIE'));
                                             const idcard = verif?.evidence?.find(e => (e.type || '').toUpperCase().includes('ID'));
@@ -7314,8 +7302,18 @@
                                             }
                                             const sTotal = sTheory + sPractical + sViva;
                                             
-                                            // Fail if absent OR if below total cutoff
-                                            const isPass = hasAttempted && sTotal >= cutoffTotal;
+                                            // v85.5: Percentage-based Cutoff Validation
+                                            const tPct = maxTheory > 0 ? (sTheory / maxTheory) * 100 : 0;
+                                            const pPct = maxPractical > 0 ? (sPractical / maxPractical) * 100 : 0;
+                                            const vPct = maxViva > 0 ? (sViva / maxViva) * 100 : 0;
+                                            const oPct = maxTotal > 0 ? (sTotal / maxTotal) * 100 : 0;
+
+                                            const tPass = !qp?.isTheoryCutoff || tPct >= cutoffTheory;
+                                            const pPass = !qp?.isPracticalCutoff || pPct >= cutoffPractical;
+                                            const vPass = !qp?.isVivaCutoff || vPct >= cutoffViva;
+                                            const oPass = !qp?.isOverallCutoff || oPct >= cutoffTotal;
+                                            
+                                            const isPass = hasAttempted && tPass && pPass && vPass && oPass;
 
                                             return (
                                                 <tr key={s.id} className={`hover:bg-primary-50/20 text-center font-bold text-secondary-700 ${!hasAttempted ? 'bg-amber-50/30' : ''}`}>
@@ -7331,15 +7329,15 @@
                                                         {!hasAttempted && <span className="ml-2 px-2 py-0.5 bg-rose-100 text-rose-600 rounded text-[8px] uppercase">Absent</span>}
                                                     </td>
                                                     <td className="px-2 py-4">{maxTheory.toFixed(2)}</td>
-                                                    <td className="px-2 py-4">{cutoffTheory.toFixed(2)}</td>
-                                                    <td className={`px-2 py-4 border-r ${sTheory < cutoffTheory ? 'text-red-500' : 'text-blue-600'}`}>{sTheory.toFixed(2)}</td>
+                                                    <td className="px-2 py-4">{cutoffTheory.toFixed(2)}%</td>
+                                                    <td className={`px-2 py-4 border-r ${tPass ? 'text-blue-600' : 'text-rose-500'}`}>{sTheory.toFixed(2)}</td>
                                                     <td className="px-2 py-4">{maxViva.toFixed(2)}</td>
-                                                    <td className="px-2 py-4">{cutoffViva.toFixed(2)}</td>
-                                                    <td className={`px-2 py-4 border-r ${sViva < cutoffViva ? 'text-red-500' : 'text-amber-600'}`}>{sViva.toFixed(2)}</td>
+                                                    <td className="px-2 py-4">{cutoffViva.toFixed(2)}%</td>
+                                                    <td className={`px-2 py-4 border-r ${vPass ? 'text-amber-600' : 'text-rose-500'}`}>{sViva.toFixed(2)}</td>
                                                     <td className="px-2 py-4">{maxPractical.toFixed(2)}</td>
-                                                    <td className="px-2 py-4">{cutoffPractical.toFixed(2)}</td>
-                                                    <td className={`px-2 py-4 border-r ${sPractical < cutoffPractical ? 'text-red-500' : 'text-green-600'}`}>{sPractical.toFixed(2)}</td>
-                                                    <td className="px-3 py-4 bg-secondary-50">{cutoffTotal.toFixed(2)}</td>
+                                                    <td className="px-2 py-4">{cutoffPractical.toFixed(2)}%</td>
+                                                    <td className={`px-2 py-4 border-r ${pPass ? 'text-green-600' : 'text-rose-500'}`}>{sPractical.toFixed(2)}</td>
+                                                    <td className="px-3 py-4 bg-secondary-50">{cutoffTotal.toFixed(2)}%</td>
                                                     <td className={`px-3 py-4 ${isPass ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'}`}>{sTotal.toFixed(2)}</td>
                                                     <td className="px-4 py-4 uppercase">
                                                         {!hasAttempted ? <span className="text-rose-600">Fail (ABS)</span> : (isPass ? <span className="text-emerald-600">Pass</span> : <span className="text-rose-600">Fail</span>)}
