@@ -2291,7 +2291,7 @@
                     dataRow.push(pPct.toFixed(2));
                     dataRow.push(oPct.toFixed(2));
 
-                    // v89: Level-Based + No Attendee Fail (Grace Grade C)
+                    // v90: Level-Specific Thresholds (L4+ B-Grade at 75%) + No Attendee Fail
                     let result = hasAttempted ? "Pass" : "Fail (ABS)";
                     let grade = "-";
 
@@ -2300,9 +2300,12 @@
                     } else {
                         const level = parseInt(qp.level) || 1;
                         if (oPct >= 85) grade = "A";
-                        else if (oPct >= 70) grade = "B";
-                        else if (level <= 3 && oPct >= 50) grade = "C";
-                        else grade = "C"; // v88 grace: attendees default to C if below thresholds
+                        else {
+                            // Level 4+ requires 75% for B, Level 1-3 requires 70% for B
+                            const bThreshold = level >= 4 ? 75 : 70;
+                            if (oPct >= bThreshold) grade = "B";
+                            else grade = "C"; // Everyone who attends gets at least C
+                        }
                     }
 
                     dataRow.push(result);
@@ -7316,7 +7319,7 @@
                                             const vPass = !qp?.isVivaCutoff || vPct >= cutoffViva;
                                             const oPass = !qp?.isOverallCutoff || oPct >= cutoffTotal;
                                             
-                                             // v89: Level-Based + No Attendee Fail (Grace Grade C)
+                                             // v90: Level-Specific Thresholds (L4+ B-Grade at 75%) + No Attendee Fail
                                              const isPass = hasAttempted; 
                                              
                                              let grade = "-";
@@ -7325,9 +7328,11 @@
                                              } else {
                                                  const level = parseInt(qp?.level) || 1;
                                                  if (oPct >= 85) grade = "A";
-                                                 else if (oPct >= 70) grade = "B";
-                                                 else if (level <= 3 && oPct >= 50) grade = "C";
-                                                 else grade = "C"; // v88 grace: attendees default to C if below thresholds
+                                                 else {
+                                                     const bThreshold = level >= 4 ? 75 : 70;
+                                                     if (oPct >= bThreshold) grade = "B";
+                                                     else grade = "C"; 
+                                                 }
                                              }
 
                                             return (
