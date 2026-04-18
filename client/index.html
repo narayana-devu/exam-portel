@@ -2191,37 +2191,22 @@
         const LucideIcon = ({ name, className }) => {
             const ref = useRef(null);
             useEffect(() => {
-                const render = () => {
+                let attempts = 0;
+                const init = () => {
                     if (window.lucide && ref.current) {
-                        const iconKey = name.split('-').map(part => part.charAt(0).toUpperCase() + part.slice(1)).join('');
-                        const iconDef = window.lucide.icons[iconKey] || window.lucide.icons[name];
-
-                        if (iconDef) {
-                            window.lucide.createIcons({
-                                attrs: { class: className },
-                                icons: { [name]: iconDef },
-                                root: ref.current.parentNode
-                            });
-                        } else {
-                            // Fallback to library default lookup
-                            window.lucide.createIcons({ root: ref.current });
-                        }
+                        window.lucide.createIcons({
+                            root: ref.current.parentNode,
+                            attrs: { class: className || "w-5 h-5" }
+                        });
+                    } else if (attempts < 10) {
+                        attempts++;
+                        setTimeout(init, 200);
                     }
                 };
-                
-                if (window.lucide) render();
-                else {
-                    const check = setInterval(() => {
-                        if (window.lucide) {
-                            render();
-                            clearInterval(check);
-                        }
-                    }, 100);
-                    return () => clearInterval(check);
-                }
+                init();
             }, [name, className]);
 
-            return <span ref={ref}><i data-lucide={name} className={className}></i></span>;
+            return <i ref={ref} data-lucide={name} className={className}></i>;
         };
 
         const Icons = {
@@ -2259,7 +2244,6 @@
             Video: ({ className }) => <LucideIcon name="video" className={className || "w-5 h-5"} />,
             Square: ({ className }) => <LucideIcon name="square" className={className || "w-5 h-5"} />,
             BarChart2: ({ className }) => <LucideIcon name="bar-chart-2" className={className || "w-5 h-5"} />,
-            X: ({ className }) => <span className={className} style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', color: '#000', fontWeight: 'bold !important', fontSize: '1.2em' }}>✕</span>,
             XCircle: ({ className }) => <LucideIcon name="x-circle" className={className || "w-5 h-5"} />,
             UploadCloud: ({ className }) => <LucideIcon name="upload-cloud" className={className || "w-12 h-12"} />,
             Save: ({ className }) => <LucideIcon name="save" className={className || "w-4 h-4"} />,
