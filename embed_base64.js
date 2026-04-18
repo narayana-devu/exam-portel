@@ -1,0 +1,1 @@
+const fs = require('fs'); let b64 = fs.readFileSync('client/brand_logo.png').toString('base64'); let html = fs.readFileSync('client/index.html', 'utf8'); html = html.replace(/src="\.\/brand_logo\.png"/g, 'src="data:image/png;base64,' + b64 + '"'); fs.writeFileSync('client/index.html', html); console.log('Successfully embedded base64 safely!');

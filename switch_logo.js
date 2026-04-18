@@ -1,0 +1,1 @@
+const fs = require('fs'); let html = fs.readFileSync('client/index.html', 'utf8'); html = html.replace(/src=["']data:image\/[^;]+;base64,[^"']+["']/g, 'src="./logo.png"'); fs.writeFileSync('client/index.html', html); console.log('Switched back to logo.png');
