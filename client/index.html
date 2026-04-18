@@ -3250,33 +3250,64 @@
 
             const fillRandomMarks = () => {
                 if (!students.length || !nosList.length) return alert("Select a batch first.");
-                if (!confirm("Populate all students with random marks?")) return;
+                if (!confirm("Populate all students with random marks based on Theory performance?")) return;
 
+                const allResponses = window.Utils.getResponses();
+                const qps = window.Utils.getQPs();
+                const qp = qps.find(q => q.id === selectedQP);
+                if (!qp) return alert("Qualification Pack data missing.");
+
+                const maxTheoryTotal = parseFloat(qp.theoryMarks) || 100;
                 let newMarks = { ...marksData };
                 let newAttendance = { ...attendance };
 
                 students.forEach(student => {
                     newAttendance[student.id] = true; // Mark present
+
+                    // 1. Determine Performance Ratio based on existing Theory Exam
+                    const sResponses = allResponses.filter(r => 
+                        (r.studentId === student.id || r.studentId === student.username) && 
+                        (r.batchId === selectedBatch)
+                    );
+                    const theoryResp = sResponses.find(r => (r.examType || '').toUpperCase() === 'THEORY');
+                    
+                    let perfRatio;
+                    if (theoryResp) {
+                        let score = parseFloat(theoryResp.totalScore || theoryResp.score || theoryResp.marks || 0);
+                        if (score === 0 && theoryResp.assessorMarks) {
+                            score = Object.values(theoryResp.assessorMarks).reduce((a, b) => a + (parseFloat(b) || 0), 0);
+                        }
+                        perfRatio = score / maxTheoryTotal;
+                    } else {
+                        // If no theory written, pick a random high performance (75-95%)
+                        perfRatio = 0.75 + (Math.random() * 0.20);
+                    }
+
+                    // 2. Protect ratio: Ensure it doesn't drop below 70% to maintain "no fail" spirit
+                    perfRatio = Math.max(0.70, Math.min(1.0, perfRatio));
+
                     nosList.forEach(nos => {
                         const tMax = parseInt(nos.theoryMarks) || 30;
                         const pMax = parseInt(nos.practicalMarks) || 30;
                         const vMax = parseInt(nos.vivaMarks) || 30;
 
-                        // Generate marks between 75% and 100% of max
-                        const getPassMark = (max) => {
-                            const minMark = Math.ceil(max * 0.75);
-                            return minMark + Math.floor(Math.random() * (max - minMark + 1));
+                        const getConsistentMark = (max) => {
+                            // Apply +/- 5% variation to practical/viva compared to theory
+                            const variation = (Math.random() * 0.1) - 0.05;
+                            let ratio = perfRatio + variation;
+                            ratio = Math.max(0.70, Math.min(1.0, ratio));
+                            return Math.round(max * ratio);
                         };
 
-                        newMarks[`${student.id}_${nos.id}_theory`] = getPassMark(tMax);
-                        newMarks[`${student.id}_${nos.id}_practical`] = getPassMark(pMax);
-                        newMarks[`${student.id}_${nos.id}_viva`] = getPassMark(vMax);
+                        newMarks[`${student.id}_${nos.id}_theory`] = Math.round(tMax * perfRatio);
+                        newMarks[`${student.id}_${nos.id}_practical`] = getConsistentMark(pMax);
+                        newMarks[`${student.id}_${nos.id}_viva`] = getConsistentMark(vMax);
                     });
                 });
 
                 setMarksData(newMarks);
                 setAttendance(newAttendance);
-                alert("Random marks populated successfully!");
+                alert("Marks populated based on Theory performance successfully!");
                 setIsBulkEntry(true);
             };
 
