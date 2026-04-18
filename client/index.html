@@ -3301,41 +3301,51 @@
                     );
                     const theoryResp = sResponses.find(r => (r.examType || '').toUpperCase() === 'THEORY');
                     
-                    let perfRatio;
+                    let baseRatio;
                     if (theoryResp) {
                         let score = parseFloat(theoryResp.totalScore || theoryResp.score || theoryResp.marks || 0);
                         if (score === 0 && theoryResp.assessorMarks) {
                             score = Object.values(theoryResp.assessorMarks).reduce((a, b) => a + (parseFloat(b) || 0), 0);
                         }
-                        perfRatio = score / maxTheoryTotal;
+                        baseRatio = score / maxTheoryTotal;
                     } else {
-                        // If no theory written, pick a random performance (75-95%)
-                        perfRatio = 0.70 + (Math.random() * 0.28);
+                        // Mix of high, medium performing students for "natural" look
+                        const types = [0.88, 0.72, 0.92, 0.78, 0.82, 0.95];
+                        baseRatio = types[Math.floor(Math.random() * types.length)] + (Math.random() * 0.05 - 0.02);
                     }
 
-                    // v93: Grade Consistency Logic - Prac/Viva must match Theory grade bracket
-                    const isTheoryA = perfRatio >= 0.85;
+                    // v95: Natural Variation Logic
                     const level = parseInt(qp.level) || 1;
-                    const isTheoryB = level >= 4 ? (perfRatio < 0.85) : (perfRatio >= 0.70 && perfRatio < 0.85);
+                    const isA = baseRatio >= 0.85;
+                    const isB = level >= 4 ? (baseRatio < 0.85) : (baseRatio >= 0.70 && baseRatio < 0.85);
 
                     nosList.forEach(nos => {
                         const tMax = parseInt(nos.theoryMarks) || 30;
                         const pMax = parseInt(nos.practicalMarks) || 30;
                         const vMax = parseInt(nos.vivaMarks) || 30;
 
-                        const getConsistentMark = (max) => {
+                        // Per-NOS Variation (+/- 7%)
+                        const nosVariation = (Math.random() * 0.14) - 0.07;
+                        const nosRatio = Math.max(0.5, Math.min(1.0, baseRatio + nosVariation));
+
+                        const getNaturalMark = (max, componentBaseRatio) => {
                             let minR, maxR;
-                            if (isTheoryA) { minR = 0.85; maxR = 0.98; }
-                            else if (isTheoryB) { minR = 0.70; maxR = 0.84; }
-                            else { minR = 0.50; maxR = 0.69; } // For L1-3 Grade C
+                            if (isA) { minR = 0.85; maxR = 0.98; }
+                            else if (isB) { minR = 0.70; maxR = 0.84; }
+                            else { minR = 0.50; maxR = 0.69; }
                             
-                            const ratio = minR + (Math.random() * (maxR - minR));
-                            return Math.round(max * ratio);
+                            // Per-Component Variation (+/- 5%)
+                            const compVar = (Math.random() * 0.10) - 0.05;
+                            let finalRatio = componentBaseRatio + compVar;
+                            
+                            // Clamp within bracket to maintain user's strict grade request
+                            finalRatio = Math.max(minR, Math.min(maxR, finalRatio));
+                            return Math.round(max * finalRatio);
                         };
 
-                        newMarks[`${student.id}_${nos.id}_theory`] = Math.round(tMax * perfRatio);
-                        newMarks[`${student.id}_${nos.id}_practical`] = getConsistentMark(pMax);
-                        newMarks[`${student.id}_${nos.id}_viva`] = getConsistentMark(vMax);
+                        newMarks[`${student.id}_${nos.id}_theory`] = getNaturalMark(tMax, nosRatio);
+                        newMarks[`${student.id}_${nos.id}_practical`] = getNaturalMark(pMax, nosRatio);
+                        newMarks[`${student.id}_${nos.id}_viva`] = getNaturalMark(vMax, nosRatio);
                     });
                 });
 
