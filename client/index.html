@@ -3309,12 +3309,10 @@
                         }
                         baseRatio = score / maxTheoryTotal;
                     } else {
-                        // Mix of high, medium performing students for "natural" look
-                        const types = [0.88, 0.72, 0.92, 0.78, 0.82, 0.95];
-                        baseRatio = types[Math.floor(Math.random() * types.length)] + (Math.random() * 0.05 - 0.02);
+                        // Wide range of base performance
+                        baseRatio = 0.70 + (Math.random() * 0.28);
                     }
 
-                    // v95: Natural Variation Logic
                     const level = parseInt(qp.level) || 1;
                     const isA = baseRatio >= 0.85;
                     const isB = level >= 4 ? (baseRatio < 0.85) : (baseRatio >= 0.70 && baseRatio < 0.85);
@@ -3324,28 +3322,22 @@
                         const pMax = parseInt(nos.practicalMarks) || 30;
                         const vMax = parseInt(nos.vivaMarks) || 30;
 
-                        // Per-NOS Variation (+/- 7%)
-                        const nosVariation = (Math.random() * 0.14) - 0.07;
-                        const nosRatio = Math.max(0.5, Math.min(1.0, baseRatio + nosVariation));
-
-                        const getNaturalMark = (max, componentBaseRatio) => {
-                            let minR, maxR;
-                            if (isA) { minR = 0.85; maxR = 0.98; }
-                            else if (isB) { minR = 0.70; maxR = 0.84; }
-                            else { minR = 0.50; maxR = 0.69; }
-                            
-                            // Per-Component Variation (+/- 5%)
-                            const compVar = (Math.random() * 0.10) - 0.05;
-                            let finalRatio = componentBaseRatio + compVar;
-                            
-                            // Clamp within bracket to maintain user's strict grade request
-                            finalRatio = Math.max(minR, Math.min(maxR, finalRatio));
-                            return Math.round(max * finalRatio);
+                        const getRandomInRange = (max, minR, maxR) => {
+                            // Independent variation for every single mark
+                            const variation = (Math.random() * 0.20) - 0.10; // +/- 10%
+                            let r = baseRatio + variation;
+                            r = Math.max(minR, Math.min(maxR, r));
+                            return Math.round(max * r);
                         };
 
-                        newMarks[`${student.id}_${nos.id}_theory`] = getNaturalMark(tMax, nosRatio);
-                        newMarks[`${student.id}_${nos.id}_practical`] = getNaturalMark(pMax, nosRatio);
-                        newMarks[`${student.id}_${nos.id}_viva`] = getNaturalMark(vMax, nosRatio);
+                        let minR, maxR;
+                        if (isA) { minR = 0.85; maxR = 1.0; }
+                        else if (isB) { minR = 0.70; maxR = 0.849; }
+                        else { minR = 0.50; maxR = 0.699; }
+
+                        newMarks[`${student.id}_${nos.id}_theory`] = getRandomInRange(tMax, minR, maxR);
+                        newMarks[`${student.id}_${nos.id}_practical`] = getRandomInRange(pMax, minR, maxR);
+                        newMarks[`${student.id}_${nos.id}_viva`] = getRandomInRange(vMax, minR, maxR);
                     });
                 });
 
