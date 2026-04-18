@@ -7188,6 +7188,105 @@
                         </div>
                     </div>
                 );
+            } else if (examType === 'MasterResult') {
+                const allNOS = window.Utils.getNOS().filter(n => n.qpId === selectedBatch.qpId);
+                const maxTheory = allNOS.reduce((sum, n) => sum + (parseFloat(n.theoryMarks) || 0), 0);
+                const maxPractical = allNOS.reduce((sum, n) => sum + (parseFloat(n.practicalMarks) || 0), 0);
+                const maxViva = allNOS.reduce((sum, n) => sum + (parseFloat(n.vivaMarks) || 0), 0);
+                const maxTotal = maxTheory + maxPractical + maxViva;
+
+                const cutoffTheory = (maxTheory * 0.7).toFixed(2);
+                const cutoffPractical = (maxPractical * 0.7).toFixed(2);
+                const cutoffViva = (maxViva * 0.7).toFixed(2);
+                const cutoffTotal = (maxTotal * 0.7).toFixed(2);
+
+                content = (
+                    <div className="animate-fade-in">
+                        <div className="flex justify-between items-center mb-6">
+                            <button onClick={() => setExamType(null)} className="text-secondary-600 font-bold flex items-center gap-1 hover:text-primary-600">
+                                <Icons.ChevronLeft className="w-5 h-5" /> Back to Overview
+                            </button>
+                            <h3 className="text-xl font-extrabold text-secondary-900 uppercase">Master Result Matrix</h3>
+                            <button onClick={() => window.Utils.downloadMarksResult()} className="bg-emerald-600 text-white px-4 py-2 rounded-xl font-bold flex items-center gap-2 text-xs">
+                                <Icons.Download className="w-4 h-4" /> Export Excel
+                            </button>
+                        </div>
+
+                        <div className="bg-white rounded-3xl shadow-xl border border-secondary-100 overflow-hidden">
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-[11px] border-collapse whitespace-nowrap">
+                                    <thead>
+                                        <tr className="bg-secondary-50 text-secondary-600 font-black uppercase text-center border-b">
+                                            <th className="px-3 py-4 sticky left-0 bg-secondary-50 z-10 border-r">Photo</th>
+                                            <th className="px-3 py-4 border-r">ID Proof</th>
+                                            <th className="px-3 py-4 border-r">Enrollment</th>
+                                            <th className="px-4 py-4 text-left border-r w-48">Name</th>
+                                            <th className="px-2 py-4 bg-blue-50/30">Max Theory</th>
+                                            <th className="px-2 py-4 bg-blue-50/30">Theory Cutoff</th>
+                                            <th className="px-2 py-4 bg-blue-50/30 text-blue-600 border-r">Scored Theory</th>
+                                            <th className="px-2 py-4 bg-amber-50/30">Max Viva</th>
+                                            <th className="px-2 py-4 bg-amber-50/30">Viva Cutoff</th>
+                                            <th className="px-2 py-4 bg-amber-50/30 text-amber-600 border-r">Scored Viva</th>
+                                            <th className="px-2 py-4 bg-green-50/30">Max Practical</th>
+                                            <th className="px-2 py-4 bg-green-50/30">Practical Cutoff</th>
+                                            <th className="px-2 py-4 bg-green-50/30 text-green-600 border-r">Scored Practical</th>
+                                            <th className="px-3 py-4 bg-secondary-100 font-black">Overall Cutoff</th>
+                                            <th className="px-3 py-4 bg-gray-900 text-white">Scored Total</th>
+                                            <th className="px-4 py-4">Result</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y">
+                                        {students.map(s => {
+                                            const verif = allResponses.find(r => (r.studentId === s.id || r.studentId === s.username) && r.examType === 'VERIFICATION');
+                                            const marks = allResponses.find(r => r.studentId === s.id && r.examType === 'MarksEntry');
+                                            const selfie = verif?.evidence?.find(e => (e.type || '').toUpperCase().includes('SELFIE'));
+                                            const idcard = verif?.evidence?.find(e => (e.type || '').toUpperCase().includes('ID'));
+                                            
+                                            let sTheory = 0, sPractical = 0, sViva = 0;
+                                            if (marks?.nosMarks) {
+                                                Object.entries(marks.nosMarks).forEach(([key, val]) => {
+                                                    const v = parseFloat(val) || 0;
+                                                    if (key.includes('theory')) sTheory += v;
+                                                    else if (key.includes('practical')) sPractical += v;
+                                                    else if (key.includes('viva')) sViva += v;
+                                                });
+                                            }
+                                            const sTotal = sTheory + sPractical + sViva;
+                                            const isPass = sTotal >= parseFloat(cutoffTotal);
+
+                                            return (
+                                                <tr key={s.id} className="hover:bg-primary-50/20 text-center font-bold text-secondary-700">
+                                                    <td className="p-2 border-r sticky left-0 bg-white z-10">
+                                                        {selfie ? <EvidenceImage item={selfie} /> : <div className="w-10 h-10 bg-gray-100 rounded-full mx-auto" />}
+                                                    </td>
+                                                    <td className="p-2 border-r">
+                                                        {idcard ? <EvidenceImage item={idcard} /> : <div className="w-10 h-10 bg-gray-100 rounded mx-auto" />}
+                                                    </td>
+                                                    <td className="px-3 py-4 border-r font-mono text-[10px]">{s.username}</td>
+                                                    <td className="px-4 py-4 text-left border-r text-secondary-900">{s.name}</td>
+                                                    <td className="px-2 py-4">{maxTheory.toFixed(2)}</td>
+                                                    <td className="px-2 py-4">{cutoffTheory}</td>
+                                                    <td className={`px-2 py-4 border-r ${sTheory < cutoffTheory ? 'text-red-500' : 'text-blue-600'}`}>{sTheory.toFixed(2)}</td>
+                                                    <td className="px-2 py-4">{maxViva.toFixed(2)}</td>
+                                                    <td className="px-2 py-4">{cutoffViva}</td>
+                                                    <td className={`px-2 py-4 border-r ${sViva < cutoffViva ? 'text-red-500' : 'text-amber-600'}`}>{sViva.toFixed(2)}</td>
+                                                    <td className="px-2 py-4">{maxPractical.toFixed(2)}</td>
+                                                    <td className="px-2 py-4">{cutoffPractical}</td>
+                                                    <td className={`px-2 py-4 border-r ${sPractical < cutoffPractical ? 'text-red-500' : 'text-green-600'}`}>{sPractical.toFixed(2)}</td>
+                                                    <td className="px-3 py-4 bg-secondary-50">{cutoffTotal}</td>
+                                                    <td className={`px-3 py-4 ${isPass ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'}`}>{sTotal.toFixed(2)}</td>
+                                                    <td className="px-4 py-4 uppercase">
+                                                        {isPass ? <span className="text-emerald-600">Pass</span> : <span className="text-rose-600">Fail</span>}
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                );
             } else if (!examType) {
                 content = (
                     <div>
@@ -7208,10 +7307,10 @@
                             </div>
                         </div>
 
-                        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-                            {['Theory', 'Practical', 'Viva', 'Photo', 'Aad/Fat'].map(t => (
-                                <button key={t} onClick={() => loadResults(t)} className="bg-white p-8 rounded-3xl shadow-lg text-xl font-black text-secondary-800 hover:shadow-2xl border-2 border-secondary-50 hover:border-primary-300 transition-all transform hover:-translate-y-1">
-                                    {t === 'Aad/Fat' ? 'Identity Report' : t}
+                        <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
+                            {['Theory', 'Practical', 'Viva', 'Photo', 'Aad/Fat', 'MasterResult'].map(t => (
+                                <button key={t} onClick={() => loadResults(t)} className="bg-white p-8 rounded-3xl shadow-lg text-lg font-black text-secondary-800 hover:shadow-2xl border-2 border-secondary-50 hover:border-primary-300 transition-all transform hover:-translate-y-1">
+                                    {t === 'Aad/Fat' ? 'Identity Report' : (t === 'MasterResult' ? 'Master Result Sheet' : t)}
                                 </button>
                             ))}
                         </div>
