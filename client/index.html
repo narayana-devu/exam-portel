@@ -2191,22 +2191,21 @@
         const LucideIcon = ({ name, className }) => {
             const ref = useRef(null);
             useEffect(() => {
-                let attempts = 0;
-                const init = () => {
-                    if (window.lucide && ref.current) {
-                        window.lucide.createIcons({
-                            root: ref.current.parentNode,
-                            attrs: { class: className || "w-5 h-5" }
-                        });
-                    } else if (attempts < 10) {
-                        attempts++;
-                        setTimeout(init, 200);
-                    }
-                };
-                init();
+                if (window.lucide && ref.current) {
+                    const icon = document.createElement('i');
+                    icon.setAttribute('data-lucide', name);
+                    icon.className = className || "w-5 h-5";
+                    
+                    ref.current.innerHTML = '';
+                    ref.current.appendChild(icon);
+                    
+                    window.lucide.createIcons({
+                        root: ref.current
+                    });
+                }
             }, [name, className]);
 
-            return <i ref={ref} data-lucide={name} className={className}></i>;
+            return <span ref={ref} className="inline-flex items-center justify-center"></span>;
         };
 
         const Icons = {
@@ -7363,9 +7362,10 @@
 
     // New StudentGradingView Component
         // SESSION PLAYER COMPONENT
-        const EvidenceImage = ({ item }) => {
+        const EvidenceImage = ({ item, onRemove }) => {
             const [src, setSrc] = React.useState(null);
             const [isLocal, setIsLocal] = React.useState(false);
+            const [hasError, setHasError] = React.useState(false);
 
             React.useEffect(() => {
                 let active = true;
@@ -7415,30 +7415,26 @@
                 <div className="relative group overflow-hidden h-32 bg-gray-100">
                     <img
                         src={src}
-                        className="w-full h-full object-cover transition-transform group-hover:scale-105 cursor-pointer"
+                        className={`w-full h-full object-cover transition-transform group-hover:scale-105 cursor-pointer ${hasError ? 'hidden' : 'block'}`}
                         onClick={() => {
                             const w = window.open("");
                             w.document.write(`<img src="${src}" style="max-width:100%"/>`);
                         }}
-                        onError={(e) => {
-                            // If it's not a valid data/blob URL, it will fail
-                            if (!src.startsWith('data:') && !src.startsWith('blob:') && !src.startsWith('http')) {
-                                e.target.style.display = 'none';
-                                e.target.nextSibling.style.display = 'flex';
-                            }
-                        }}
+                        onError={() => setHasError(true)}
                     />
 
                     {/* Delete Button */}
-                    <button
-                        onClick={(e) => { e.stopPropagation(); if (confirm('Delete this photo?')) onRemove(item); }}
-                        className="absolute top-1 left-1 bg-red-600 text-gray-900 p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity z-20 shadow-lg hover:bg-red-700"
-                        title="Delete Evidence"
-                    >
-                        <Icons.Trash2 className="w-3 h-3" />
-                    </button>
+                    {onRemove && (
+                        <button
+                            onClick={(e) => { e.stopPropagation(); if (confirm('Delete this photo?')) onRemove(item); }}
+                            className="absolute top-1 left-1 bg-red-600 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity z-20 shadow-lg hover:bg-red-700"
+                            title="Delete Evidence"
+                        >
+                            <Icons.Trash2 className="w-3 h-3 text-white" />
+                        </button>
+                    )}
 
-                    <div className="absolute inset-0 hidden flex-col items-center justify-center bg-gray-200 text-gray-800 p-2 text-center">
+                    <div className={`${hasError ? 'flex' : 'hidden'} absolute inset-0 flex-col items-center justify-center bg-gray-200 text-gray-800 p-2 text-center`}>
                         <Icons.XCircle className="w-8 h-8 mb-1" />
                         <span className="text-[10px] font-bold">Media Not Found</span>
                         <p className="text-[8px]">Device Mismatch or Not Synced</p>
