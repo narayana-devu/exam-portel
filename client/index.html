@@ -5413,7 +5413,10 @@
                 captureImage: true,
                 cameraInterval: '60',
                 sscId: '', // Added
-                qpId: ''   // Added
+                qpId: '',   // Added
+                maxTheory: '100', theoryCutoff: '70',
+                maxViva: '100', vivaCutoff: '70',
+                maxPractical: '100', practicalCutoff: '70'
             });
 
             const [showNewProjectInput, setShowNewProjectInput] = useState(false);
@@ -6389,6 +6392,61 @@
                                             </div>
                                         </div>
                                     </div>
+
+                                    {/* Section: Marks Weights & Cutoffs */}
+                                    <div className="bg-white/40 rounded-3xl p-6 border border-white/50 shadow-sm backdrop-blur-md">
+                                        <div className="flex items-center gap-3 mb-5">
+                                            <div className="w-1.5 h-5 bg-emerald-500 rounded-full"></div>
+                                            <h4 className="text-[11px] font-black text-gray-900 uppercase tracking-[0.3em]">Marks Weights & Cutoffs</h4>
+                                        </div>
+                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                            <div className="bg-blue-50/50 p-4 rounded-2xl border border-blue-100 flex flex-col gap-3">
+                                                <p className="text-[10px] font-black text-blue-700 uppercase tracking-widest text-center border-b border-blue-100 pb-2">Theory Config</p>
+                                                <div className="grid grid-cols-2 gap-4">
+                                                    <div>
+                                                        <label className="text-[9px] font-black text-gray-800 uppercase tracking-widest">Max Theory</label>
+                                                        <input type="number" className="w-full bg-white border border-gray-100 rounded-xl px-4 py-2 text-gray-900 text-xs font-bold"
+                                                            value={newBatch.maxTheory} onChange={e => setNewBatch({...newBatch, maxTheory: e.target.value})} />
+                                                    </div>
+                                                    <div>
+                                                        <label className="text-[9px] font-black text-gray-800 uppercase tracking-widest">Cutoff Marks</label>
+                                                        <input type="number" className="w-full bg-white border border-gray-100 rounded-xl px-4 py-2 text-gray-900 text-xs font-bold"
+                                                            value={newBatch.theoryCutoff} onChange={e => setNewBatch({...newBatch, theoryCutoff: e.target.value})} />
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div className="bg-amber-50/50 p-4 rounded-2xl border border-amber-100 flex flex-col gap-3">
+                                                <p className="text-[10px] font-black text-amber-700 uppercase tracking-widest text-center border-b border-amber-100 pb-2">Viva Config</p>
+                                                <div className="grid grid-cols-2 gap-4">
+                                                    <div>
+                                                        <label className="text-[9px] font-black text-gray-800 uppercase tracking-widest">Max Viva</label>
+                                                        <input type="number" className="w-full bg-white border border-gray-100 rounded-xl px-4 py-2 text-gray-900 text-xs font-bold"
+                                                            value={newBatch.maxViva} onChange={e => setNewBatch({...newBatch, maxViva: e.target.value})} />
+                                                    </div>
+                                                    <div>
+                                                        <label className="text-[9px] font-black text-gray-800 uppercase tracking-widest">Cutoff Marks</label>
+                                                        <input type="number" className="w-full bg-white border border-gray-100 rounded-xl px-4 py-2 text-gray-900 text-xs font-bold"
+                                                            value={newBatch.vivaCutoff} onChange={e => setNewBatch({...newBatch, vivaCutoff: e.target.value})} />
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div className="bg-green-50/50 p-4 rounded-2xl border border-green-100 flex flex-col gap-3">
+                                                <p className="text-[10px] font-black text-green-700 uppercase tracking-widest text-center border-b border-green-100 pb-2">Practical Config</p>
+                                                <div className="grid grid-cols-2 gap-4">
+                                                    <div>
+                                                        <label className="text-[9px] font-black text-gray-800 uppercase tracking-widest">Max Practical</label>
+                                                        <input type="number" className="w-full bg-white border border-gray-100 rounded-xl px-4 py-2 text-gray-900 text-xs font-bold"
+                                                            value={newBatch.maxPractical} onChange={e => setNewBatch({...newBatch, maxPractical: e.target.value})} />
+                                                    </div>
+                                                    <div>
+                                                        <label className="text-[9px] font-black text-gray-800 uppercase tracking-widest">Cutoff Marks</label>
+                                                        <input type="number" className="w-full bg-white border border-gray-100 rounded-xl px-4 py-2 text-gray-900 text-xs font-bold"
+                                                            value={newBatch.practicalCutoff} onChange={e => setNewBatch({...newBatch, practicalCutoff: e.target.value})} />
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
 
                                 {/* Action Footer */}
@@ -7188,16 +7246,15 @@
                     </div>
                 );
             } else if (examType === 'MasterResult') {
-                const allNOS = window.Utils.getNOS().filter(n => n.qpId === selectedBatch.qpId);
-                const maxTheory = allNOS.reduce((sum, n) => sum + (parseFloat(n.theoryMarks) || 0), 0);
-                const maxPractical = allNOS.reduce((sum, n) => sum + (parseFloat(n.practicalMarks) || 0), 0);
-                const maxViva = allNOS.reduce((sum, n) => sum + (parseFloat(n.vivaMarks) || 0), 0);
+                const maxTheory = parseFloat(selectedBatch.maxTheory) || 0;
+                const maxPractical = parseFloat(selectedBatch.maxPractical) || 0;
+                const maxViva = parseFloat(selectedBatch.maxViva) || 0;
                 const maxTotal = maxTheory + maxPractical + maxViva;
 
-                const cutoffTheory = (maxTheory * 0.7).toFixed(2);
-                const cutoffPractical = (maxPractical * 0.7).toFixed(2);
-                const cutoffViva = (maxViva * 0.7).toFixed(2);
-                const cutoffTotal = (maxTotal * 0.7).toFixed(2);
+                const cutoffTheory = parseFloat(selectedBatch.theoryCutoff) || 0;
+                const cutoffPractical = parseFloat(selectedBatch.practicalCutoff) || 0;
+                const cutoffViva = parseFloat(selectedBatch.vivaCutoff) || 0;
+                const cutoffTotal = cutoffTheory + cutoffPractical + cutoffViva;
 
                 content = (
                     <div className="animate-fade-in">
@@ -7236,8 +7293,13 @@
                                     </thead>
                                     <tbody className="divide-y">
                                         {students.map(s => {
-                                            const verif = allResponses.find(r => (r.studentId === s.id || r.studentId === s.username) && r.examType === 'VERIFICATION');
-                                            const marks = allResponses.find(r => r.studentId === s.id && r.examType === 'MarksEntry');
+                                            const studentRes = allResponses.filter(r => r.studentId === s.id || r.studentId === s.username);
+                                            const verif = studentRes.find(r => r.examType === 'VERIFICATION');
+                                            const marks = studentRes.find(r => r.examType === 'MarksEntry');
+                                            
+                                            // Absence Detection: Check if they attempted any real component
+                                            const hasAttempted = studentRes.some(r => ['THEORY', 'PRACTICAL', 'VIVA'].includes(r.examType.toUpperCase()));
+                                            
                                             const selfie = verif?.evidence?.find(e => (e.type || '').toUpperCase().includes('SELFIE'));
                                             const idcard = verif?.evidence?.find(e => (e.type || '').toUpperCase().includes('ID'));
                                             
@@ -7251,10 +7313,12 @@
                                                 });
                                             }
                                             const sTotal = sTheory + sPractical + sViva;
-                                            const isPass = sTotal >= parseFloat(cutoffTotal);
+                                            
+                                            // Fail if absent OR if below total cutoff
+                                            const isPass = hasAttempted && sTotal >= cutoffTotal;
 
                                             return (
-                                                <tr key={s.id} className="hover:bg-primary-50/20 text-center font-bold text-secondary-700">
+                                                <tr key={s.id} className={`hover:bg-primary-50/20 text-center font-bold text-secondary-700 ${!hasAttempted ? 'bg-amber-50/30' : ''}`}>
                                                     <td className="p-2 border-r sticky left-0 bg-white z-10">
                                                         {selfie ? <EvidenceImage item={selfie} /> : <div className="w-10 h-10 bg-gray-100 rounded-full mx-auto" />}
                                                     </td>
@@ -7262,20 +7326,23 @@
                                                         {idcard ? <EvidenceImage item={idcard} /> : <div className="w-10 h-10 bg-gray-100 rounded mx-auto" />}
                                                     </td>
                                                     <td className="px-3 py-4 border-r font-mono text-[10px]">{s.username}</td>
-                                                    <td className="px-4 py-4 text-left border-r text-secondary-900">{s.name}</td>
+                                                    <td className="px-4 py-4 text-left border-r text-secondary-900">
+                                                        {s.name}
+                                                        {!hasAttempted && <span className="ml-2 px-2 py-0.5 bg-rose-100 text-rose-600 rounded text-[8px] uppercase">Absent</span>}
+                                                    </td>
                                                     <td className="px-2 py-4">{maxTheory.toFixed(2)}</td>
-                                                    <td className="px-2 py-4">{cutoffTheory}</td>
+                                                    <td className="px-2 py-4">{cutoffTheory.toFixed(2)}</td>
                                                     <td className={`px-2 py-4 border-r ${sTheory < cutoffTheory ? 'text-red-500' : 'text-blue-600'}`}>{sTheory.toFixed(2)}</td>
                                                     <td className="px-2 py-4">{maxViva.toFixed(2)}</td>
-                                                    <td className="px-2 py-4">{cutoffViva}</td>
+                                                    <td className="px-2 py-4">{cutoffViva.toFixed(2)}</td>
                                                     <td className={`px-2 py-4 border-r ${sViva < cutoffViva ? 'text-red-500' : 'text-amber-600'}`}>{sViva.toFixed(2)}</td>
                                                     <td className="px-2 py-4">{maxPractical.toFixed(2)}</td>
-                                                    <td className="px-2 py-4">{cutoffPractical}</td>
+                                                    <td className="px-2 py-4">{cutoffPractical.toFixed(2)}</td>
                                                     <td className={`px-2 py-4 border-r ${sPractical < cutoffPractical ? 'text-red-500' : 'text-green-600'}`}>{sPractical.toFixed(2)}</td>
-                                                    <td className="px-3 py-4 bg-secondary-50">{cutoffTotal}</td>
+                                                    <td className="px-3 py-4 bg-secondary-50">{cutoffTotal.toFixed(2)}</td>
                                                     <td className={`px-3 py-4 ${isPass ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'}`}>{sTotal.toFixed(2)}</td>
                                                     <td className="px-4 py-4 uppercase">
-                                                        {isPass ? <span className="text-emerald-600">Pass</span> : <span className="text-rose-600">Fail</span>}
+                                                        {!hasAttempted ? <span className="text-rose-600">Fail (ABS)</span> : (isPass ? <span className="text-emerald-600">Pass</span> : <span className="text-rose-600">Fail</span>)}
                                                     </td>
                                                 </tr>
                                             );
