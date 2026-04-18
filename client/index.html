@@ -2292,7 +2292,7 @@
                     dataRow.push(oPct.toFixed(2));
 
                     let result = "Pass";
-                    let grade = "C";
+                    let grade = "-";
 
                     if (isAbsent) {
                         result = "Fail (ABS)";
@@ -2307,9 +2307,19 @@
                             result = "Fail";
                             grade = "F";
                         } else {
-                            if (oPct >= 85) grade = "A";
-                            else if (oPct >= 70) grade = "B";
-                            else grade = "C";
+                            // NSQF Level Based Grading (v87)
+                            const level = parseInt(qp.level) || 1;
+                            if (level >= 1 && level <= 3) {
+                                if (oPct >= 85) grade = "A";
+                                else if (oPct >= 70) grade = "B";
+                                else if (oPct >= 50) grade = "C";
+                                else grade = "F";
+                            } else {
+                                // Level 4 and Above
+                                if (oPct >= 85) grade = "A";
+                                else if (oPct >= 70) grade = "B";
+                                else grade = "F";
+                            }
                         }
                     }
 
@@ -7279,6 +7289,7 @@
                                             <th className="px-2 py-4 bg-green-50/30 text-green-600 border-r">Scored Practical</th>
                                             <th className="px-3 py-4 bg-secondary-100 font-black">Overall Cutoff</th>
                                             <th className="px-3 py-4 bg-gray-900 text-white">Scored Total</th>
+                                            <th className="px-2 py-4">Grade</th>
                                             <th className="px-4 py-4">Result</th>
                                         </tr>
                                     </thead>
@@ -7323,7 +7334,26 @@
                                             const vPass = !qp?.isVivaCutoff || vPct >= cutoffViva;
                                             const oPass = !qp?.isOverallCutoff || oPct >= cutoffTotal;
                                             
-                                            const isPass = hasAttempted && tPass && pPass && vPass && oPass;
+                                                                                         const isPass = hasAttempted && tPass && pPass && vPass && oPass;
+                                             
+                                             // NSQF Level Based Grading (v87)
+                                             let grade = "-";
+                                             if (!hasAttempted || !isPass) {
+                                                 grade = "F";
+                                             } else {
+                                                 const level = parseInt(qp?.level) || 1;
+                                                 if (level >= 1 && level <= 3) {
+                                                     if (oPct >= 85) grade = "A";
+                                                     else if (oPct >= 70) grade = "B";
+                                                     else if (oPct >= 50) grade = "C";
+                                                     else grade = "F";
+                                                 } else {
+                                                     // Level 4 and Above
+                                                     if (oPct >= 85) grade = "A";
+                                                     else if (oPct >= 70) grade = "B";
+                                                     else grade = "F";
+                                                 }
+                                             }
 
                                             return (
                                                 <tr key={s.id} className={`hover:bg-primary-50/20 text-center font-bold text-secondary-700 ${!hasAttempted ? 'bg-amber-50/30' : ''}`}>
@@ -7349,6 +7379,7 @@
                                                     <td className={`px-2 py-4 border-r ${pPass ? 'text-green-600' : 'text-rose-500'}`}>{sPractical.toFixed(2)}</td>
                                                     <td className="px-3 py-4 bg-secondary-50">{cutoffTotal.toFixed(2)}%</td>
                                                     <td className={`px-3 py-4 ${isPass ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'}`}>{sTotal.toFixed(2)}</td>
+                                                    <td className="px-2 py-4 font-black text-secondary-900">{grade}</td>
                                                     <td className="px-4 py-4 uppercase">
                                                         {!hasAttempted ? <span className="text-rose-600">Fail (ABS)</span> : (isPass ? <span className="text-emerald-600">Pass</span> : <span className="text-rose-600">Fail</span>)}
                                                     </td>
