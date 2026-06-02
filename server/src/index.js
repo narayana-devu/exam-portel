@@ -665,7 +665,8 @@ app.post('/api/synced_chunks', async (req, res) => {
 });
 
 // SECURE MEDIA PROXY (Streams S3 Content via Server Credentials)
-app.get('/api/media-stream', (req, res) => {
+// Supports HTTP Range Requests (HTTP 206) required by Safari/Chrome for video streaming & seeking
+app.get('/api/media-stream', async (req, res) => {
     const key = req.query.key;
     const clientKey = req.query.apiKey;
 
@@ -678,27 +679,84 @@ app.get('/api/media-stream', (req, res) => {
         return res.status(400).send('Bad Request: Missing S3 config or Key');
     }
 
-    // 2. Stream from S3
-    const params = {
-        Bucket: process.env.BUCKET_NAME,
-        Key: key
-    };
-
-    // Optional: Set Content-Type based on extension
+    // Determine Content-Type based on extension
     const ext = path.extname(key).toLowerCase();
-    if (['.jpg', '.jpeg'].includes(ext)) res.setHeader('Content-Type', 'image/jpeg');
-    if (['.png'].includes(ext)) res.setHeader('Content-Type', 'image/png');
-    if (['.webm'].includes(ext)) res.setHeader('Content-Type', 'video/webm');
-    if (['.mp4'].includes(ext)) res.setHeader('Content-Type', 'video/mp4');
+    let contentType = 'application/octet-stream';
+    if (['.jpg', '.jpeg'].includes(ext)) contentType = 'image/jpeg';
+    else if (['.png'].includes(ext)) contentType = 'image/png';
+    else if (['.webm'].includes(ext)) contentType = 'video/webm';
+    else if (['.mp4'].includes(ext)) contentType = 'video/mp4';
 
-    s3.getObject(params)
-        .createReadStream()
-        .on('error', (err) => {
-            console.error("Stream Error:", err.code, key);
-            if (err.code === 'NoSuchKey') res.status(404).send('Not Found');
-            else res.status(500).send(err.message);
-        })
-        .pipe(res);
+    try {
+        // Fetch metadata to get the total content size of the file in S3
+        const metadata = await s3.headObject({
+            Bucket: process.env.BUCKET_NAME,
+            Key: key
+        }).promise();
+
+        const totalSize = metadata.ContentLength;
+        const range = req.headers.range;
+
+        res.setHeader('Accept-Ranges', 'bytes');
+        res.setHeader('Content-Type', contentType);
+
+        if (range) {
+            // Parse Range Header, e.g. "bytes=0-1048576"
+            const parts = range.replace(/bytes=/, "").split("-");
+            const start = parseInt(parts[0], 10);
+            const end = parts[1] ? parseInt(parts[1], 10) : totalSize - 1;
+
+            // Check if range is valid
+            if (start >= totalSize || end >= totalSize || start > end) {
+                res.setHeader('Content-Range', `bytes */${totalSize}`);
+                return res.status(416).send('Requested Range Not Satisfiable');
+            }
+
+            const chunksize = (end - start) + 1;
+            res.status(206);
+            res.setHeader('Content-Range', `bytes ${start}-${end}/${totalSize}`);
+            res.setHeader('Content-Length', chunksize);
+
+            const streamParams = {
+                Bucket: process.env.BUCKET_NAME,
+                Key: key,
+                Range: `bytes=${start}-${end}`
+            };
+
+            s3.getObject(streamParams).createReadStream()
+                .on('error', (err) => {
+                    console.error("Stream Range Error:", err.code, key);
+                    if (!res.headersSent) {
+                        res.status(500).send(err.message);
+                    }
+                })
+                .pipe(res);
+        } else {
+            // No range header provided, send the full file content
+            res.setHeader('Content-Length', totalSize);
+            s3.getObject({
+                Bucket: process.env.BUCKET_NAME,
+                Key: key
+            }).createReadStream()
+                .on('error', (err) => {
+                    console.error("Stream Full Error:", err.code, key);
+                    if (!res.headersSent) {
+                        if (err.code === 'NoSuchKey') res.status(404).send('Not Found');
+                        else res.status(500).send(err.message);
+                    }
+                })
+                .pipe(res);
+        }
+    } catch (e) {
+        console.error("S3 Proxy Error:", e.message, key);
+        if (!res.headersSent) {
+            if (e.code === 'NotFound' || e.code === 'NoSuchKey') {
+                res.status(404).send('Not Found');
+            } else {
+                res.status(500).send(e.message);
+            }
+        }
+    }
 });
 // createCRUDEndpoints('synced_chunks', 'synced_chunks'); // Replaced by custom handler above
 
