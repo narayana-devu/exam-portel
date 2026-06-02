@@ -9799,12 +9799,29 @@
             const startTimeRef = useRef(null);
             useEffect(() => { isSubmittingRef.current = isSubmitting; }, [isSubmitting]);
 
+            // ── MANDATORY VIDEO RECORDING STATE (v87) ──────────────────────────
+            // 'idle' | 'waiting' (2-min countdown) | 'recording' | 'complete' | 'failed'
+            const [recStatus, setRecStatus]     = useState('idle');
+            const [recElapsed, setRecElapsed]   = useState(0);   // seconds into recording
+            const [recWait,    setRecWait]       = useState(0);   // seconds waiting before record
+            const recBlobRef       = useRef(null);   // final recorded Blob
+            const recChunksRef     = useRef([]);     // MediaRecorder chunks
+            const recRecorderRef   = useRef(null);   // MediaRecorder instance
+            const recTimerRef      = useRef(null);   // elapsed counter interval
+            const recWaitTimerRef  = useRef(null);   // pre-record wait interval
+            const recStreamRef     = useRef(null);   // dedicated recording stream
+            const REC_WAIT_SEC  = 120; // 2 minutes before recording starts
+            const REC_DUR_SEC   = 300; // 5 minutes of mandatory recording
+
             const [streamActive, setStreamActive] = useState(false);
             const compositeReqRef = useRef(null); // Reference for Canvas Animation Frame
             const camStreamRef = useRef(null);
             const screenStreamRef = useRef(null);
 
             const toggleRecording = () => setIsRecording(prev => !prev);
+
+            // ── FORMAT mm:ss ──────────────────────────────────────────────────
+            const fmtTime = (s) => `${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`;
 
             const startCameraManual = async () => {
                 try {
@@ -10387,16 +10404,16 @@
                     startTimeRef.current = Date.now();
 
                     if (startMode === 'Practical') {
-                        // PRACTICAL: Webcam only (no screen share needed - student uses camera to demonstrate tasks)
-                        console.log("Starting Practical Recording (Webcam only)...");
+                        console.log("Starting Practical Mode...");
                         await startCameraManual();
                         setTimeout(() => { if (!isRecording) toggleRecording(); }, 2000);
                     } else {
-                        // THEORY (Webcam Only)
-                        console.log("Starting Theory Recording...");
+                        console.log("Starting Theory/Viva Mode...");
                         await startCameraManual();
                         setTimeout(() => { if (!isRecording) toggleRecording(); }, 2000);
                     }
+                    // Start mandatory 5-min recording (after 2-min delay)
+                    startMandatoryRecording(startMode);
                 } else {
                     alert("Unavailable: Question Paper not loaded for this batch.");
                 }
@@ -10404,7 +10421,135 @@
 
 
 
+            // ── STOP MANDATORY RECORDING ──────────────────────────────────────
+            const stopMandatoryRecording = () => {
+                clearInterval(recTimerRef.current);
+                clearInterval(recWaitTimerRef.current);
+                if (recRecorderRef.current && recRecorderRef.current.state !== 'inactive') {
+                    recRecorderRef.current.stop();
+                }
+                if (recStreamRef.current) {
+                    recStreamRef.current.getTracks().forEach(t => t.stop());
+                    recStreamRef.current = null;
+                }
+            };
+
+            // ── START MANDATORY RECORDING (called after exam begins) ──────────
+            const startMandatoryRecording = async (examType) => {
+                // Reset any previous session
+                recChunksRef.current = [];
+                recBlobRef.current = null;
+                setRecStatus('waiting');
+                setRecElapsed(0);
+                setRecWait(0);
+
+                let waitCount = 0;
+                recWaitTimerRef.current = setInterval(() => {
+                    waitCount++;
+                    setRecWait(waitCount);
+                    if (waitCount >= REC_WAIT_SEC) {
+                        clearInterval(recWaitTimerRef.current);
+                        beginActualRecording(examType);
+                    }
+                }, 1000);
+            };
+
+            const beginActualRecording = async (examType) => {
+                try {
+                    // Get fresh camera + mic stream for recording
+                    const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+                    recStreamRef.current = stream;
+
+                    // Pick best supported format
+                    const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9')
+                        ? 'video/webm;codecs=vp9'
+                        : (MediaRecorder.isTypeSupported('video/webm') ? 'video/webm' : 'video/mp4');
+
+                    const recorder = new MediaRecorder(stream, { mimeType, videoBitsPerSecond: 800000 });
+                    recRecorderRef.current = recorder;
+
+                    recorder.ondataavailable = (e) => {
+                        if (e.data && e.data.size > 0) recChunksRef.current.push(e.data);
+                    };
+
+                    recorder.onstop = () => {
+                        const blob = new Blob(recChunksRef.current, { type: mimeType });
+                        recBlobRef.current = blob;
+                        console.log(`[MandatoryRec] Recording complete. Size: ${(blob.size/1024/1024).toFixed(2)} MB`);
+                        setRecStatus('complete');
+                        setIsRecording(false);
+                        // Upload blob as evidence
+                        uploadRecordingBlob(blob, examType);
+                    };
+
+                    recorder.start(10000); // chunk every 10s
+                    setRecStatus('recording');
+                    setIsRecording(true);
+                    setRecElapsed(0);
+
+                    let elapsedCount = 0;
+                    recTimerRef.current = setInterval(() => {
+                        elapsedCount++;
+                        setRecElapsed(elapsedCount);
+                        // Auto-stop after 5 minutes
+                        if (elapsedCount >= REC_DUR_SEC) {
+                            clearInterval(recTimerRef.current);
+                            if (recRecorderRef.current && recRecorderRef.current.state === 'recording') {
+                                recRecorderRef.current.stop();
+                            }
+                        }
+                    }, 1000);
+
+                } catch (err) {
+                    console.error('[MandatoryRec] Camera failed:', err);
+                    setRecStatus('failed');
+                    // Allow with warning (user denied camera)
+                    alert(`⚠️ Video Recording Warning\n\nCamera/Microphone access was denied for recording.\nYour exam will continue but video evidence will be missing.\n\nError: ${err.message}`);
+                }
+            };
+
+            // ── UPLOAD BLOB TO S3 VIA SERVER ──────────────────────────────────
+            const uploadRecordingBlob = async (blob, examType) => {
+                try {
+                    const formData = new FormData();
+                    const ext = blob.type.includes('mp4') ? 'mp4' : 'webm';
+                    const fileName = `exam_rec_${examType}_${user.id}_${Date.now()}.${ext}`;
+                    formData.append('file', blob, fileName);
+
+                    const API_KEY_VAL = window.__API_KEY__ || 'portel_secure_key_2025';
+                    const resp = await fetch(`${API_BASE}/upload-media`, {
+                        method: 'POST',
+                        headers: { 'x-api-key': API_KEY_VAL },
+                        body: formData
+                    });
+
+                    if (resp.ok) {
+                        const data = await resp.json();
+                        console.log('[MandatoryRec] Uploaded to S3:', data.url);
+                        // Save URL as evidence
+                        window.Utils.saveResponse({
+                            studentId: user.id,
+                            examType: examType,
+                            evidence: [{ url: data.url, time: new Date().toISOString(), type: 'MANDATORY_VIDEO_REC', fileName }]
+                        });
+                    } else {
+                        throw new Error(`Upload failed: ${resp.status}`);
+                    }
+                } catch (e) {
+                    console.error('[MandatoryRec] Upload Error:', e);
+                    // Save as local base64 fallback (small note only)
+                    window.Utils.saveResponse({
+                        studentId: user.id,
+                        examType: examType,
+                        evidence: [{ time: new Date().toISOString(), type: 'MANDATORY_VIDEO_REC_LOCAL', error: e.message, note: 'Video saved locally, upload failed' }]
+                    });
+                }
+            };
+
             const endExam = () => {
+                // Stop mandatory recording first
+                stopMandatoryRecording();
+
                 // STOP ALL MEDIA TRACKS
                 [mediaStream, camStreamRef.current, screenStreamRef.current].forEach(s => {
                     if (s) {
@@ -10430,6 +10575,9 @@
                 setStreamActive(false);
                 setExamMode(null);
                 setIsSubmitting(false);
+                setRecStatus('idle');
+                setRecElapsed(0);
+                setRecWait(0);
             };
 
             const submitExam = async () => {
@@ -10449,10 +10597,28 @@
                         }
                     } catch (e) { console.error("Final Photo Failed", e); }
 
-                    // v76: STOP RECORDING EXPLICITLY & WAIT for final segment to save to VideoDB
-                    // (Disabled - v29: Video recording feature removed)
+                    // v87: Mandatory Recording Check
+                    if (recStatus === 'waiting') {
+                        const waited = recWait;
+                        const remainWait = REC_WAIT_SEC - waited;
+                        if (!confirm(`⚠️ Mandatory Recording Not Started Yet\n\nRecording begins ${fmtTime(remainWait)} from now (2-min delay period).\n\nSubmitting now means NO video evidence will be recorded.\nAre you sure you want to submit without video?`)) {
+                            setIsSubmitting(false);
+                            return;
+                        }
+                    } else if (recStatus === 'recording') {
+                        const recorded = recElapsed;
+                        if (recorded < REC_DUR_SEC) {
+                            if (!confirm(`⚠️ Mandatory Recording Incomplete\n\nRecorded: ${fmtTime(recorded)} / 5:00 required\n\nYou haven't completed the mandatory 5-minute recording.\nSubmitting now will stop the recording early.\n\nContinue submitting?`)) {
+                                setIsSubmitting(false);
+                                return;
+                            }
+                        }
+                    }
+                    // Stop mandatory recording on submit
+                    stopMandatoryRecording();
+
                     if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
-                        console.log("[Submit] Stopping recorder (Video save disabled)...");
+                        console.log("[Submit] Stopping legacy recorder...");
                         mediaRecorderRef.current.stop();
                         setIsRecording(false);
                         if (window.studentRecordingInterval) clearInterval(window.studentRecordingInterval);
@@ -10689,12 +10855,40 @@
                                     </div>
                                 </div>
 
-                                <div className="flex items-center gap-6">
+                                <div className="flex items-center gap-3">
                                     {/* Timer */}
                                     <div className={`flex items-center gap-3 px-5 py-2 rounded-2xl border transition-all duration-500 ${timeLeft < 300 ? 'bg-rose-50 border-rose-100 text-rose-600 animate-pulse' : 'bg-secondary-50 border-secondary-200 text-secondary-700 font-bold'}`}>
                                         <Icons.Clock className="w-5 h-5 opacity-70" />
                                         <span className="font-mono text-xl">{Math.floor(timeLeft / 60)}:{(timeLeft % 60).toString().padStart(2, '0')}</span>
                                     </div>
+
+                                    {/* Mandatory Recording Status Pill */}
+                                    {recStatus === 'idle' && (
+                                        <div className="flex items-center gap-2 px-3 py-2 rounded-2xl text-xs font-black bg-gray-100 border border-gray-200 text-gray-500">
+                                            <Icons.Video className="w-3.5 h-3.5" /> VIDEO PENDING
+                                        </div>
+                                    )}
+                                    {recStatus === 'waiting' && (
+                                        <div className="flex items-center gap-2 px-3 py-2 rounded-2xl text-xs font-black bg-amber-50 border border-amber-200 text-amber-700 animate-pulse">
+                                            <Icons.Video className="w-3.5 h-3.5" /> REC IN {fmtTime(REC_WAIT_SEC - recWait)}
+                                        </div>
+                                    )}
+                                    {recStatus === 'recording' && (
+                                        <div className="flex items-center gap-2 px-3 py-2 rounded-2xl text-xs font-black bg-rose-50 border border-rose-300 text-rose-700 animate-pulse">
+                                            <div className="w-2 h-2 bg-rose-600 rounded-full animate-ping"></div>
+                                            🔴 {fmtTime(recElapsed)} / 5:00
+                                        </div>
+                                    )}
+                                    {recStatus === 'complete' && (
+                                        <div className="flex items-center gap-2 px-3 py-2 rounded-2xl text-xs font-black bg-emerald-50 border border-emerald-200 text-emerald-700">
+                                            <Icons.CheckCircle className="w-3.5 h-3.5" /> VIDEO ✅ DONE
+                                        </div>
+                                    )}
+                                    {recStatus === 'failed' && (
+                                        <div className="flex items-center gap-2 px-3 py-2 rounded-2xl text-xs font-black bg-gray-100 border border-gray-300 text-gray-600">
+                                            <Icons.VideoOff className="w-3.5 h-3.5" /> NO VIDEO
+                                        </div>
+                                    )}
 
                                     {/* Warnings */}
                                     <div className={`flex items-center gap-2 px-4 py-2 rounded-2xl text-xs font-black tracking-tighter border transition-all ${warnings > 2 ? 'bg-rose-100 border-rose-200 text-rose-700' : 'bg-amber-100 border-amber-200 text-amber-700'}`}>
@@ -10820,8 +11014,31 @@
                                                 </button>
                                             </div>
                                         )}
-                                        {isRecording && (
-                                            <div className="absolute top-4 right-4 flex items-center gap-2 bg-rose-600 text-white text-[10px] font-black px-3 py-1.5 rounded-full animate-pulse shadow-lg z-10 border border-white/20">
+                                        {/* Mandatory Recording Badge */}
+                                        {recStatus === 'waiting' && (
+                                            <div className="absolute top-3 right-3 flex items-center gap-1.5 bg-amber-500 text-white text-[9px] font-black px-2.5 py-1.5 rounded-full shadow-lg z-10 border border-white/30">
+                                                <div className="w-2 h-2 bg-white rounded-full animate-pulse"></div>
+                                                REC IN {fmtTime(REC_WAIT_SEC - recWait)}
+                                            </div>
+                                        )}
+                                        {recStatus === 'recording' && (
+                                            <div className="absolute top-3 right-3 flex items-center gap-1.5 bg-rose-600 text-white text-[9px] font-black px-2.5 py-1.5 rounded-full animate-pulse shadow-lg z-10 border border-white/30">
+                                                <div className="w-2 h-2 bg-white rounded-full"></div>
+                                                🔴 {fmtTime(recElapsed)} / 5:00
+                                            </div>
+                                        )}
+                                        {recStatus === 'complete' && (
+                                            <div className="absolute top-3 right-3 flex items-center gap-1.5 bg-emerald-600 text-white text-[9px] font-black px-2.5 py-1.5 rounded-full shadow-lg z-10 border border-white/30">
+                                                ✅ REC DONE
+                                            </div>
+                                        )}
+                                        {recStatus === 'failed' && (
+                                            <div className="absolute top-3 right-3 flex items-center gap-1.5 bg-gray-700 text-white text-[9px] font-black px-2.5 py-1.5 rounded-full shadow-lg z-10 border border-white/30">
+                                                ⚠️ NO VIDEO
+                                            </div>
+                                        )}
+                                        {isRecording && recStatus !== 'recording' && (
+                                            <div className="absolute top-3 right-3 flex items-center gap-1.5 bg-rose-600 text-white text-[9px] font-black px-2.5 py-1.5 rounded-full animate-pulse shadow-lg z-10 border border-white/20">
                                                 <div className="w-2 h-2 bg-white rounded-full"></div> LIVE REC
                                             </div>
                                         )}
