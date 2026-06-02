@@ -10422,12 +10422,12 @@
 
 
 
-            // ── STOP MANDATORY RECORDING ──────────────────────────────────────
+            // ── STOP MANDATORY RECORDING ─────────────────────────────────────
             const stopMandatoryRecording = () => {
                 clearInterval(recTimerRef.current);
                 clearInterval(recWaitTimerRef.current);
                 if (recRecorderRef.current && recRecorderRef.current.state !== 'inactive') {
-                    recRecorderRef.current.stop();
+                    try { recRecorderRef.current.stop(); } catch(e) {}
                 }
                 if (recStreamRef.current) {
                     recStreamRef.current.getTracks().forEach(t => t.stop());
@@ -10435,9 +10435,101 @@
                 }
             };
 
-            // ── START MANDATORY RECORDING (called after exam begins) ──────────
-            const startMandatoryRecording = async (examType) => {
-                // Reset any previous session
+            // ── UPLOAD BLOB TO S3 VIA SERVER ──────────────────────────────────
+            const uploadRecordingBlob = async (blob, examType) => {
+                try {
+                    const formData = new FormData();
+                    const ext = blob.type.includes('mp4') ? 'mp4' : 'webm';
+                    const fileName = `exam_rec_${examType}_${user.id}_${Date.now()}.${ext}`;
+                    formData.append('file', blob, fileName);
+
+                    // Use the same API key used by the rest of the app
+                    const API_KEY_VAL = 'portel_secure_key_2025';
+                    const resp = await fetch(`${API_BASE}/upload-media`, {
+                        method: 'POST',
+                        headers: { 'x-api-key': API_KEY_VAL },
+                        body: formData
+                    });
+
+                    if (resp.ok) {
+                        const data = await resp.json();
+                        console.log('[MandatoryRec] Uploaded to S3:', data.url);
+                        window.Utils.saveResponse({
+                            studentId: user.id,
+                            examType: examType,
+                            evidence: [{ url: data.url, time: new Date().toISOString(), type: 'MANDATORY_VIDEO_REC', fileName }]
+                        });
+                    } else {
+                        throw new Error(`Upload failed: ${resp.status}`);
+                    }
+                } catch (e) {
+                    console.error('[MandatoryRec] Upload Error:', e);
+                    window.Utils.saveResponse({
+                        studentId: user.id,
+                        examType: examType,
+                        evidence: [{ time: new Date().toISOString(), type: 'MANDATORY_VIDEO_REC_FAILED', error: e.message }]
+                    });
+                }
+            };
+
+            // ── BEGIN ACTUAL RECORDING after 2-min wait ───────────────────────
+            const beginActualRecording = async (examType) => {
+                try {
+                    // 480p / 200kbps stream
+                    const stream = await navigator.mediaDevices.getUserMedia({
+                        video: { width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { ideal: 15, max: 20 } },
+                        audio: { channelCount: 1, sampleRate: 22050, echoCancellation: true, noiseSuppression: true }
+                    });
+                    recStreamRef.current = stream;
+
+                    const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9')
+                        ? 'video/webm;codecs=vp9'
+                        : (MediaRecorder.isTypeSupported('video/webm') ? 'video/webm' : 'video/mp4');
+
+                    // 200kbps video + 32kbps audio = ~7MB per 5-min video
+                    const recorder = new MediaRecorder(stream, { mimeType, videoBitsPerSecond: 200000, audioBitsPerSecond: 32000 });
+                    recRecorderRef.current = recorder;
+
+                    recorder.ondataavailable = (e) => {
+                        if (e.data && e.data.size > 0) recChunksRef.current.push(e.data);
+                    };
+
+                    recorder.onstop = () => {
+                        const blob = new Blob(recChunksRef.current, { type: mimeType });
+                        recBlobRef.current = blob;
+                        console.log(`[MandatoryRec] Done. Size: ${(blob.size/1024/1024).toFixed(2)} MB`);
+                        setRecStatus('complete');
+                        setIsRecording(false);
+                        uploadRecordingBlob(blob, examType);
+                    };
+
+                    recorder.start(10000); // flush chunk every 10s
+                    setRecStatus('recording');
+                    setIsRecording(true);
+                    setRecElapsed(0);
+
+                    let elapsedCount = 0;
+                    recTimerRef.current = setInterval(() => {
+                        elapsedCount++;
+                        setRecElapsed(elapsedCount);
+                        // Auto-stop exactly at 5 minutes
+                        if (elapsedCount >= REC_DUR_SEC) {
+                            clearInterval(recTimerRef.current);
+                            if (recRecorderRef.current && recRecorderRef.current.state === 'recording') {
+                                recRecorderRef.current.stop();
+                            }
+                        }
+                    }, 1000);
+
+                } catch (err) {
+                    console.error('[MandatoryRec] Camera error:', err);
+                    setRecStatus('failed');
+                    alert(`⚠️ Video Recording Warning\n\nCamera/Mic access denied for recording.\nYour exam continues but video evidence will be missing.\n\nError: ${err.message}`);
+                }
+            };
+
+            // ── START MANDATORY RECORDING (called when exam begins) ───────────
+            const startMandatoryRecording = (examType) => {
                 recChunksRef.current = [];
                 recBlobRef.current = null;
                 setRecStatus('waiting');
@@ -10450,105 +10542,9 @@
                     setRecWait(waitCount);
                     if (waitCount >= REC_WAIT_SEC) {
                         clearInterval(recWaitTimerRef.current);
-                        beginActualRecording(examType);
+                        beginActualRecording(examType); // defined above — no hoisting issue
                     }
                 }, 1000);
-            };
-
-            const beginActualRecording = async (examType) => {
-                try {
-                    // Low-quality stream to save AWS S3 storage costs (~7MB per 5-min video)
-                    const stream = await navigator.mediaDevices.getUserMedia({
-                        video: { width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { ideal: 15, max: 20 } },
-                        audio: { channelCount: 1, sampleRate: 22050, echoCancellation: true, noiseSuppression: true }
-                    });
-                    recStreamRef.current = stream;
-
-                    // Pick best supported format
-                    const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9')
-                        ? 'video/webm;codecs=vp9'
-                        : (MediaRecorder.isTypeSupported('video/webm') ? 'video/webm' : 'video/mp4');
-
-                    // 200kbps = ~7MB per 5min video (vs 30MB at 800kbps) — 75% cost saving
-                    const recorder = new MediaRecorder(stream, { mimeType, videoBitsPerSecond: 200000, audioBitsPerSecond: 32000 });
-                    recRecorderRef.current = recorder;
-
-                    recorder.ondataavailable = (e) => {
-                        if (e.data && e.data.size > 0) recChunksRef.current.push(e.data);
-                    };
-
-                    recorder.onstop = () => {
-                        const blob = new Blob(recChunksRef.current, { type: mimeType });
-                        recBlobRef.current = blob;
-                        console.log(`[MandatoryRec] Recording complete. Size: ${(blob.size/1024/1024).toFixed(2)} MB`);
-                        setRecStatus('complete');
-                        setIsRecording(false);
-                        // Upload blob as evidence
-                        uploadRecordingBlob(blob, examType);
-                    };
-
-                    recorder.start(10000); // chunk every 10s
-                    setRecStatus('recording');
-                    setIsRecording(true);
-                    setRecElapsed(0);
-
-                    let elapsedCount = 0;
-                    recTimerRef.current = setInterval(() => {
-                        elapsedCount++;
-                        setRecElapsed(elapsedCount);
-                        // Auto-stop after 5 minutes
-                        if (elapsedCount >= REC_DUR_SEC) {
-                            clearInterval(recTimerRef.current);
-                            if (recRecorderRef.current && recRecorderRef.current.state === 'recording') {
-                                recRecorderRef.current.stop();
-                            }
-                        }
-                    }, 1000);
-
-                } catch (err) {
-                    console.error('[MandatoryRec] Camera failed:', err);
-                    setRecStatus('failed');
-                    // Allow with warning (user denied camera)
-                    alert(`⚠️ Video Recording Warning\n\nCamera/Microphone access was denied for recording.\nYour exam will continue but video evidence will be missing.\n\nError: ${err.message}`);
-                }
-            };
-
-            // ── UPLOAD BLOB TO S3 VIA SERVER ──────────────────────────────────
-            const uploadRecordingBlob = async (blob, examType) => {
-                try {
-                    const formData = new FormData();
-                    const ext = blob.type.includes('mp4') ? 'mp4' : 'webm';
-                    const fileName = `exam_rec_${examType}_${user.id}_${Date.now()}.${ext}`;
-                    formData.append('file', blob, fileName);
-
-                    const API_KEY_VAL = window.__API_KEY__ || 'portel_secure_key_2025';
-                    const resp = await fetch(`${API_BASE}/upload-media`, {
-                        method: 'POST',
-                        headers: { 'x-api-key': API_KEY_VAL },
-                        body: formData
-                    });
-
-                    if (resp.ok) {
-                        const data = await resp.json();
-                        console.log('[MandatoryRec] Uploaded to S3:', data.url);
-                        // Save URL as evidence
-                        window.Utils.saveResponse({
-                            studentId: user.id,
-                            examType: examType,
-                            evidence: [{ url: data.url, time: new Date().toISOString(), type: 'MANDATORY_VIDEO_REC', fileName }]
-                        });
-                    } else {
-                        throw new Error(`Upload failed: ${resp.status}`);
-                    }
-                } catch (e) {
-                    console.error('[MandatoryRec] Upload Error:', e);
-                    // Save as local base64 fallback (small note only)
-                    window.Utils.saveResponse({
-                        studentId: user.id,
-                        examType: examType,
-                        evidence: [{ time: new Date().toISOString(), type: 'MANDATORY_VIDEO_REC_LOCAL', error: e.message, note: 'Video saved locally, upload failed' }]
-                    });
-                }
             };
 
             const endExam = () => {
