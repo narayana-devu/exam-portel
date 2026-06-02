@@ -486,7 +486,7 @@
 
         // CONFIGURATION
         // BACKEND CONFIGURATION
-        const API_BASE = window.location.origin + '/api'; // Use relative path for proxy
+        var API_BASE = window.location.origin + '/api'; // Use relative path for proxy
 
         let db = null; // Removed Firestore
         let auth = null;
@@ -2215,7 +2215,7 @@
     <script type="text/babel">
         const { useState, useEffect, useRef } = React;
         const { createRoot } = ReactDOM;
-        const API_BASE = window.location.origin + '/api';
+        var API_BASE = window.location.origin + '/api';
 
         // Safe Icon Component
         const LucideIcon = ({ name, className }) => {
