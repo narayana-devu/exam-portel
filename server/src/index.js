@@ -737,7 +737,7 @@ const runCleanup = async () => {
                                 ev.type === 'MANDATORY_VIDEO_REC' || (ev.url && (ev.url.includes('.webm') || ev.url.includes('.mp4')))
                             );
                             for (const ev of videoEvidence) {
-                                if (ev.url && ev.url.includes(process.env.BUCKET_NAME)) {
+                                if (s3 && ev.url && ev.url.includes(process.env.BUCKET_NAME)) {
                                     try {
                                         const urlObj = new URL(ev.url);
                                         const key = decodeURIComponent(urlObj.pathname.substring(1));
