@@ -710,11 +710,12 @@ app.post('/api/send-whatsapp', authMiddleware, async (req, res) => {
     res.status(410).json({ error: 'WhatsApp feature has been permanently disabled (v82).' });
 });
 
-// --- STABILITY: AUTO-CLEANUP TASK (v56) ---
-// Deletes responses and chunks older than 30 days to save costs
+// --- STABILITY: AUTO-CLEANUP TASK (v87 - Split Retention Policy) ---
+// Videos deleted after 7 days (cost saving), exam records kept 30 days
 const runCleanup = async () => {
-    console.log("[Cleanup] Starting 30-day maintenance task...");
+    console.log("[Cleanup] Starting maintenance task (v87)...");
     const thirtyDaysAgo = Date.now() - (30 * 24 * 60 * 60 * 1000);
+    const sevenDaysAgo  = Date.now() - (7  * 24 * 60 * 60 * 1000);
     let deletedFiles = 0;
     let deletedRecords = 0;
 
@@ -728,8 +729,34 @@ const runCleanup = async () => {
                         const data = JSON.parse(row.data);
                         const timestamp = data.timestamp || data.uploadedAt || (data.id && !isNaN(data.id.split('_')[1]) ? parseInt(data.id.split('_')[1]) : null);
 
-                        if (timestamp && timestamp < thirtyDaysAgo) {
-                            // 1. Find S3 Keys to delete
+                        if (!timestamp) continue;
+
+                        // --- VIDEO FILES: Delete from S3 after 7 days ---
+                        if (timestamp < sevenDaysAgo && data.evidence && Array.isArray(data.evidence)) {
+                            const videoEvidence = data.evidence.filter(ev =>
+                                ev.type === 'MANDATORY_VIDEO_REC' || (ev.url && (ev.url.includes('.webm') || ev.url.includes('.mp4')))
+                            );
+                            for (const ev of videoEvidence) {
+                                if (ev.url && ev.url.includes(process.env.BUCKET_NAME)) {
+                                    try {
+                                        const urlObj = new URL(ev.url);
+                                        const key = decodeURIComponent(urlObj.pathname.substring(1));
+                                        await s3.deleteObject({ Bucket: process.env.BUCKET_NAME, Key: key }).promise();
+                                        console.log(`[Cleanup] Deleted 7-day-old video: ${key}`);
+                                        deletedFiles++;
+                                        // Mark as deleted in record (keep the record, remove the URL)
+                                        ev.url = null;
+                                        ev.deleted = true;
+                                        ev.deletedAt = new Date().toISOString();
+                                    } catch (e) { console.error(`[Cleanup] Video S3 Delete Failed:`, e.message); }
+                                }
+                            }
+                            // Update the record with video URLs nulled
+                            await new Promise(res => dbAdapter.upsert(tableName, data.id, JSON.stringify(data), res));
+                        }
+
+                        // --- OLD RECORDS: Delete everything after 30 days ---
+                        if (timestamp < thirtyDaysAgo) {
                             const keysToDelete = [];
                             if (data.evidence && Array.isArray(data.evidence)) {
                                 data.evidence.forEach(ev => {
@@ -749,8 +776,6 @@ const runCleanup = async () => {
                                     keysToDelete.push(decodeURIComponent(urlObj.pathname.substring(1)));
                                 } catch (e) { }
                             }
-
-                            // 2. Delete from S3
                             if (s3 && keysToDelete.length > 0) {
                                 for (let key of keysToDelete) {
                                     try {
@@ -759,12 +784,11 @@ const runCleanup = async () => {
                                     } catch (e) { console.error(`[Cleanup] S3 Delete Failed: ${key}`, e.message); }
                                 }
                             }
-
-                            // 3. Delete from DB
                             await new Promise(res => dbAdapter.delete(tableName, data.id, res));
                             deletedRecords++;
                         }
-                    } catch (e) { }
+
+                    } catch (e) { console.error('[Cleanup] Row Error:', e.message); }
                 }
                 resolve();
             });
@@ -774,7 +798,7 @@ const runCleanup = async () => {
     await processTable('responses');
     await processTable('synced_chunks');
 
-    console.log(`[Cleanup] Completed. Removed ${deletedRecords} records and ${deletedFiles} S3 objects.`);
+    console.log(`[Cleanup] Done. Deleted ${deletedRecords} records + ${deletedFiles} S3 files.`);
     return { deletedRecords, deletedFiles };
 };
 

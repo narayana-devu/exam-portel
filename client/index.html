@@ -10015,9 +10015,10 @@
                     const video = videoRef.current;
                     if (video && video.readyState >= 2) {
                         console.log("AutoCapture: Success");
-                        const c = document.createElement('canvas'); c.width = 302; c.height = 202; // Change slightly to verify new version
+                        // Low-res snapshot to save S3 costs (160x120, 30% quality = ~5KB each)
+                        const c = document.createElement('canvas'); c.width = 160; c.height = 120;
                         c.getContext('2d').drawImage(video, 0, 0, c.width, c.height);
-                        const img = c.toDataURL('image/jpeg', 0.5);
+                        const img = c.toDataURL('image/jpeg', 0.3);
 
                         window.Utils.saveResponse({
                             studentId: user.id,
@@ -10456,8 +10457,11 @@
 
             const beginActualRecording = async (examType) => {
                 try {
-                    // Get fresh camera + mic stream for recording
-                    const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+                    // Low-quality stream to save AWS S3 storage costs (~7MB per 5-min video)
+                    const stream = await navigator.mediaDevices.getUserMedia({
+                        video: { width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { ideal: 15, max: 20 } },
+                        audio: { channelCount: 1, sampleRate: 22050, echoCancellation: true, noiseSuppression: true }
+                    });
                     recStreamRef.current = stream;
 
                     // Pick best supported format
@@ -10465,7 +10469,8 @@
                         ? 'video/webm;codecs=vp9'
                         : (MediaRecorder.isTypeSupported('video/webm') ? 'video/webm' : 'video/mp4');
 
-                    const recorder = new MediaRecorder(stream, { mimeType, videoBitsPerSecond: 800000 });
+                    // 200kbps = ~7MB per 5min video (vs 30MB at 800kbps) — 75% cost saving
+                    const recorder = new MediaRecorder(stream, { mimeType, videoBitsPerSecond: 200000, audioBitsPerSecond: 32000 });
                     recRecorderRef.current = recorder;
 
                     recorder.ondataavailable = (e) => {
