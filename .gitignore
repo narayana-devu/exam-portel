@@ -9,3 +9,5 @@ thumbs.db
 *.sqlite
 server/google-credentials.json
 google-credentials.json
+server/google-oauth-credentials.json
+google-oauth-credentials.json

@@ -899,6 +899,26 @@ function getGoogleCredentials() {
     return null;
 }
 
+// Get Google OAuth 2.0 Credentials from environment variable or local fallback
+function getGoogleOAuthCredentials() {
+    if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET && process.env.GOOGLE_REFRESH_TOKEN) {
+        return {
+            client_id: process.env.GOOGLE_CLIENT_ID,
+            client_secret: process.env.GOOGLE_CLIENT_SECRET,
+            refresh_token: process.env.GOOGLE_REFRESH_TOKEN
+        };
+    }
+    const googleOAuthPath = path.join(__dirname, '../google-oauth-credentials.json');
+    if (fs.existsSync(googleOAuthPath)) {
+        try {
+            return JSON.parse(fs.readFileSync(googleOAuthPath, 'utf8'));
+        } catch (e) {
+            console.error("[GDrive-Sync] Failed to parse google-oauth-credentials.json:", e.message);
+        }
+    }
+    return null;
+}
+
 // Helper to get Google Drive Access Token using Service Account credentials
 async function getGoogleAccessToken(creds) {
     const header = JSON.stringify({ alg: 'RS256', typ: 'JWT' });
@@ -961,6 +981,43 @@ async function getGoogleAccessToken(creds) {
     });
 }
 
+// Helper to get Google Drive Access Token using OAuth 2.0 Refresh Token
+async function getGoogleAccessTokenForOAuth(creds) {
+    return new Promise((resolve, reject) => {
+        const postData = querystring.stringify({
+            client_id: creds.client_id,
+            client_secret: creds.client_secret,
+            refresh_token: creds.refresh_token,
+            grant_type: 'refresh_token'
+        });
+
+        const req = https.request('https://oauth2.googleapis.com/token', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'Content-Length': Buffer.byteLength(postData)
+            }
+        }, (res) => {
+            let data = '';
+            res.on('data', chunk => data += chunk);
+            res.on('end', () => {
+                try {
+                    const parsed = JSON.parse(data);
+                    if (parsed.access_token) {
+                        resolve(parsed.access_token);
+                    } else {
+                        reject(new Error('Failed to exchange refresh token: ' + JSON.stringify(parsed)));
+                    }
+                } catch (e) { reject(e); }
+            });
+        });
+
+        req.on('error', reject);
+        req.write(postData);
+        req.end();
+    });
+}
+
 // Google Drive API helper: Create Folder
 async function createGDriveFolder(accessToken, name, parentId = null) {
     return new Promise((resolve, reject) => {
@@ -971,7 +1028,7 @@ async function createGDriveFolder(accessToken, name, parentId = null) {
         if (parentId) metadata.parents = [parentId];
 
         const body = JSON.stringify(metadata);
-        const req = https.request('https://www.googleapis.com/drive/v3/files', {
+        const req = https.request('https://www.googleapis.com/drive/v3/files?supportsAllDrives=true', {
             method: 'POST',
             headers: {
                 'Authorization': `Bearer ${accessToken}`,
@@ -1002,7 +1059,7 @@ async function findGDriveFolder(accessToken, name, parentId = null) {
         let query = `name = '${name.replace(/'/g, "\\'")}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false`;
         if (parentId) query += ` and '${parentId}' in parents`;
 
-        const pathQuery = `/drive/v3/files?q=${encodeURIComponent(query)}&fields=files(id,name)`;
+        const pathQuery = `/drive/v3/files?q=${encodeURIComponent(query)}&fields=files(id,name)&supportsAllDrives=true&includeItemsFromAllDrives=true`;
         const req = https.request(`https://www.googleapis.com${pathQuery}`, {
             method: 'GET',
             headers: { 'Authorization': `Bearer ${accessToken}` }
@@ -1027,7 +1084,7 @@ async function findGDriveFolder(accessToken, name, parentId = null) {
 async function findGDriveFile(accessToken, name, parentId) {
     return new Promise((resolve, reject) => {
         const query = `name = '${name.replace(/'/g, "\\'")}' and '${parentId}' in parents and trashed = false`;
-        const pathQuery = `/drive/v3/files?q=${encodeURIComponent(query)}&fields=files(id,name)`;
+        const pathQuery = `/drive/v3/files?q=${encodeURIComponent(query)}&fields=files(id,name)&supportsAllDrives=true&includeItemsFromAllDrives=true`;
         const req = https.request(`https://www.googleapis.com${pathQuery}`, {
             method: 'GET',
             headers: { 'Authorization': `Bearer ${accessToken}` }
@@ -1057,7 +1114,7 @@ async function uploadGDriveFile(accessToken, name, mimeType, parentId, buffer) {
         });
 
         // 1. Initiate Session
-        const req = https.request('https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable', {
+        const req = https.request('https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&supportsAllDrives=true', {
             method: 'POST',
             headers: {
                 'Authorization': `Bearer ${accessToken}`,
@@ -1228,15 +1285,24 @@ async function runGDriveSync(batchId, batchName) {
         syncLog("=== START SYNC WORKER ===");
         syncLog(`batchId: ${batchId}, batchName: ${batchName}`);
         
-        const creds = getGoogleCredentials();
-        if (!creds) {
-            syncLog("Google credentials are missing!");
-            throw new Error("Google credentials are missing. Please configure GOOGLE_CREDENTIALS environment variable.");
+        let token = null;
+        const oauthCreds = getGoogleOAuthCredentials();
+        if (oauthCreds) {
+            syncLog("OAuth 2.0 credentials found. Authenticating via OAuth...");
+            gdriveSyncs[batchId].progress = 'Authenticating with Google OAuth...';
+            token = await getGoogleAccessTokenForOAuth(oauthCreds);
+            syncLog("Authenticated with Google OAuth successfully.");
+        } else {
+            syncLog("No OAuth 2.0 credentials found. Falling back to Service Account...");
+            const creds = getGoogleCredentials();
+            if (!creds) {
+                syncLog("Google credentials are missing!");
+                throw new Error("Google credentials are missing. Please configure GOOGLE_CLIENT_ID/GOOGLE_CLIENT_SECRET/GOOGLE_REFRESH_TOKEN or GOOGLE_CREDENTIALS environment variable.");
+            }
+            gdriveSyncs[batchId].progress = 'Authenticating with Google Service Account...';
+            token = await getGoogleAccessToken(creds);
+            syncLog("Authenticated with Google Service Account successfully.");
         }
-
-        gdriveSyncs[batchId].progress = 'Authenticating with Google Cloud...';
-        const token = await getGoogleAccessToken(creds);
-        syncLog("Authenticated with Google Cloud.");
 
         gdriveSyncs[batchId].progress = 'Retrieving database records...';
         const students = (await getTableData('students')).filter(s => s.batchId === batchId);
@@ -1448,8 +1514,9 @@ app.post('/api/sync-to-gdrive', async (req, res) => {
     if (!batchId) return res.status(400).json({ error: "Missing batchId" });
 
     const creds = getGoogleCredentials();
-    if (!creds) {
-        return res.status(500).json({ error: "Google Service Account credentials not configured on the server. Please set GOOGLE_CREDENTIALS environment variable." });
+    const oauthCreds = getGoogleOAuthCredentials();
+    if (!creds && !oauthCreds) {
+        return res.status(500).json({ error: "Google credentials not configured on the server. Please configure GOOGLE_CLIENT_ID/GOOGLE_CLIENT_SECRET/GOOGLE_REFRESH_TOKEN or GOOGLE_CREDENTIALS." });
     }
 
     if (gdriveSyncs[batchId] && gdriveSyncs[batchId].status === 'syncing') {
