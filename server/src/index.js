@@ -1107,12 +1107,28 @@ async function uploadGDriveFile(accessToken, name, mimeType, parentId, buffer) {
     });
 }
 
+// Sync logging helper
+const logPath = path.join(__dirname, '../sync.log');
+const syncLog = (msg) => {
+    try {
+        fs.appendFileSync(logPath, `[${new Date().toISOString()}] ${msg}\n`);
+    } catch (e) {
+        console.error("Failed to write to sync.log:", e.message);
+    }
+};
+
 // Fetch evidence file as raw buffer (support S3, proxy, local)
 const getEvidenceBuffer = async (item) => {
     let url = item.url || item.img || item.downloadUrl;
-    if (!url) return null;
+    if (!url) {
+        syncLog("[getEvidenceBuffer] Empty URL in item: " + JSON.stringify(item));
+        return null;
+    }
+
+    syncLog("[getEvidenceBuffer] Fetching URL: " + url);
 
     if (url.startsWith('data:')) {
+        syncLog("[getEvidenceBuffer] Detected Data URL.");
         const matches = url.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
         if (matches && matches.length === 3) {
             return Buffer.from(matches[2], 'base64');
@@ -1129,30 +1145,43 @@ const getEvidenceBuffer = async (item) => {
             } else if (s3Key.startsWith('/')) {
                 s3Key = s3Key.substring(1);
             }
+            syncLog("[getEvidenceBuffer] Attempting S3 fetch: " + s3Key);
             const s3Data = await s3.getObject({
                 Bucket: process.env.BUCKET_NAME,
                 Key: decodeURIComponent(s3Key)
             }).promise();
+            syncLog("[getEvidenceBuffer] S3 fetch success. Size: " + s3Data.Body.length);
             return s3Data.Body;
         } catch (e) {
+            syncLog("[getEvidenceBuffer] S3 Get Object Error: " + e.message);
             console.error("[GDrive-Sync S3 Get Error]:", e.message);
         }
     }
 
     if (url.startsWith('http')) {
         try {
+            syncLog("[getEvidenceBuffer] Attempting HTTP fetch: " + url);
             return new Promise((resolve) => {
                 https.get(url, (res) => {
                     if (res.statusCode !== 200) {
+                        syncLog("[getEvidenceBuffer] HTTP fetch failed. Status: " + res.statusCode);
                         resolve(null);
                         return;
                     }
                     const chunks = [];
                     res.on('data', chunk => chunks.push(chunk));
-                    res.on('end', () => resolve(Buffer.concat(chunks)));
-                }).on('error', () => resolve(null));
+                    res.on('end', () => {
+                        const buf = Buffer.concat(chunks);
+                        syncLog("[getEvidenceBuffer] HTTP fetch success. Size: " + buf.length);
+                        resolve(buf);
+                    });
+                }).on('error', (err) => {
+                    syncLog("[getEvidenceBuffer] HTTP Request Error: " + err.message);
+                    resolve(null);
+                });
             });
         } catch (e) {
+            syncLog("[getEvidenceBuffer] HTTP Fetch Catch Error: " + e.message);
             console.warn("[GDrive-Sync HTTP Fetch Error]:", e.message);
         }
     }
@@ -1160,13 +1189,20 @@ const getEvidenceBuffer = async (item) => {
     try {
         const basename = path.basename(url);
         const localPath = path.join(__dirname, '../uploads', basename);
+        syncLog("[getEvidenceBuffer] Attempting Local File read: " + localPath);
         if (fs.existsSync(localPath)) {
-            return fs.readFileSync(localPath);
+            const buf = fs.readFileSync(localPath);
+            syncLog("[getEvidenceBuffer] Local File read success. Size: " + buf.length);
+            return buf;
+        } else {
+            syncLog("[getEvidenceBuffer] Local File does not exist: " + localPath);
         }
     } catch (e) {
+        syncLog("[getEvidenceBuffer] Local File Read Error: " + e.message);
         console.error("[GDrive-Sync Local File Error]:", e);
     }
 
+    syncLog("[getEvidenceBuffer] Failed to retrieve buffer for URL: " + url);
     return null;
 };
 
@@ -1189,19 +1225,25 @@ const gdriveSyncs = {};
 // Background sync worker function
 async function runGDriveSync(batchId, batchName) {
     try {
+        syncLog("=== START SYNC WORKER ===");
+        syncLog(`batchId: ${batchId}, batchName: ${batchName}`);
+        
         const creds = getGoogleCredentials();
         if (!creds) {
+            syncLog("Google credentials are missing!");
             throw new Error("Google credentials are missing. Please configure GOOGLE_CREDENTIALS environment variable.");
         }
 
         gdriveSyncs[batchId].progress = 'Authenticating with Google Cloud...';
         const token = await getGoogleAccessToken(creds);
+        syncLog("Authenticated with Google Cloud.");
 
         gdriveSyncs[batchId].progress = 'Retrieving database records...';
         const students = (await getTableData('students')).filter(s => s.batchId === batchId);
         const allResponses = await getTableData('responses');
         const batches = await getTableData('batches');
         const batch = batches.find(b => b.id === batchId) || { name: batchName };
+        syncLog(`Students in batch: ${students.length}, Total responses in DB: ${allResponses.length}`);
 
         const parentFolderId = process.env.GOOGLE_DRIVE_FOLDER_ID || '1tv8GLA-8XWLGDnnzbMN4ivdf5uinvbOE';
         
@@ -1217,10 +1259,14 @@ async function runGDriveSync(batchId, batchName) {
             if (!isNaN(d.getTime())) date = d;
         }
         const monthFolderQueryName = `${monthNames[date.getMonth()]}_${date.getFullYear()}`;
+        syncLog(`Month Folder: ${monthFolderQueryName}`);
         
         let monthFolderId = await findGDriveFolder(token, monthFolderQueryName, parentFolderId);
         if (!monthFolderId) {
             monthFolderId = await createGDriveFolder(token, monthFolderQueryName, parentFolderId);
+            syncLog(`Created Month Folder ID: ${monthFolderId}`);
+        } else {
+            syncLog(`Found Month Folder ID: ${monthFolderId}`);
         }
 
         // 2. Create/Find Batch Folder inside Month folder
@@ -1229,6 +1275,9 @@ async function runGDriveSync(batchId, batchName) {
         let batchFolderId = await findGDriveFolder(token, batchDirName, monthFolderId);
         if (!batchFolderId) {
             batchFolderId = await createGDriveFolder(token, batchDirName, monthFolderId);
+            syncLog(`Created Batch Folder ID: ${batchFolderId}`);
+        } else {
+            syncLog(`Found Batch Folder ID: ${batchFolderId}`);
         }
 
         // 3. Create/Find the 4 subfolders under batchFolderId
@@ -1239,6 +1288,9 @@ async function runGDriveSync(batchId, batchName) {
             let fid = await findGDriveFolder(token, name, batchFolderId);
             if (!fid) {
                 fid = await createGDriveFolder(token, name, batchFolderId);
+                syncLog(`Created subfolder '${name}' ID: ${fid}`);
+            } else {
+                syncLog(`Found subfolder '${name}' ID: ${fid}`);
             }
             subFolderIds[name] = fid;
         }
@@ -1249,6 +1301,8 @@ async function runGDriveSync(batchId, batchName) {
         for (const s of students) {
             const studentResponses = allResponses.filter(r => r.studentId === s.id || r.studentId === s.username);
             const videoCountMap = { theory: 0, practical: 0, viva: 0 };
+            
+            syncLog(`Student: ${s.name} (${s.username}), responses found: ${studentResponses.length}`);
 
             for (const resp of studentResponses) {
                 const rawExamType = (resp.examType || '').toLowerCase();
@@ -1277,7 +1331,6 @@ async function runGDriveSync(batchId, batchName) {
                                 fileSuffix: fileSuffix
                             });
                         } else {
-                            // It's a photo (manual or regular proctoring)
                             let categoryLabel = 'other';
                             if (isManual) categoryLabel = 'manual';
                             else if (rawExamType.includes('theory')) categoryLabel = 'theory';
@@ -1298,65 +1351,78 @@ async function runGDriveSync(batchId, batchName) {
 
         const totalTasks = uploadTasks.length;
         gdriveSyncs[batchId].total = totalTasks;
+        syncLog(`Total upload tasks gathered: ${totalTasks}`);
 
         if (totalTasks === 0) {
             gdriveSyncs[batchId].status = 'completed';
             gdriveSyncs[batchId].progress = 'No student files or videos found to upload.';
+            syncLog("Sync complete: No tasks.");
             return;
         }
 
         let completed = 0;
         for (const task of uploadTasks) {
             gdriveSyncs[batchId].progress = `Syncing: ${task.student.name} (${completed + 1}/${totalTasks})`;
+            syncLog(`Processing task: student=${task.student.name}, type=${task.type}, url=${task.item.url || task.item.img}`);
 
             try {
-                // Determine candidate subfolder under "evidence of each student/"
                 const studentDirName = `${task.student.name}_${task.student.username}`.replace(/ /g, '_').replace(/[^a-zA-Z0-9_]/g, '');
                 let studentFolderId = await findGDriveFolder(token, studentDirName, subFolderIds['evidence of each student']);
                 if (!studentFolderId) {
                     studentFolderId = await createGDriveFolder(token, studentDirName, subFolderIds['evidence of each student']);
+                    syncLog(`Created student folder '${studentDirName}' ID: ${studentFolderId}`);
                 }
 
-                // Fetch file buffer (downloads from S3/local once)
                 const buffer = await getEvidenceBuffer(task.item);
                 if (buffer) {
                     if (task.type === 'video') {
                         const ext = (task.item.url || task.item.img || '').toLowerCase().endsWith('.mp4') ? 'mp4' : 'webm';
                         const mimeType = `video/${ext}`;
 
-                        // Filename in shared batch "videos" folder
                         const sharedFileName = `${task.student.username}_${task.student.name}_${task.targetExamType}${task.fileSuffix}.${ext}`.replace(/ /g, '_');
                         let fileIdShared = await findGDriveFile(token, sharedFileName, subFolderIds['videos']);
                         if (!fileIdShared) {
+                            syncLog(`Uploading video to shared folder: ${sharedFileName}`);
                             fileIdShared = await uploadGDriveFile(token, sharedFileName, mimeType, subFolderIds['videos'], buffer);
+                        } else {
+                            syncLog(`Video already exists in shared folder: ${sharedFileName}`);
                         }
 
-                        // Filename in student's personal folder
                         const personalFileName = `${task.targetExamType}${task.fileSuffix}.${ext}`;
                         let fileIdPersonal = await findGDriveFile(token, personalFileName, studentFolderId);
                         if (!fileIdPersonal) {
+                            syncLog(`Uploading video to student folder: ${personalFileName}`);
                             fileIdPersonal = await uploadGDriveFile(token, personalFileName, mimeType, studentFolderId, buffer);
+                        } else {
+                            syncLog(`Video already exists in student folder: ${personalFileName}`);
                         }
                     } else if (task.type === 'photo') {
                         const label = (task.item.type || 'Photo').replace(/[^a-zA-Z0-9_]/g, '_');
                         const time = (task.item.time || new Date().toISOString()).slice(0, 19).replace(/:/g, '-');
 
-                        // Filename in shared batch "photos" folder
                         const sharedFileName = `${task.student.username}_${task.student.name}_${task.categoryLabel}_${label}_${time}.jpg`.replace(/ /g, '_');
                         let fileIdShared = await findGDriveFile(token, sharedFileName, subFolderIds['photos']);
                         if (!fileIdShared) {
+                            syncLog(`Uploading photo to shared folder: ${sharedFileName}`);
                             fileIdShared = await uploadGDriveFile(token, sharedFileName, 'image/jpeg', subFolderIds['photos'], buffer);
+                        } else {
+                            syncLog(`Photo already exists in shared folder: ${sharedFileName}`);
                         }
 
-                        // Filename in student's personal folder
                         const personalFileName = `${task.categoryLabel}_${label}_${time}.jpg`.replace(/ /g, '_');
                         let fileIdPersonal = await findGDriveFile(token, personalFileName, studentFolderId);
                         if (!fileIdPersonal) {
+                            syncLog(`Uploading photo to student folder: ${personalFileName}`);
                             fileIdPersonal = await uploadGDriveFile(token, personalFileName, 'image/jpeg', studentFolderId, buffer);
+                        } else {
+                            syncLog(`Photo already exists in student folder: ${personalFileName}`);
                         }
                     }
+                } else {
+                    syncLog(`Skipping task because file buffer is NULL.`);
                 }
             } catch (err) {
+                syncLog(`Error processing task: ${err.message}`);
                 console.error(`[GDrive-Sync] Failed file uploads for candidate ${task.student.name}:`, err.message);
             }
 
@@ -1366,7 +1432,9 @@ async function runGDriveSync(batchId, batchName) {
 
         gdriveSyncs[batchId].status = 'completed';
         gdriveSyncs[batchId].progress = `Sync complete! Successfully synchronized ${completed} files to Google Drive.`;
+        syncLog(`=== SYNC WORKER COMPLETE. Uploaded ${completed}/${totalTasks} tasks ===`);
     } catch (err) {
+        syncLog(`Worker CRITICAL error: ${err.message}`);
         console.error("[GDrive-Sync Worker Error]:", err);
         gdriveSyncs[batchId].status = 'error';
         gdriveSyncs[batchId].error = err.message;
@@ -1419,6 +1487,17 @@ app.get('/api/sync-to-gdrive/status/:batchId', (req, res) => {
     const { batchId } = req.params;
     const syncState = gdriveSyncs[batchId] || { status: 'idle', progress: 'No sync active.' };
     res.json(syncState);
+});
+
+// 3. Endpoint: Read Sync Logs (Diagnostics)
+app.get('/api/sync-log', (req, res) => {
+    const logPath = path.join(__dirname, '../sync.log');
+    if (fs.existsSync(logPath)) {
+        res.setHeader('Content-Type', 'text/plain');
+        res.send(fs.readFileSync(logPath, 'utf8'));
+    } else {
+        res.send("No log file found.");
+    }
 });
 
 
