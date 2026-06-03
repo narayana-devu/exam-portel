@@ -9811,6 +9811,8 @@
             const recTimerRef      = useRef(null);   // elapsed counter interval
             const recWaitTimerRef  = useRef(null);   // pre-record wait interval
             const recStreamRef     = useRef(null);   // dedicated recording stream
+            const mandatoryUploadResolveRef = useRef(null); // Ref to resolve upload wait promise
+            const mandatoryUploadPromiseRef = useRef(null); // Ref to track active upload promise
             const REC_WAIT_SEC  = 120; // 2 minutes before recording starts
             const REC_DUR_SEC   = 300; // 5 minutes of mandatory recording
 
@@ -10436,6 +10438,19 @@
                 }
             };
 
+            // ── STOP AND AWAIT UPLOAD MANDATORY RECORDING ────────────────────
+            const stopAndUploadMandatoryRecording = () => {
+                if (recStatus === 'idle' || recStatus === 'failed' || recStatus === 'complete' || recStatus === 'waiting') {
+                    stopMandatoryRecording();
+                    return mandatoryUploadPromiseRef.current || Promise.resolve();
+                }
+
+                return new Promise(resolve => {
+                    mandatoryUploadResolveRef.current = resolve;
+                    stopMandatoryRecording();
+                });
+            };
+
             // ── UPLOAD BLOB TO S3 VIA SERVER ──────────────────────────────────
             const uploadRecordingBlob = async (blob, examType) => {
                 try {
@@ -10455,7 +10470,7 @@
                     if (resp.ok) {
                         const data = await resp.json();
                         console.log('[MandatoryRec] Uploaded to S3:', data.url);
-                        window.Utils.saveResponse({
+                        await window.Utils.saveResponse({
                             studentId: user.id,
                             examType: examType,
                             evidence: [{ url: data.url, time: new Date().toISOString(), type: 'MANDATORY_VIDEO_REC', fileName }]
@@ -10465,7 +10480,7 @@
                     }
                 } catch (e) {
                     console.error('[MandatoryRec] Upload Error:', e);
-                    window.Utils.saveResponse({
+                    await window.Utils.saveResponse({
                         studentId: user.id,
                         examType: examType,
                         evidence: [{ time: new Date().toISOString(), type: 'MANDATORY_VIDEO_REC_FAILED', error: e.message }]
@@ -10495,13 +10510,28 @@
                         if (e.data && e.data.size > 0) recChunksRef.current.push(e.data);
                     };
 
-                    recorder.onstop = () => {
+                    recorder.onstop = async () => {
                         const blob = new Blob(recChunksRef.current, { type: mimeType });
                         recBlobRef.current = blob;
                         console.log(`[MandatoryRec] Done. Size: ${(blob.size/1024/1024).toFixed(2)} MB`);
                         setRecStatus('complete');
                         setIsRecording(false);
-                        uploadRecordingBlob(blob, examType);
+                        
+                        const uploadProc = (async () => {
+                            try {
+                                await uploadRecordingBlob(blob, examType);
+                            } catch (err) {
+                                console.error("Upload failed in onstop:", err);
+                            }
+                        })();
+                        mandatoryUploadPromiseRef.current = uploadProc;
+                        await uploadProc;
+                        mandatoryUploadPromiseRef.current = null;
+
+                        if (mandatoryUploadResolveRef.current) {
+                            mandatoryUploadResolveRef.current();
+                            mandatoryUploadResolveRef.current = null;
+                        }
                     };
 
                     recorder.start(10000); // flush chunk every 10s
@@ -10616,8 +10646,11 @@
                             }
                         }
                     }
-                    // Stop mandatory recording on submit
-                    stopMandatoryRecording();
+
+                    // Stop mandatory recording and wait for upload to complete
+                    console.log("[Submit] Stopping mandatory recording and waiting for S3 upload...");
+                    await stopAndUploadMandatoryRecording();
+                    console.log("[Submit] Mandatory recording upload process finished.");
 
                     if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
                         console.log("[Submit] Stopping legacy recorder...");
