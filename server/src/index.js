@@ -876,6 +876,533 @@ setInterval(runCleanup, 24 * 60 * 60 * 1000);
 setTimeout(runCleanup, 10000);
 
 
+// ── GOOGLE DRIVE SYNC INTEGRATION (v86.9.5) ───────────────────────────
+const crypto = require('crypto');
+
+// Get Google credentials from environment variable or local fallback
+function getGoogleCredentials() {
+    if (process.env.GOOGLE_CREDENTIALS) {
+        try {
+            return JSON.parse(process.env.GOOGLE_CREDENTIALS);
+        } catch (e) {
+            console.error("[GDrive-Sync] Failed to parse GOOGLE_CREDENTIALS environment variable:", e.message);
+        }
+    }
+    const googleCredentialsPath = path.join(__dirname, '../google-credentials.json');
+    if (fs.existsSync(googleCredentialsPath)) {
+        try {
+            return JSON.parse(fs.readFileSync(googleCredentialsPath, 'utf8'));
+        } catch (e) {
+            console.error("[GDrive-Sync] Failed to parse google-credentials.json:", e.message);
+        }
+    }
+    return null;
+}
+
+// Helper to get Google Drive Access Token using Service Account credentials
+async function getGoogleAccessToken(creds) {
+    const header = JSON.stringify({ alg: 'RS256', typ: 'JWT' });
+    const claim = JSON.stringify({
+        iss: creds.client_email,
+        scope: 'https://www.googleapis.com/auth/drive',
+        aud: creds.token_uri,
+        exp: Math.floor(Date.now() / 1000) + 3600,
+        iat: Math.floor(Date.now() / 1000)
+    });
+
+    const base64UrlEncode = (str) => {
+        return Buffer.from(str)
+            .toString('base64')
+            .replace(/=/g, '')
+            .replace(/\+/g, '-')
+            .replace(/\//g, '_');
+    };
+
+    const tokenInput = `${base64UrlEncode(header)}.${base64UrlEncode(claim)}`;
+    const sign = crypto.createSign('RSA-SHA256');
+    sign.update(tokenInput);
+    const signature = sign.sign(creds.private_key, 'base64')
+        .replace(/=/g, '')
+        .replace(/\+/g, '-')
+        .replace(/\//g, '_');
+
+    const jwt = `${tokenInput}.${signature}`;
+
+    return new Promise((resolve, reject) => {
+        const postData = querystring.stringify({
+            grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+            assertion: jwt
+        });
+
+        const req = https.request(creds.token_uri, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'Content-Length': Buffer.byteLength(postData)
+            }
+        }, (res) => {
+            let data = '';
+            res.on('data', chunk => data += chunk);
+            res.on('end', () => {
+                try {
+                    const parsed = JSON.parse(data);
+                    if (parsed.access_token) {
+                        resolve(parsed.access_token);
+                    } else {
+                        reject(new Error('Failed to get access token: ' + JSON.stringify(parsed)));
+                    }
+                } catch (e) { reject(e); }
+            });
+        });
+
+        req.on('error', reject);
+        req.write(postData);
+        req.end();
+    });
+}
+
+// Google Drive API helper: Create Folder
+async function createGDriveFolder(accessToken, name, parentId = null) {
+    return new Promise((resolve, reject) => {
+        const metadata = {
+            name: name,
+            mimeType: 'application/vnd.google-apps.folder'
+        };
+        if (parentId) metadata.parents = [parentId];
+
+        const body = JSON.stringify(metadata);
+        const req = https.request('https://www.googleapis.com/drive/v3/files', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${accessToken}`,
+                'Content-Type': 'application/json; charset=UTF-8',
+                'Content-Length': Buffer.byteLength(body)
+            }
+        }, (res) => {
+            let data = '';
+            res.on('data', chunk => data += chunk);
+            res.on('end', () => {
+                try {
+                    const parsed = JSON.parse(data);
+                    if (parsed.id) resolve(parsed.id);
+                    else reject(new Error(`Folder create failed: ${data}`));
+                } catch (e) { reject(e); }
+            });
+        });
+
+        req.on('error', reject);
+        req.write(body);
+        req.end();
+    });
+}
+
+// Google Drive API helper: Find Folder
+async function findGDriveFolder(accessToken, name, parentId = null) {
+    return new Promise((resolve, reject) => {
+        let query = `name = '${name.replace(/'/g, "\\'")}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false`;
+        if (parentId) query += ` and '${parentId}' in parents`;
+
+        const pathQuery = `/drive/v3/files?q=${encodeURIComponent(query)}&fields=files(id,name)`;
+        const req = https.request(`https://www.googleapis.com${pathQuery}`, {
+            method: 'GET',
+            headers: { 'Authorization': `Bearer ${accessToken}` }
+        }, (res) => {
+            let data = '';
+            res.on('data', chunk => data += chunk);
+            res.on('end', () => {
+                try {
+                    const parsed = JSON.parse(data);
+                    if (parsed.files && parsed.files.length > 0) resolve(parsed.files[0].id);
+                    else resolve(null);
+                } catch (e) { reject(e); }
+            });
+        });
+
+        req.on('error', reject);
+        req.end();
+    });
+}
+
+// Google Drive API helper: Find File
+async function findGDriveFile(accessToken, name, parentId) {
+    return new Promise((resolve, reject) => {
+        const query = `name = '${name.replace(/'/g, "\\'")}' and '${parentId}' in parents and trashed = false`;
+        const pathQuery = `/drive/v3/files?q=${encodeURIComponent(query)}&fields=files(id,name)`;
+        const req = https.request(`https://www.googleapis.com${pathQuery}`, {
+            method: 'GET',
+            headers: { 'Authorization': `Bearer ${accessToken}` }
+        }, (res) => {
+            let data = '';
+            res.on('data', chunk => data += chunk);
+            res.on('end', () => {
+                try {
+                    const parsed = JSON.parse(data);
+                    if (parsed.files && parsed.files.length > 0) resolve(parsed.files[0].id);
+                    else resolve(null);
+                } catch (e) { reject(e); }
+            });
+        });
+
+        req.on('error', reject);
+        req.end();
+    });
+}
+
+// Google Drive API helper: Upload File (Resumable)
+async function uploadGDriveFile(accessToken, name, mimeType, parentId, buffer) {
+    return new Promise((resolve, reject) => {
+        const metadata = JSON.stringify({
+            name: name,
+            parents: [parentId]
+        });
+
+        // 1. Initiate Session
+        const req = https.request('https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${accessToken}`,
+                'Content-Type': 'application/json; charset=UTF-8',
+                'X-Upload-Content-Type': mimeType,
+                'Content-Length': Buffer.byteLength(metadata)
+            }
+        }, (res) => {
+            const location = res.headers.location;
+            if (!location) {
+                reject(new Error(`Failed to initiate resumable upload session. Status: ${res.statusCode}`));
+                return;
+            }
+
+            // 2. Upload Content
+            const uploadUrl = new URL(location);
+            const uploadReq = https.request({
+                hostname: uploadUrl.hostname,
+                path: uploadUrl.pathname + uploadUrl.search,
+                method: 'PUT',
+                headers: {
+                    'Content-Type': mimeType,
+                    'Content-Length': buffer.length
+                }
+            }, (uploadRes) => {
+                let data = '';
+                uploadRes.on('data', chunk => data += chunk);
+                uploadRes.on('end', () => {
+                    try {
+                        const parsed = JSON.parse(data);
+                        if (parsed.id) resolve(parsed.id);
+                        else reject(new Error(`Upload failed: ${data}`));
+                    } catch (e) {
+                        reject(new Error(`Upload finished, response parse failed. Status: ${uploadRes.statusCode}`));
+                    }
+                });
+            });
+
+            uploadReq.on('error', reject);
+            uploadReq.write(buffer);
+            uploadReq.end();
+        });
+
+        req.on('error', reject);
+        req.write(metadata);
+        req.end();
+    });
+}
+
+// Fetch evidence file as raw buffer (support S3, proxy, local)
+const getEvidenceBuffer = async (item) => {
+    let url = item.url || item.img || item.downloadUrl;
+    if (!url) return null;
+
+    if (url.startsWith('data:')) {
+        const matches = url.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+        if (matches && matches.length === 3) {
+            return Buffer.from(matches[2], 'base64');
+        }
+    }
+
+    if (s3 && url.includes('amazonaws.com')) {
+        try {
+            const urlObj = new URL(url);
+            let s3Key = urlObj.pathname;
+            const bucketPrefix = `/${process.env.BUCKET_NAME}/`;
+            if (s3Key.startsWith(bucketPrefix)) {
+                s3Key = s3Key.substring(bucketPrefix.length);
+            } else if (s3Key.startsWith('/')) {
+                s3Key = s3Key.substring(1);
+            }
+            const s3Data = await s3.getObject({
+                Bucket: process.env.BUCKET_NAME,
+                Key: decodeURIComponent(s3Key)
+            }).promise();
+            return s3Data.Body;
+        } catch (e) {
+            console.error("[GDrive-Sync S3 Get Error]:", e.message);
+        }
+    }
+
+    if (url.startsWith('http')) {
+        try {
+            return new Promise((resolve) => {
+                https.get(url, (res) => {
+                    if (res.statusCode !== 200) {
+                        resolve(null);
+                        return;
+                    }
+                    const chunks = [];
+                    res.on('data', chunk => chunks.push(chunk));
+                    res.on('end', () => resolve(Buffer.concat(chunks)));
+                }).on('error', () => resolve(null));
+            });
+        } catch (e) {
+            console.warn("[GDrive-Sync HTTP Fetch Error]:", e.message);
+        }
+    }
+
+    try {
+        const basename = path.basename(url);
+        const localPath = path.join(__dirname, '../uploads', basename);
+        if (fs.existsSync(localPath)) {
+            return fs.readFileSync(localPath);
+        }
+    } catch (e) {
+        console.error("[GDrive-Sync Local File Error]:", e);
+    }
+
+    return null;
+};
+
+// Database helper wrapper for Promises
+const getTableData = (table) => {
+    return new Promise((resolve, reject) => {
+        dbAdapter.getAll(table, (err, rows) => {
+            if (err) return reject(err);
+            try {
+                const items = rows.map(r => JSON.parse(r.data));
+                resolve(items);
+            } catch (e) { reject(e); }
+        });
+    });
+};
+
+// Background Google Drive Sync State
+const gdriveSyncs = {};
+
+// Background sync worker function
+async function runGDriveSync(batchId, batchName) {
+    try {
+        const creds = getGoogleCredentials();
+        if (!creds) {
+            throw new Error("Google credentials are missing. Please configure GOOGLE_CREDENTIALS environment variable.");
+        }
+
+        gdriveSyncs[batchId].progress = 'Authenticating with Google Cloud...';
+        const token = await getGoogleAccessToken(creds);
+
+        gdriveSyncs[batchId].progress = 'Retrieving database records...';
+        const students = (await getTableData('students')).filter(s => s.batchId === batchId);
+        const allResponses = await getTableData('responses');
+
+        const parentFolderId = process.env.GOOGLE_DRIVE_FOLDER_ID || '1tv8GLA-8XWLGDnnzbMN4ivdf5uinvbOE';
+        gdriveSyncs[batchId].progress = 'Locating batch root folder...';
+        const batchDirName = `${batchName}_TNSDC`.replace(/ /g, '_');
+        
+        let batchFolderId = await findGDriveFolder(token, batchDirName, parentFolderId);
+        if (!batchFolderId) {
+            batchFolderId = await createGDriveFolder(token, batchDirName, parentFolderId);
+        }
+
+        gdriveSyncs[batchId].progress = 'Structuring subdirectories...';
+        const subFolderIds = {};
+        const foldersToCreate = ['theory', 'practical', 'viva', 'manual', 'video'];
+        for (const folderName of foldersToCreate) {
+            let fid = await findGDriveFolder(token, folderName, batchFolderId);
+            if (!fid) {
+                fid = await createGDriveFolder(token, folderName, batchFolderId);
+            }
+            subFolderIds[folderName] = fid;
+        }
+
+        // Gather all upload tasks
+        gdriveSyncs[batchId].progress = 'Analyzing evidence files...';
+        const uploadTasks = [];
+        for (const s of students) {
+            const studentResponses = allResponses.filter(r => r.studentId === s.id || r.studentId === s.username);
+            const videoCountMap = { theory: 0, practical: 0, viva: 0 };
+
+            for (const resp of studentResponses) {
+                const rawExamType = (resp.examType || '').toLowerCase();
+                if (resp.evidence && Array.isArray(resp.evidence)) {
+                    for (const item of resp.evidence) {
+                        const isManual = (item.type || '').toUpperCase().includes('MANUAL') || rawExamType === 'photo';
+                        const isVideo = (item.type || '').toUpperCase().includes('VIDEO') || 
+                                        (item.url || item.img || '').toLowerCase().endsWith('.webm') || 
+                                        (item.url || item.img || '').toLowerCase().endsWith('.mp4');
+
+                        if (isVideo) {
+                            let targetExamType = 'theory';
+                            if (rawExamType.includes('practical')) targetExamType = 'practical';
+                            else if (rawExamType.includes('viva')) targetExamType = 'viva';
+                            else if (rawExamType.includes('theory')) targetExamType = 'theory';
+                            else continue;
+
+                            videoCountMap[targetExamType]++;
+                            const fileSuffix = videoCountMap[targetExamType] > 1 ? `_${videoCountMap[targetExamType]}` : '';
+                            
+                            uploadTasks.push({
+                                student: s,
+                                item: item,
+                                type: 'video',
+                                targetExamType: targetExamType,
+                                fileSuffix: fileSuffix
+                            });
+                        } else if (isManual) {
+                            uploadTasks.push({
+                                student: s,
+                                item: item,
+                                type: 'manual'
+                            });
+                        } else {
+                            let targetFolder = null;
+                            if (rawExamType.includes('theory')) targetFolder = 'theory';
+                            else if (rawExamType.includes('practical')) targetFolder = 'practical';
+                            else if (rawExamType.includes('viva')) targetFolder = 'viva';
+
+                            if (targetFolder) {
+                                uploadTasks.push({
+                                    student: s,
+                                    item: item,
+                                    type: 'proctoring',
+                                    targetFolder: targetFolder
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        const totalTasks = uploadTasks.length;
+        gdriveSyncs[batchId].total = totalTasks;
+
+        if (totalTasks === 0) {
+            gdriveSyncs[batchId].status = 'completed';
+            gdriveSyncs[batchId].progress = 'No student files or videos found to upload.';
+            return;
+        }
+
+        let completed = 0;
+        for (const task of uploadTasks) {
+            gdriveSyncs[batchId].progress = `Syncing: ${task.student.name} (${completed + 1}/${totalTasks})`;
+
+            try {
+                if (task.type === 'video') {
+                    const studentDirName = `${task.student.name}_${task.student.username}`.replace(/ /g, '_').replace(/[^a-zA-Z0-9_]/g, '');
+                    let studentFolderId = await findGDriveFolder(token, studentDirName, subFolderIds['video']);
+                    if (!studentFolderId) {
+                        studentFolderId = await createGDriveFolder(token, studentDirName, subFolderIds['video']);
+                    }
+
+                    const ext = (task.item.url || task.item.img || '').toLowerCase().endsWith('.mp4') ? 'mp4' : 'webm';
+                    const videoFileName = `${task.targetExamType}${task.fileSuffix}.${ext}`;
+
+                    let fileId = await findGDriveFile(token, videoFileName, studentFolderId);
+                    if (!fileId) {
+                        const buffer = await getEvidenceBuffer(task.item);
+                        if (buffer) {
+                            fileId = await uploadGDriveFile(token, videoFileName, `video/${ext}`, studentFolderId, buffer);
+                        }
+                    }
+                } else if (task.type === 'manual') {
+                    const label = (task.item.type || 'Manual').replace(/[^a-zA-Z0-9_]/g, '_');
+                    const time = (task.item.time || new Date().toISOString()).slice(0, 19).replace(/:/g, '-');
+                    const fileName = `${task.student.username}_${task.student.name}_${label}_${time}.jpg`.replace(/ /g, '_');
+
+                    let fileId = await findGDriveFile(token, fileName, subFolderIds['manual']);
+                    if (!fileId) {
+                        const buffer = await getEvidenceBuffer(task.item);
+                        if (buffer) {
+                            fileId = await uploadGDriveFile(token, fileName, 'image/jpeg', subFolderIds['manual'], buffer);
+                        }
+                    }
+                } else if (task.type === 'proctoring') {
+                    const label = (task.item.type || 'Photo').replace(/[^a-zA-Z0-9_]/g, '_');
+                    const time = (task.item.time || new Date().toISOString()).slice(0, 19).replace(/:/g, '-');
+                    const fileName = `${task.student.username}_${task.student.name}_${label}_${time}.jpg`.replace(/ /g, '_');
+
+                    const destFolderId = subFolderIds[task.targetFolder];
+                    let fileId = await findGDriveFile(token, fileName, destFolderId);
+                    if (!fileId) {
+                        const buffer = await getEvidenceBuffer(task.item);
+                        if (buffer) {
+                            fileId = await uploadGDriveFile(token, fileName, 'image/jpeg', destFolderId, buffer);
+                        }
+                    }
+                }
+            } catch (err) {
+                console.error(`[GDrive-Sync] Failed individual file upload for student ${task.student.name}:`, err.message);
+            }
+
+            completed++;
+            gdriveSyncs[batchId].completed = completed;
+        }
+
+        gdriveSyncs[batchId].status = 'completed';
+        gdriveSyncs[batchId].progress = `Sync complete! Uploaded ${completed} files to Google Drive.`;
+    } catch (err) {
+        console.error("[GDrive-Sync Worker Error]:", err);
+        gdriveSyncs[batchId].status = 'error';
+        gdriveSyncs[batchId].error = err.message;
+        gdriveSyncs[batchId].progress = `Failed: ${err.message}`;
+    }
+}
+
+// 1. Endpoint: Trigger Google Drive Sync
+app.post('/api/sync-to-gdrive', async (req, res) => {
+    const { batchId } = req.body;
+    if (!batchId) return res.status(400).json({ error: "Missing batchId" });
+
+    const creds = getGoogleCredentials();
+    if (!creds) {
+        return res.status(500).json({ error: "Google Service Account credentials not configured on the server. Please set GOOGLE_CREDENTIALS environment variable." });
+    }
+
+    if (gdriveSyncs[batchId] && gdriveSyncs[batchId].status === 'syncing') {
+        return res.json({ success: true, message: "Sync already in progress." });
+    }
+
+    try {
+        // Fetch batch details to get batch name
+        dbAdapter.getAll('batches', (err, rows) => {
+            if (err) return res.status(500).json({ error: err.message });
+            const batches = rows.map(r => JSON.parse(r.data));
+            const batch = batches.find(b => b.id === batchId);
+            if (!batch) return res.status(404).json({ error: "Batch not found" });
+
+            gdriveSyncs[batchId] = {
+                status: 'syncing',
+                progress: 'Starting background job...',
+                completed: 0,
+                total: 0,
+                error: null
+            };
+
+            // Launch worker async
+            runGDriveSync(batchId, batch.name);
+
+            res.json({ success: true, message: "Google Drive sync started." });
+        });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// 2. Endpoint: Poll Sync Progress
+app.get('/api/sync-to-gdrive/status/:batchId', (req, res) => {
+    const { batchId } = req.params;
+    const syncState = gdriveSyncs[batchId] || { status: 'idle', progress: 'No sync active.' };
+    res.json(syncState);
+});
+
+
 // Serve Client Static Files
 app.use(express.static(path.join(__dirname, '../../client')));
 

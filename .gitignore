@@ -7,3 +7,5 @@ thumbs.db
 .gemini
 
 *.sqlite
+server/google-credentials.json
+google-credentials.json

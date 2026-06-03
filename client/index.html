@@ -1074,6 +1074,60 @@
                 }
             },
 
+            // v86.9.5: GOOGLE DRIVE SYNC TRIGGER & POLLING
+            syncBatchToGDrive: async (batchId, onProgress) => {
+                try {
+                    onProgress("Initiating Google Drive sync...");
+                    const res = await fetch(`${API_BASE}/sync-to-gdrive`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'x-api-key': 'portel_secure_key_2025'
+                        },
+                        body: JSON.stringify({ batchId })
+                    });
+
+                    if (!res.ok) {
+                        const errData = await res.json();
+                        throw new Error(errData.error || "Failed to start Google Drive sync.");
+                    }
+
+                    // Poll status
+                    return new Promise((resolve, reject) => {
+                        const interval = setInterval(async () => {
+                            try {
+                                const statusRes = await fetch(`${API_BASE}/sync-to-gdrive/status/${batchId}`, {
+                                    headers: {
+                                        'x-api-key': 'portel_secure_key_2025'
+                                    }
+                                });
+                                if (statusRes.ok) {
+                                    const state = await statusRes.json();
+                                    if (state.status === 'syncing') {
+                                        onProgress(state.progress || "Syncing to Google Drive...");
+                                    } else if (state.status === 'completed') {
+                                        clearInterval(interval);
+                                        onProgress(null);
+                                        alert("✅ " + (state.progress || "Google Drive Sync Complete!"));
+                                        resolve();
+                                    } else if (state.status === 'error') {
+                                        clearInterval(interval);
+                                        onProgress(null);
+                                        alert("❌ Sync Error: " + (state.error || "Unknown error"));
+                                        reject(new Error(state.error));
+                                    }
+                                }
+                            } catch (e) {
+                                console.error("Polling error:", e);
+                            }
+                        }, 1500);
+                    });
+                } catch (err) {
+                    alert("Error: " + err.message);
+                    onProgress(null);
+                }
+            },
+
             // Utility to fetch evidence as blob from either IndexedDB or S3 (v86.2)
             fetchEvidenceAsBlob: async (item) => {
                 let blob = null;
@@ -7351,6 +7405,9 @@
                                     </div>
                                 ) : (
                                     <div className="flex gap-3">
+                                        <button onClick={() => window.Utils.syncBatchToGDrive(selectedBatch.id, setZipStatus)} className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-2xl font-black text-[12px] uppercase tracking-widest shadow-xl flex items-center gap-2 border-2 border-blue-400">
+                                            <Icons.Cloud className="w-5 h-5" /> SYNC TO GOOGLE DRIVE (☁️)
+                                        </button>
                                         <button onClick={() => window.Utils.downloadBatchTNSDCZip(selectedBatch.id, setZipStatus)} className="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-3 rounded-2xl font-black text-[12px] uppercase tracking-widest shadow-xl flex items-center gap-2 border-2 border-emerald-400">
                                             <Icons.Download className="w-5 h-5" /> DOWNLOAD TNSDC FORMAT (ZIP)
                                         </button>
