@@ -944,6 +944,136 @@
                 } catch (err) { alert("Error: " + err.message); onProgress(null); }
             },
 
+            // v86.9.5: TNSDC SPECIFIC ZIP DOWNLOAD
+            downloadBatchTNSDCZip: async (batchId, onProgress) => {
+                try {
+                    const batch = window.Utils.getBatches().find(b => b.id === batchId);
+                    if (!batch) throw new Error("Batch not found.");
+                    const students = window.Utils.getStudentsByBatch(batchId);
+                    const allResponses = window.Utils.getResponses();
+                    const zip = new JSZip();
+
+                    // Create root folders
+                    const theoryFolder = zip.folder("theory");
+                    const practicalFolder = zip.folder("practical");
+                    const vivaFolder = zip.folder("viva");
+                    const manualFolder = zip.folder("manual");
+                    const videoFolder = zip.folder("video");
+
+                    let completed = 0;
+                    let fileCount = 0;
+
+                    for (const s of students) {
+                        onProgress(`TNSDC: Processing Student ${s.name} (${completed + 1}/${students.length})...`);
+                        
+                        // Find all responses for this student
+                        const studentResponses = allResponses.filter(r => r.studentId === s.id || r.studentId === s.username);
+                        
+                        // We will also track video indices to handle multiple videos if any
+                        const videoCountMap = { theory: 0, practical: 0, viva: 0 };
+
+                        for (const resp of studentResponses) {
+                            const rawExamType = (resp.examType || '').toLowerCase();
+                            
+                            if (resp.evidence && Array.isArray(resp.evidence)) {
+                                for (const item of resp.evidence) {
+                                    const isManual = (item.type || '').toUpperCase().includes('MANUAL') || rawExamType === 'photo';
+                                    const isVideo = (item.type || '').toUpperCase().includes('VIDEO') || 
+                                                    (item.url || item.img || '').toLowerCase().endsWith('.webm') || 
+                                                    (item.url || item.img || '').toLowerCase().endsWith('.mp4');
+
+                                    if (isVideo) {
+                                        // Save to video/[StudentName]_[Username]/[examType].webm
+                                        let targetExamType = 'theory';
+                                        if (rawExamType.includes('practical')) targetExamType = 'practical';
+                                        else if (rawExamType.includes('viva')) targetExamType = 'viva';
+                                        else if (rawExamType.includes('theory')) targetExamType = 'theory';
+                                        else continue; // Skip unknown exam types for video
+
+                                        try {
+                                            const blob = await window.Utils.fetchEvidenceAsBlob(item);
+                                            if (blob) {
+                                                const studentDirName = `${s.name}_${s.username}`.replace(/ /g, '_').replace(/[^a-zA-Z0-9_]/g, '');
+                                                const studentVideoFolder = videoFolder.folder(studentDirName);
+                                                
+                                                // Determine extension
+                                                const ext = blob.type.includes('mp4') ? 'mp4' : 'webm';
+                                                
+                                                // Handle duplicate video names
+                                                videoCountMap[targetExamType]++;
+                                                const fileSuffix = videoCountMap[targetExamType] > 1 ? `_${videoCountMap[targetExamType]}` : '';
+                                                const videoFileName = `${targetExamType}${fileSuffix}.${ext}`;
+                                                
+                                                studentVideoFolder.file(videoFileName, blob);
+                                                fileCount++;
+                                            }
+                                        } catch (err) {
+                                            console.error(`Error zipping video for ${s.name}:`, err);
+                                        }
+                                    } else if (isManual) {
+                                        // Save to manual/
+                                        try {
+                                            const blob = await window.Utils.fetchEvidenceAsBlob(item);
+                                            if (blob) {
+                                                const label = (item.type || 'Manual').replace(/[^a-zA-Z0-9_]/g, '_');
+                                                const time = (item.time || new Date().toISOString()).slice(0, 19).replace(/:/g, '-');
+                                                const fileName = `${s.username}_${s.name}_${label}_${time}.jpg`.replace(/ /g, '_');
+                                                manualFolder.file(fileName, blob);
+                                                fileCount++;
+                                            }
+                                        } catch (err) {
+                                            console.error(`Error zipping manual photo for ${s.name}:`, err);
+                                        }
+                                    } else {
+                                        // Regular proctoring photo - save to theory, practical, or viva
+                                        let targetFolder = null;
+                                        if (rawExamType.includes('theory')) targetFolder = theoryFolder;
+                                        else if (rawExamType.includes('practical')) targetFolder = practicalFolder;
+                                        else if (rawExamType.includes('viva')) targetFolder = vivaFolder;
+
+                                        if (targetFolder) {
+                                            try {
+                                                const blob = await window.Utils.fetchEvidenceAsBlob(item);
+                                                if (blob) {
+                                                    const label = (item.type || 'Photo').replace(/[^a-zA-Z0-9_]/g, '_');
+                                                    const time = (item.time || new Date().toISOString()).slice(0, 19).replace(/:/g, '-');
+                                                    const fileName = `${s.username}_${s.name}_${label}_${time}.jpg`.replace(/ /g, '_');
+                                                    targetFolder.file(fileName, blob);
+                                                    fileCount++;
+                                                }
+                                            } catch (err) {
+                                                console.error(`Error zipping photo for ${s.name}:`, err);
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        completed++;
+                    }
+
+                    if (fileCount === 0) {
+                        alert("No evidence/videos found to build TNSDC ZIP.");
+                        onProgress(null);
+                        return;
+                    }
+
+                    onProgress("Finalizing TNSDC ZIP...");
+                    const content = await zip.generateAsync({ type: "blob" });
+                    const link = document.createElement("a");
+                    link.href = URL.createObjectURL(content);
+                    link.download = `${batch.name}_TNSDC_${new Date().toISOString().slice(0, 10)}.zip`;
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    onProgress(null);
+                    alert(`✅ TNSDC ZIP Download Complete!\nTotal files: ${fileCount}`);
+                } catch (err) {
+                    alert("Error: " + err.message);
+                    onProgress(null);
+                }
+            },
+
             // Utility to fetch evidence as blob from either IndexedDB or S3 (v86.2)
             fetchEvidenceAsBlob: async (item) => {
                 let blob = null;
@@ -7220,9 +7350,14 @@
                                         <span className="text-[10px] font-black text-primary-700 uppercase whitespace-nowrap">{zipStatus}</span>
                                     </div>
                                 ) : (
-                                    <button onClick={() => window.Utils.downloadBatchAbsoluteEverythingZip(selectedBatch.id, setZipStatus)} className="bg-primary-600 hover:bg-primary-700 text-gray-900 px-8 py-3 rounded-2xl font-black text-[12px] uppercase tracking-widest shadow-xl flex items-center gap-3 border-2 border-primary-400 animate-pulse-subtle">
-                                        <Icons.Database className="w-6 h-6" /> DOWNLOAD ALL MASTER DATA (ZIP)
-                                    </button>
+                                    <div className="flex gap-3">
+                                        <button onClick={() => window.Utils.downloadBatchTNSDCZip(selectedBatch.id, setZipStatus)} className="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-3 rounded-2xl font-black text-[12px] uppercase tracking-widest shadow-xl flex items-center gap-2 border-2 border-emerald-400">
+                                            <Icons.Download className="w-5 h-5" /> DOWNLOAD TNSDC FORMAT (ZIP)
+                                        </button>
+                                        <button onClick={() => window.Utils.downloadBatchAbsoluteEverythingZip(selectedBatch.id, setZipStatus)} className="bg-primary-600 hover:bg-primary-700 text-gray-900 px-6 py-3 rounded-2xl font-black text-[12px] uppercase tracking-widest shadow-xl flex items-center gap-2 border-2 border-primary-400">
+                                            <Icons.Database className="w-5 h-5" /> DOWNLOAD ALL MASTER DATA (ZIP)
+                                        </button>
+                                    </div>
                                 )}
                             </div>
                         </div>
