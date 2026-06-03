@@ -1200,29 +1200,51 @@ async function runGDriveSync(batchId, batchName) {
         gdriveSyncs[batchId].progress = 'Retrieving database records...';
         const students = (await getTableData('students')).filter(s => s.batchId === batchId);
         const allResponses = await getTableData('responses');
+        const batches = await getTableData('batches');
+        const batch = batches.find(b => b.id === batchId) || { name: batchName };
 
         const parentFolderId = process.env.GOOGLE_DRIVE_FOLDER_ID || '1tv8GLA-8XWLGDnnzbMN4ivdf5uinvbOE';
-        gdriveSyncs[batchId].progress = 'Locating batch root folder...';
-        const batchDirName = `${batchName}_TNSDC`.replace(/ /g, '_');
         
-        let batchFolderId = await findGDriveFolder(token, batchDirName, parentFolderId);
+        // 1. Determine Month/Year Folder Name
+        gdriveSyncs[batchId].progress = 'Structuring Month folder...';
+        const monthNames = [
+            "January", "February", "March", "April", "May", "June",
+            "July", "August", "September", "October", "November", "December"
+        ];
+        let date = new Date();
+        if (batch.startDate) {
+            const d = new Date(batch.startDate);
+            if (!isNaN(d.getTime())) date = d;
+        }
+        const monthFolderQueryName = `${monthNames[date.getMonth()]}_${date.getFullYear()}`;
+        
+        let monthFolderId = await findGDriveFolder(token, monthFolderQueryName, parentFolderId);
+        if (!monthFolderId) {
+            monthFolderId = await createGDriveFolder(token, monthFolderQueryName, parentFolderId);
+        }
+
+        // 2. Create/Find Batch Folder inside Month folder
+        gdriveSyncs[batchId].progress = 'Structuring Batch folder...';
+        const batchDirName = batch.name.replace(/ /g, '_');
+        let batchFolderId = await findGDriveFolder(token, batchDirName, monthFolderId);
         if (!batchFolderId) {
-            batchFolderId = await createGDriveFolder(token, batchDirName, parentFolderId);
+            batchFolderId = await createGDriveFolder(token, batchDirName, monthFolderId);
         }
 
-        gdriveSyncs[batchId].progress = 'Structuring subdirectories...';
+        // 3. Create/Find the 4 subfolders under batchFolderId
+        gdriveSyncs[batchId].progress = 'Structuring batch categories...';
+        const subFolderNames = ['photos', 'videos', 'documents', 'evidence of each student'];
         const subFolderIds = {};
-        const foldersToCreate = ['theory', 'practical', 'viva', 'manual', 'video'];
-        for (const folderName of foldersToCreate) {
-            let fid = await findGDriveFolder(token, folderName, batchFolderId);
+        for (const name of subFolderNames) {
+            let fid = await findGDriveFolder(token, name, batchFolderId);
             if (!fid) {
-                fid = await createGDriveFolder(token, folderName, batchFolderId);
+                fid = await createGDriveFolder(token, name, batchFolderId);
             }
-            subFolderIds[folderName] = fid;
+            subFolderIds[name] = fid;
         }
 
-        // Gather all upload tasks
-        gdriveSyncs[batchId].progress = 'Analyzing evidence files...';
+        // 4. Gather all candidate evidence files to compile tasks list
+        gdriveSyncs[batchId].progress = 'Analyzing candidate evidence...';
         const uploadTasks = [];
         for (const s of students) {
             const studentResponses = allResponses.filter(r => r.studentId === s.id || r.studentId === s.username);
@@ -1254,26 +1276,20 @@ async function runGDriveSync(batchId, batchName) {
                                 targetExamType: targetExamType,
                                 fileSuffix: fileSuffix
                             });
-                        } else if (isManual) {
+                        } else {
+                            // It's a photo (manual or regular proctoring)
+                            let categoryLabel = 'other';
+                            if (isManual) categoryLabel = 'manual';
+                            else if (rawExamType.includes('theory')) categoryLabel = 'theory';
+                            else if (rawExamType.includes('practical')) categoryLabel = 'practical';
+                            else if (rawExamType.includes('viva')) categoryLabel = 'viva';
+
                             uploadTasks.push({
                                 student: s,
                                 item: item,
-                                type: 'manual'
+                                type: 'photo',
+                                categoryLabel: categoryLabel
                             });
-                        } else {
-                            let targetFolder = null;
-                            if (rawExamType.includes('theory')) targetFolder = 'theory';
-                            else if (rawExamType.includes('practical')) targetFolder = 'practical';
-                            else if (rawExamType.includes('viva')) targetFolder = 'viva';
-
-                            if (targetFolder) {
-                                uploadTasks.push({
-                                    student: s,
-                                    item: item,
-                                    type: 'proctoring',
-                                    targetFolder: targetFolder
-                                });
-                            }
                         }
                     }
                 }
@@ -1294,51 +1310,54 @@ async function runGDriveSync(batchId, batchName) {
             gdriveSyncs[batchId].progress = `Syncing: ${task.student.name} (${completed + 1}/${totalTasks})`;
 
             try {
-                if (task.type === 'video') {
-                    const studentDirName = `${task.student.name}_${task.student.username}`.replace(/ /g, '_').replace(/[^a-zA-Z0-9_]/g, '');
-                    let studentFolderId = await findGDriveFolder(token, studentDirName, subFolderIds['video']);
-                    if (!studentFolderId) {
-                        studentFolderId = await createGDriveFolder(token, studentDirName, subFolderIds['video']);
-                    }
+                // Determine candidate subfolder under "evidence of each student/"
+                const studentDirName = `${task.student.name}_${task.student.username}`.replace(/ /g, '_').replace(/[^a-zA-Z0-9_]/g, '');
+                let studentFolderId = await findGDriveFolder(token, studentDirName, subFolderIds['evidence of each student']);
+                if (!studentFolderId) {
+                    studentFolderId = await createGDriveFolder(token, studentDirName, subFolderIds['evidence of each student']);
+                }
 
-                    const ext = (task.item.url || task.item.img || '').toLowerCase().endsWith('.mp4') ? 'mp4' : 'webm';
-                    const videoFileName = `${task.targetExamType}${task.fileSuffix}.${ext}`;
+                // Fetch file buffer (downloads from S3/local once)
+                const buffer = await getEvidenceBuffer(task.item);
+                if (buffer) {
+                    if (task.type === 'video') {
+                        const ext = (task.item.url || task.item.img || '').toLowerCase().endsWith('.mp4') ? 'mp4' : 'webm';
+                        const mimeType = `video/${ext}`;
 
-                    let fileId = await findGDriveFile(token, videoFileName, studentFolderId);
-                    if (!fileId) {
-                        const buffer = await getEvidenceBuffer(task.item);
-                        if (buffer) {
-                            fileId = await uploadGDriveFile(token, videoFileName, `video/${ext}`, studentFolderId, buffer);
+                        // Filename in shared batch "videos" folder
+                        const sharedFileName = `${task.student.username}_${task.student.name}_${task.targetExamType}${task.fileSuffix}.${ext}`.replace(/ /g, '_');
+                        let fileIdShared = await findGDriveFile(token, sharedFileName, subFolderIds['videos']);
+                        if (!fileIdShared) {
+                            fileIdShared = await uploadGDriveFile(token, sharedFileName, mimeType, subFolderIds['videos'], buffer);
                         }
-                    }
-                } else if (task.type === 'manual') {
-                    const label = (task.item.type || 'Manual').replace(/[^a-zA-Z0-9_]/g, '_');
-                    const time = (task.item.time || new Date().toISOString()).slice(0, 19).replace(/:/g, '-');
-                    const fileName = `${task.student.username}_${task.student.name}_${label}_${time}.jpg`.replace(/ /g, '_');
 
-                    let fileId = await findGDriveFile(token, fileName, subFolderIds['manual']);
-                    if (!fileId) {
-                        const buffer = await getEvidenceBuffer(task.item);
-                        if (buffer) {
-                            fileId = await uploadGDriveFile(token, fileName, 'image/jpeg', subFolderIds['manual'], buffer);
+                        // Filename in student's personal folder
+                        const personalFileName = `${task.targetExamType}${task.fileSuffix}.${ext}`;
+                        let fileIdPersonal = await findGDriveFile(token, personalFileName, studentFolderId);
+                        if (!fileIdPersonal) {
+                            fileIdPersonal = await uploadGDriveFile(token, personalFileName, mimeType, studentFolderId, buffer);
                         }
-                    }
-                } else if (task.type === 'proctoring') {
-                    const label = (task.item.type || 'Photo').replace(/[^a-zA-Z0-9_]/g, '_');
-                    const time = (task.item.time || new Date().toISOString()).slice(0, 19).replace(/:/g, '-');
-                    const fileName = `${task.student.username}_${task.student.name}_${label}_${time}.jpg`.replace(/ /g, '_');
+                    } else if (task.type === 'photo') {
+                        const label = (task.item.type || 'Photo').replace(/[^a-zA-Z0-9_]/g, '_');
+                        const time = (task.item.time || new Date().toISOString()).slice(0, 19).replace(/:/g, '-');
 
-                    const destFolderId = subFolderIds[task.targetFolder];
-                    let fileId = await findGDriveFile(token, fileName, destFolderId);
-                    if (!fileId) {
-                        const buffer = await getEvidenceBuffer(task.item);
-                        if (buffer) {
-                            fileId = await uploadGDriveFile(token, fileName, 'image/jpeg', destFolderId, buffer);
+                        // Filename in shared batch "photos" folder
+                        const sharedFileName = `${task.student.username}_${task.student.name}_${task.categoryLabel}_${label}_${time}.jpg`.replace(/ /g, '_');
+                        let fileIdShared = await findGDriveFile(token, sharedFileName, subFolderIds['photos']);
+                        if (!fileIdShared) {
+                            fileIdShared = await uploadGDriveFile(token, sharedFileName, 'image/jpeg', subFolderIds['photos'], buffer);
+                        }
+
+                        // Filename in student's personal folder
+                        const personalFileName = `${task.categoryLabel}_${label}_${time}.jpg`.replace(/ /g, '_');
+                        let fileIdPersonal = await findGDriveFile(token, personalFileName, studentFolderId);
+                        if (!fileIdPersonal) {
+                            fileIdPersonal = await uploadGDriveFile(token, personalFileName, 'image/jpeg', studentFolderId, buffer);
                         }
                     }
                 }
             } catch (err) {
-                console.error(`[GDrive-Sync] Failed individual file upload for student ${task.student.name}:`, err.message);
+                console.error(`[GDrive-Sync] Failed file uploads for candidate ${task.student.name}:`, err.message);
             }
 
             completed++;
@@ -1346,7 +1365,7 @@ async function runGDriveSync(batchId, batchName) {
         }
 
         gdriveSyncs[batchId].status = 'completed';
-        gdriveSyncs[batchId].progress = `Sync complete! Uploaded ${completed} files to Google Drive.`;
+        gdriveSyncs[batchId].progress = `Sync complete! Successfully synchronized ${completed} files to Google Drive.`;
     } catch (err) {
         console.error("[GDrive-Sync Worker Error]:", err);
         gdriveSyncs[batchId].status = 'error';
