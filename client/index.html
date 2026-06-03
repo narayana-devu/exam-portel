@@ -3112,75 +3112,6 @@
                 window.Utils.downloadMarksResult(selectedBatch, marksData, attendance);
             };
 
-            const fillRandomMarks = () => {
-                if (!students.length || !nosList.length) return alert("Select a batch first.");
-                if (!confirm("Populate all students with random marks based on Theory performance?")) return;
-
-                const allResponses = window.Utils.getResponses();
-                const qps = window.Utils.getQPs();
-                const qp = qps.find(q => q.id === selectedQP);
-                if (!qp) return alert("Qualification Pack data missing.");
-
-                const maxTheoryTotal = parseFloat(qp.theoryMarks) || 100;
-                let newMarks = { ...marksData };
-                let newAttendance = { ...attendance };
-
-                students.forEach(student => {
-                    newAttendance[student.id] = true; // Mark present
-
-                    // 1. Determine Performance Ratio based on existing Theory Exam
-                    const sResponses = allResponses.filter(r =>
-                        (r.studentId === student.id || r.studentId === student.username) &&
-                        (r.batchId === selectedBatch)
-                    );
-                    const theoryResp = sResponses.find(r => (r.examType || '').toUpperCase() === 'THEORY');
-
-                    let baseRatio;
-                    if (theoryResp) {
-                        let score = parseFloat(theoryResp.totalScore || theoryResp.score || theoryResp.marks || 0);
-                        if (score === 0 && theoryResp.assessorMarks) {
-                            score = Object.values(theoryResp.assessorMarks).reduce((a, b) => a + (parseFloat(b) || 0), 0);
-                        }
-                        baseRatio = score / maxTheoryTotal;
-                    } else {
-                        // Wide range of base performance
-                        baseRatio = 0.70 + (Math.random() * 0.28);
-                    }
-
-                    const level = parseInt(qp.level) || 1;
-                    const isA = baseRatio >= 0.85;
-                    const isB = level >= 4 ? (baseRatio < 0.85) : (baseRatio >= 0.70 && baseRatio < 0.85);
-
-                    nosList.forEach(nos => {
-                        const tMax = parseInt(nos.theoryMarks) || 30;
-                        const pMax = parseInt(nos.practicalMarks) || 30;
-                        const vMax = parseInt(nos.vivaMarks) || 30;
-
-                        const getRandomInRange = (max, minR, maxR) => {
-                            // Independent variation for every single mark
-                            const variation = (Math.random() * 0.20) - 0.10; // +/- 10%
-                            let r = baseRatio + variation;
-                            r = Math.max(minR, Math.min(maxR, r));
-                            return Math.round(max * r);
-                        };
-
-                        let minR, maxR;
-                        if (isA) { minR = 0.85; maxR = 1.0; }
-                        else if (isB) { minR = 0.70; maxR = 0.849; }
-                        else { minR = 0.50; maxR = 0.699; }
-
-                        newMarks[`${student.id}_${nos.id}_theory`] = getRandomInRange(tMax, minR, maxR);
-                        newMarks[`${student.id}_${nos.id}_practical`] = getRandomInRange(pMax, minR, maxR);
-                        newMarks[`${student.id}_${nos.id}_viva`] = getRandomInRange(vMax, minR, maxR);
-                    });
-                });
-
-                setMarksData(newMarks);
-                setAttendance(newAttendance);
-                alert("Marks populated based on Theory performance successfully!");
-                setIsBulkEntry(true);
-            };
-
             // EXCEL MARKS UPLOAD
             const handleMarksUpload = (e) => {
                 const file = e.target.files[0];
@@ -3428,10 +3359,6 @@
 
                                 <button onClick={downloadMarksTemplate} className="bg-white border text-gray-700 hover:bg-gray-50 px-4 py-2 rounded-lg font-bold shadow-sm flex items-center gap-2 text-sm transition-colors">
                                     <Icons.Download className="w-4 h-4" /> Template
-                                </button>
-
-                                <button onClick={fillRandomMarks} className="bg-amber-100 border-amber-200 text-amber-700 hover:bg-amber-200 px-4 py-2 rounded-lg font-bold shadow-sm flex items-center gap-2 text-sm transition-colors" title="Fill with sample marks for testing">
-                                    <Icons.Zap className="w-4 h-4" /> Fill Random
                                 </button>
 
                                 {isBulkEntry && (
@@ -7573,35 +7500,47 @@
 
             return (
                 <div className="relative bg-slate-900 w-full h-32 group-hover:h-auto min-h-[128px]">
-                    {src ? (
+                    {src && !isError ? (
                         <video
                             ref={videoRef}
                             src={src}
                             controls
-                            autoPlay
+                            preload="metadata"
                             className="w-full h-auto object-contain"
                             onEnded={() => {
                                 if (index < parts.length - 1) setIndex(index + 1);
                             }}
-                            onError={() => setIsError(true)}
+                            onError={() => {
+                                console.error("[SessionPlayer] Video tag error for src:", src);
+                                setIsError(true);
+                            }}
                         />
                     ) : (
-                        <div className="flex flex-col items-center justify-center h-full text-gray-900 text-xs p-4 text-center">
+                        <div className="flex flex-col items-center justify-center h-full text-slate-100 text-xs p-4 text-center">
                             {isLoading ? (
                                 <>
-                                    <Icons.Loader className="w-6 h-6 animate-spin mb-2 text-indigo-700" />
+                                    <Icons.Loader className="w-6 h-6 animate-spin mb-2 text-indigo-400" />
                                     <span>Loading Part {index + 1}...</span>
                                 </>
                             ) : (
                                 <>
                                     <Icons.XCircle className="w-8 h-8 mb-2 text-red-500" />
-                                    <span className="font-bold">Media Not Found</span>
-                                    <p className="text-[10px] opacity-60">Not Synced or Local Storage Missing</p>
+                                    <span className="font-bold">Media Not Found or Codec Unsupported</span>
+                                    <p className="text-[10px] opacity-60">Try downloading and playing locally.</p>
+                                    {src && (
+                                        <a
+                                            href={src}
+                                            download={`video_part_${index + 1}.webm`}
+                                            className="mt-2 bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded text-[10px] font-bold inline-flex items-center gap-1 shadow transition-all active:scale-95"
+                                        >
+                                            <Icons.Download className="w-3 h-3" /> Download Video File
+                                        </a>
+                                    )}
                                 </>
                             )}
                         </div>
                     )}
-                    <div className="absolute top-0 right-0 flex gap-1">
+                    <div className="absolute top-0 right-0 flex gap-1 items-center">
                         {sourceType === 'Local' && (
                             <div className="bg-amber-500 text-gray-900 text-[10px] px-2 py-1 font-bold z-10 flex items-center gap-1 shadow-sm">
                                 <Icons.Smartphone className="w-3 h-3" /> {src && src.startsWith('blob:') ? 'Local' : 'Stored on Source'}
@@ -7616,10 +7555,23 @@
                             Part {index + 1}/{parts.length}
                         </div>
 
+                        {/* Download Video Button */}
+                        {src && (
+                            <a
+                                href={src}
+                                download={`video_part_${index + 1}.webm`}
+                                className="bg-emerald-600 hover:bg-emerald-700 text-white p-1 z-20 shadow-lg flex items-center justify-center rounded"
+                                title="Download Video Part"
+                                onClick={(e) => e.stopPropagation()}
+                            >
+                                <Icons.Download className="w-3.5 h-3.5" />
+                            </a>
+                        )}
+
                         {/* Delete Session Button */}
                         <button
                             onClick={(e) => { e.stopPropagation(); if (confirm('Delete this entire video session?')) onRemove(parts[0].sessionId ? { isGroup: true, parts } : parts[0]); }}
-                            className="bg-red-600 text-gray-900 p-1 opacity-0 group-hover:opacity-100 transition-opacity z-20 shadow-lg hover:bg-red-700"
+                            className="bg-red-600 text-gray-900 p-1 opacity-0 group-hover:opacity-100 transition-opacity z-20 shadow-lg hover:bg-red-700 rounded"
                             title="Delete Session"
                         >
                             <Icons.Trash2 className="w-3 h-3" />
@@ -10498,8 +10450,8 @@
                     });
                     recStreamRef.current = stream;
 
-                    const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9')
-                        ? 'video/webm;codecs=vp9'
+                    const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp8')
+                        ? 'video/webm;codecs=vp8'
                         : (MediaRecorder.isTypeSupported('video/webm') ? 'video/webm' : 'video/mp4');
 
                     // 200kbps video + 32kbps audio = ~7MB per 5-min video
