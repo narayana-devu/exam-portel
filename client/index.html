@@ -4422,8 +4422,8 @@
 
                     {/* Modals with Glass Styling */}
 
-                    {showUploadNOSModal && (
-                        <div className="fixed inset-0 bg-white/40 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-fade-in" onClick={() => setShowUploadNOSModal(false)}>
+                    {showUploadNOSModal && ReactDOM.createPortal(
+                        <div className="fixed inset-0 bg-white/40 backdrop-blur-md flex items-center justify-center p-4 z-[9999] animate-fade-in" onClick={() => setShowUploadNOSModal(false)}>
                             <div className="glass rounded-[40px] p-10 w-full max-w-lg border border-white/60 shadow-2xl animate-scale-in relative" onClick={e => e.stopPropagation()}>
                                 <button
                                     onClick={() => setShowUploadNOSModal(false)}
@@ -4477,11 +4477,12 @@
                                     </button>
                                 </div>
                             </div>
-                        </div>
+                        </div>,
+                        document.body
                     )}
 
-                    {showNOSModal && (
-                        <div className="fixed inset-0 bg-white/40 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-fade-in" onClick={() => setShowNOSModal(false)}>
+                    {showNOSModal && ReactDOM.createPortal(
+                        <div className="fixed inset-0 bg-white/40 backdrop-blur-md flex items-center justify-center p-4 z-[9999] animate-fade-in" onClick={() => setShowNOSModal(false)}>
                             <div className="glass rounded-[40px] p-10 w-full max-w-2xl border border-white/60 shadow-2xl animate-scale-in relative" onClick={e => e.stopPropagation()}>
                                 <button
                                     onClick={() => setShowNOSModal(false)}
@@ -4526,11 +4527,12 @@
                                     </div>
                                 </form>
                             </div>
-                        </div>
+                        </div>,
+                        document.body
                     )}
 
-                    {showPCModal && (
-                        <div className="fixed inset-0 bg-white/40 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-fade-in" onClick={() => setShowPCModal(false)}>
+                    {showPCModal && ReactDOM.createPortal(
+                        <div className="fixed inset-0 bg-white/40 backdrop-blur-md flex items-center justify-center p-4 z-[9999] animate-fade-in" onClick={() => setShowPCModal(false)}>
                             <div className="glass rounded-[40px] p-10 w-full max-w-xl border border-white/60 shadow-2xl animate-scale-in relative" onClick={e => e.stopPropagation()}>
                                 <button
                                     onClick={() => setShowPCModal(false)}
@@ -4577,7 +4579,8 @@
                                     </div>
                                 </form>
                             </div>
-                        </div>
+                        </div>,
+                        document.body
                     )}
                 </>
             );
@@ -5296,8 +5299,8 @@
             const waitingList = students.filter(s => !completedIds.includes(s.id));
             const doneList = students.filter(s => completedIds.includes(s.id));
 
-            return (
-                <div className="fixed inset-0 bg-slate-50 z-50 flex font-sans text-gray-900 animate-fade-in">
+            return ReactDOM.createPortal(
+                <div className="fixed inset-0 bg-slate-50 z-[9999] flex font-sans text-gray-900 animate-fade-in">
                     {/* Left Sidebar: Meeting Participants */}
                     <div className="w-1/4 bg-white border-r border-gray-200 flex flex-col shadow-xl z-20">
                         <div className="p-4 border-b border-gray-200 bg-gray-50/50">
@@ -5417,7 +5420,8 @@
                             </div>
                         )}
                     </div>
-                </div>
+                </div>,
+                document.body
             );
         };
 
@@ -6181,8 +6185,8 @@
 
 
                     {/* New Import Students Modal */}
-                    {showImportModal && (
-                        <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-md flex items-center justify-center p-6 z-[100] animate-fade-in" onClick={() => setShowImportModal(false)}>
+                    {showImportModal && ReactDOM.createPortal(
+                        <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-md flex items-center justify-center p-6 z-[9999] animate-fade-in" onClick={() => setShowImportModal(false)}>
                             <div className="bg-white border border-gray-100 w-full max-w-4xl rounded-[40px] shadow-[0_32px_64px_-16px_rgba(0,0,0,0.15)] overflow-hidden relative" onClick={e => e.stopPropagation()}>
                                 {/* Decorative Background */}
                                 <div className="absolute top-0 right-0 w-96 h-96 bg-primary-50/50 blur-[120px] -mr-48 -mt-48"></div>
@@ -6283,11 +6287,12 @@
                                     </div>
                                 </div>
                             </div>
-                        </div>
+                        </div>,
+                        document.body
                     )}
 
-                    {showCreateModal && (
-                        <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-md flex items-center justify-center p-4 md:p-6 z-[100] animate-fade-in font-sans" onClick={() => setShowCreateModal(false)}>
+                    {showCreateModal && ReactDOM.createPortal(
+                        <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-md flex items-center justify-center p-4 md:p-6 z-[9999] animate-fade-in font-sans" onClick={() => setShowCreateModal(false)}>
                             <div className="bg-white border border-gray-100 w-full h-full max-w-[1600px] max-h-[92vh] rounded-[32px] shadow-[0_32px_64px_-16px_rgba(0,0,0,0.15)] overflow-hidden relative flex flex-col" onClick={e => e.stopPropagation()}>
                                 {/* Decorative Background */}
                                 <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-primary-500/10 blur-[130px] -mr-48 -mt-48 pointer-events-none"></div>
@@ -6463,11 +6468,12 @@
                                     </button>
                                 </div>
                             </div>
-                        </div>
+                        </div>,
+                        document.body
                     )}
 
-                    {showAssignModal && (
-                        <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-md flex items-center justify-center p-6 z-[100] animate-fade-in font-sans" onClick={() => setShowAssignModal(false)}>
+                    {showAssignModal && ReactDOM.createPortal(
+                        <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-md flex items-center justify-center p-6 z-[9999] animate-fade-in font-sans" onClick={() => setShowAssignModal(false)}>
                             <div className="glass w-full max-w-xl rounded-[40px] shadow-2xl border border-white/60 overflow-hidden relative" onClick={e => e.stopPropagation()}>
                                 <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/5 blur-[80px] -mr-32 -mt-32"></div>
 
@@ -6559,11 +6565,12 @@
                                     </div>
                                 </div>
                             </div>
-                        </div>
+                        </div>,
+                        document.body
                     )}
 
-                    {showStudentModal && (
-                        <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-md flex items-center justify-center p-6 z-[100] animate-fade-in font-sans" onClick={() => setShowStudentModal(false)}>
+                    {showStudentModal && ReactDOM.createPortal(
+                        <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-md flex items-center justify-center p-6 z-[9999] animate-fade-in font-sans" onClick={() => setShowStudentModal(false)}>
                             <div className="bg-white border border-gray-100 w-full max-w-6xl rounded-[40px] shadow-[0_32px_64px_-16px_rgba(0,0,0,0.25)] overflow-hidden relative" onClick={e => e.stopPropagation()}>
                                 {/* Decorative elements */}
                                 <div className="absolute top-0 right-0 w-[600px] h-[600px] bg-primary-50/50 blur-[150px] -mr-64 -mt-64"></div>
@@ -6705,7 +6712,8 @@
                                     </div>
                                 </div>
                             </div>
-                        </div>
+                        </div>,
+                        document.body
                     )}
 
                     {vivaSession && <VivaLobby batch={vivaSession.batch} onClose={() => setVivaSession(null)} />}
