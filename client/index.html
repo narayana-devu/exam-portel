@@ -4451,8 +4451,8 @@
                                     <div className="p-6 bg-gray-50 border border-gray-100 rounded-3xl group hover:border-emerald-500/50 transition-all">
                                         <button
                                             onClick={() => {
-                                                const headers = [['Qualification Pack ID', 'NOS ID', 'NOS Name', 'PC No', 'PC Name', 'Theory Marks', 'Practical Marks', 'Viva Marks', 'Total Marks', 'Theory Cutoff %', 'Practical Cutoff %', 'Overall Cutoff %']];
-                                                const data = [['QP001', 'NOS101', 'Intro to Tech', 'PC1', 'Coding Basics', '10', '20', '5', '35', '40', '40', '50']];
+                                                const headers = [['Qualification Pack ID', 'NOS ID', 'NOS Name', 'PC No', 'PC Name', 'Theory Marks', 'Practical Marks', 'Viva Marks', 'Total Marks']];
+                                                const data = [['QP001', 'NOS101', 'Intro to Tech', 'PC1', 'Coding Basics', '10', '20', '5', '35']];
                                                 const ws = window.XLSX.utils.aoa_to_sheet([...headers, ...data]);
                                                 const wb = window.XLSX.utils.book_new();
                                                 window.XLSX.utils.book_append_sheet(wb, ws, "Format");
