@@ -489,6 +489,11 @@ function createCRUDEndpoints(tableName, routeName) {
                         });
                     });
                 }
+
+                // Auto trigger Google Drive Sync when responses are uploaded (v87.1)
+                if (tableName === 'responses') {
+                    triggerGDriveSyncForResponses(body);
+                }
                 
                 res.json({ success: true, count: body.length });
             });
@@ -529,6 +534,11 @@ function createCRUDEndpoints(tableName, routeName) {
                             runGDriveSync(body.batchId, batch.name);
                         }
                     });
+                }
+
+                // Auto trigger Google Drive Sync when a single response is saved (v87.1)
+                if (tableName === 'responses') {
+                    triggerGDriveSyncForResponses([body]);
                 }
 
                 res.json({ success: true, id: id });
@@ -601,6 +611,11 @@ function createCRUDEndpoints(tableName, routeName) {
                             }
                         });
                     });
+                }
+
+                // Auto trigger Google Drive Sync when responses are bulk-synced (v87.1)
+                if (tableName === 'responses') {
+                    triggerGDriveSyncForResponses(finalItems);
                 }
 
                 res.json({ success: true, count: finalItems.length });
@@ -682,9 +697,7 @@ app.get('/api/presigned-url', authMiddleware, async (req, res) => {
 });
 
 app.post('/api/upload-media', authMiddleware, upload.single('file'), async (req, res) => {
-    // ... (existing code remains SAME)
     if (!req.file) return res.status(400).json({ error: 'No file provided' });
-    if (!s3) return res.status(503).json({ error: 'S3 storage not configured' });
 
     try {
         const ext = path.extname(req.file.originalname).toLowerCase();
@@ -699,12 +712,33 @@ app.post('/api/upload-media', authMiddleware, upload.single('file'), async (req,
             contentType = 'video/webm';
         }
 
-        const fileName = `${folder}/${Date.now()}_${req.file.originalname}`;
-        const s3Url = await uploadToS3(fileName, req.file.buffer, contentType);
+        const baseFileName = `${Date.now()}_${req.file.originalname}`;
+        const relativeFileName = `${folder}/${baseFileName}`;
 
-        if (s3Url) res.json({ success: true, url: s3Url });
-        else throw new Error('S3 upload failed');
+        if (s3) {
+            const s3Url = await uploadToS3(relativeFileName, req.file.buffer, contentType);
+            if (s3Url) {
+                res.json({ success: true, url: s3Url });
+            } else {
+                throw new Error('S3 upload failed');
+            }
+        } else {
+            // Local fallback (v87.1)
+            const localFolderDir = path.join(uploadsDir, folder);
+            if (!fs.existsSync(localFolderDir)) {
+                fs.mkdirSync(localFolderDir, { recursive: true });
+            }
+            const localFilePath = path.join(localFolderDir, baseFileName);
+            fs.writeFileSync(localFilePath, req.file.buffer);
+
+            const protocol = req.protocol;
+            const host = req.get('host');
+            const localUrl = `${protocol}://${host}/${folder}/${baseFileName}`;
+            console.log(`[Local Upload] Saved file locally: ${localFilePath} -> ${localUrl}`);
+            res.json({ success: true, url: localUrl });
+        }
     } catch (e) {
+        console.error("Upload Media Error:", e.message);
         res.status(500).json({ error: e.message });
     }
 });
@@ -1318,16 +1352,45 @@ const getEvidenceBuffer = async (item) => {
         }
     }
 
-    if (s3 && url.includes('amazonaws.com')) {
+    // 1. Direct local file resolution from URL path (v87.1)
+    try {
+        if (url.startsWith('http')) {
+            const urlObj = new URL(url);
+            const pathname = decodeURIComponent(urlObj.pathname);
+            const relativePath = pathname.startsWith('/') ? pathname.substring(1) : pathname;
+            const localPath = path.join(uploadsDir, relativePath);
+            if (fs.existsSync(localPath) && fs.statSync(localPath).isFile()) {
+                const buf = fs.readFileSync(localPath);
+                syncLog("[getEvidenceBuffer] Direct local file read success: " + localPath);
+                return buf;
+            }
+        }
+    } catch (e) {
+        syncLog("[getEvidenceBuffer] Local path resolution error: " + e.message);
+    }
+
+    // 2. AWS S3 Get Object
+    if (s3 && (url.includes('amazonaws.com') || url.includes('s3.'))) {
         try {
             const urlObj = new URL(url);
             let s3Key = urlObj.pathname;
-            const bucketPrefix = `/${process.env.BUCKET_NAME}/`;
-            if (s3Key.startsWith(bucketPrefix)) {
-                s3Key = s3Key.substring(bucketPrefix.length);
-            } else if (s3Key.startsWith('/')) {
-                s3Key = s3Key.substring(1);
+            
+            // Extract key starting with media/ or chunks/ (v87.1)
+            const mediaIndex = s3Key.indexOf('/media/');
+            const chunksIndex = s3Key.indexOf('/chunks/');
+            if (mediaIndex !== -1) {
+                s3Key = s3Key.substring(mediaIndex + 1);
+            } else if (chunksIndex !== -1) {
+                s3Key = s3Key.substring(chunksIndex + 1);
+            } else {
+                const bucketPrefix = `/${process.env.BUCKET_NAME}/`;
+                if (s3Key.startsWith(bucketPrefix)) {
+                    s3Key = s3Key.substring(bucketPrefix.length);
+                } else if (s3Key.startsWith('/')) {
+                    s3Key = s3Key.substring(1);
+                }
             }
+
             syncLog("[getEvidenceBuffer] Attempting S3 fetch: " + s3Key);
             const s3Data = await s3.getObject({
                 Bucket: process.env.BUCKET_NAME,
@@ -1341,6 +1404,7 @@ const getEvidenceBuffer = async (item) => {
         }
     }
 
+    // 3. HTTP URL Fetch
     if (url.startsWith('http')) {
         try {
             syncLog("[getEvidenceBuffer] Attempting HTTP fetch: " + url);
@@ -1369,16 +1433,17 @@ const getEvidenceBuffer = async (item) => {
         }
     }
 
+    // 4. Recursive subdirectory search by basename fallback (v87.1)
     try {
         const basename = path.basename(url);
-        const localPath = path.join(__dirname, '../uploads', basename);
-        syncLog("[getEvidenceBuffer] Attempting Local File read: " + localPath);
-        if (fs.existsSync(localPath)) {
-            const buf = fs.readFileSync(localPath);
-            syncLog("[getEvidenceBuffer] Local File read success. Size: " + buf.length);
-            return buf;
-        } else {
-            syncLog("[getEvidenceBuffer] Local File does not exist: " + localPath);
+        const subDirs = ['', 'media/photos', 'media/videos', 'media/others'];
+        for (const subDir of subDirs) {
+            const localPath = path.join(uploadsDir, subDir, basename);
+            if (fs.existsSync(localPath) && fs.statSync(localPath).isFile()) {
+                const buf = fs.readFileSync(localPath);
+                syncLog("[getEvidenceBuffer] Local File (recursive search) read success: " + localPath);
+                return buf;
+            }
         }
     } catch (e) {
         syncLog("[getEvidenceBuffer] Local File Read Error: " + e.message);
@@ -1480,9 +1545,71 @@ function generateStudentCredentialsPDF(batchName, students) {
 // Background Google Drive Sync State
 const gdriveSyncs = {};
 
+// Helper to automatically trigger Google Drive sync for responses (v87.1)
+function triggerGDriveSyncForResponses(responses) {
+    if (!responses || responses.length === 0) return;
+    
+    const studentIds = [...new Set(responses.map(r => r.studentId).filter(Boolean))];
+    if (studentIds.length === 0) return;
+    
+    dbAdapter.getAll('students', (err, studentRows) => {
+        if (err || !studentRows) return;
+        const students = studentRows.map(r => { try { return JSON.parse(r.data); } catch(e) { return null; } }).filter(Boolean);
+        
+        const affectedBatchIds = new Set();
+        studentIds.forEach(sid => {
+            const student = students.find(s => s.id === sid || s.username === sid);
+            if (student && student.batchId) {
+                affectedBatchIds.add(student.batchId);
+            }
+        });
+        
+        if (affectedBatchIds.size === 0) return;
+        
+        dbAdapter.getAll('batches', (err2, batchRows) => {
+            if (err2 || !batchRows) return;
+            const batches = batchRows.map(r => { try { return JSON.parse(r.data); } catch(e) { return null; } }).filter(Boolean);
+            
+            affectedBatchIds.forEach(bId => {
+                const batch = batches.find(b => b.id === bId);
+                if (batch) {
+                    gdriveSyncs[bId] = {
+                        status: 'syncing',
+                        progress: 'Auto-syncing after response upload...',
+                        completed: 0,
+                        total: 0,
+                        error: null
+                    };
+                    runGDriveSync(bId, batch.name);
+                }
+            });
+        });
+    });
+}
+
 // Background sync worker function
 async function runGDriveSync(batchId, batchName) {
+    // Concurrency Guard (v87.1)
+    if (gdriveSyncs[batchId] && gdriveSyncs[batchId].status === 'syncing' && gdriveSyncs[batchId].startedAt) {
+        const timeSinceStart = Date.now() - gdriveSyncs[batchId].startedAt;
+        if (timeSinceStart < 300000) { // 5-minute safety timeout
+            syncLog(`Sync already in progress for batchId: ${batchId} (started ${Math.round(timeSinceStart / 1000)}s ago). Skipping concurrent execution.`);
+            return;
+        }
+    }
+
     try {
+        if (!gdriveSyncs[batchId]) {
+            gdriveSyncs[batchId] = {
+                status: 'syncing',
+                progress: 'Starting background job...',
+                completed: 0,
+                total: 0,
+                error: null
+            };
+        }
+        gdriveSyncs[batchId].startedAt = Date.now();
+
         syncLog("=== START SYNC WORKER ===");
         syncLog(`batchId: ${batchId}, batchName: ${batchName}`);
         
