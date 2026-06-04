@@ -467,6 +467,28 @@ function createCRUDEndpoints(tableName, routeName) {
                         }
                     });
                 }
+
+                // Auto trigger Google Drive Sync when students are uploaded
+                if (tableName === 'students') {
+                    const affectedBatchIds = [...new Set(body.map(s => s.batchId).filter(Boolean))];
+                    affectedBatchIds.forEach(bId => {
+                        dbAdapter.getAll('batches', (err2, batchRows) => {
+                            if (err2) return;
+                            const batches = batchRows.map(r => { try { return JSON.parse(r.data); } catch(e) { return null; } }).filter(Boolean);
+                            const batch = batches.find(b => b.id === bId);
+                            if (batch) {
+                                gdriveSyncs[bId] = {
+                                    status: 'syncing',
+                                    progress: 'Auto-syncing after student upload...',
+                                    completed: 0,
+                                    total: 0,
+                                    error: null
+                                };
+                                runGDriveSync(bId, batch.name);
+                            }
+                        });
+                    });
+                }
                 
                 res.json({ success: true, count: body.length });
             });
@@ -488,6 +510,25 @@ function createCRUDEndpoints(tableName, routeName) {
                         error: null
                     };
                     runGDriveSync(id, body.name);
+                }
+
+                // Auto trigger Google Drive Sync when a single student is saved
+                if (tableName === 'students' && body.batchId) {
+                    dbAdapter.getAll('batches', (err2, batchRows) => {
+                        if (err2) return;
+                        const batches = batchRows.map(r => { try { return JSON.parse(r.data); } catch(e) { return null; } }).filter(Boolean);
+                        const batch = batches.find(b => b.id === body.batchId);
+                        if (batch) {
+                            gdriveSyncs[body.batchId] = {
+                                status: 'syncing',
+                                progress: 'Auto-syncing after student save...',
+                                completed: 0,
+                                total: 0,
+                                error: null
+                            };
+                            runGDriveSync(body.batchId, batch.name);
+                        }
+                    });
                 }
 
                 res.json({ success: true, id: id });
@@ -537,6 +578,28 @@ function createCRUDEndpoints(tableName, routeName) {
                             };
                             runGDriveSync(b.id, b.name);
                         }
+                    });
+                }
+
+                // Auto trigger Google Drive Sync when students are bulk-synced
+                if (tableName === 'students') {
+                    const affectedBatchIds = [...new Set(finalItems.map(s => s.batchId).filter(Boolean))];
+                    affectedBatchIds.forEach(bId => {
+                        dbAdapter.getAll('batches', (err2, batchRows) => {
+                            if (err2) return;
+                            const batches = batchRows.map(r => { try { return JSON.parse(r.data); } catch(e) { return null; } }).filter(Boolean);
+                            const batch = batches.find(b => b.id === bId);
+                            if (batch) {
+                                gdriveSyncs[bId] = {
+                                    status: 'syncing',
+                                    progress: 'Auto-syncing after student bulk-sync...',
+                                    completed: 0,
+                                    total: 0,
+                                    error: null
+                                };
+                                runGDriveSync(bId, batch.name);
+                            }
+                        });
                     });
                 }
 
