@@ -4813,8 +4813,10 @@
 
                 if (uploadPaperType === 'THEORY') {
                     data = [
-                        ['What is the capital of France?', 'London', 'Berlin', 'Paris', 'Madrid', 'Paris', '4', 'MCQ', 'PC1:2'],
-                        ['Which is a prime number?', '4', '6', '7', '9', '7', '4', 'MCQ', 'PC1:2']
+                        ['What is the capital of France?', 'London', 'Berlin', 'Paris', 'Madrid', 'Paris', '4', 'MCQ', '1PC1:10'],
+                        ['Which is a prime number?', '4', '6', '7', '9', '7', '4', 'MCQ', '2PC1:10'],
+                        ['What is 2+2?', '3', '4', '5', '6', '4', '4', 'MCQ', '3PC1:10'],
+                        ['Water boils at?', '50C', '100C', '150C', '200C', '100C', '4', 'MCQ', '4PC1:10']
                     ];
                 } else if (uploadPaperType === 'PRACTICAL') {
                     data = [
@@ -4858,7 +4860,7 @@
                         const isViva = questionType === 'VIVA';
                         const noOfOptions = (isCoding || isPractical || isViva) ? 0 : parseInt(row.NoofOptions || row.Noofoptions || 4);
 
-                        // Parse PCIDsWithMarks (e.g., "PC1:5,PC2:3")
+                        // Parse PCIDsWithMarks (e.g., "PC1:5,PC2:3" or "1PC1:10,2PC1:10")
                         const pcMapping = {};
                         let calculatedMarks = 0;
                         if (row.PCIDsWithMarks) {
@@ -4871,25 +4873,39 @@
                                         // Lookup: Try direct ID match, Code match, or NOSCode_PCCode combination
                                         const targetStr = rawTarget.toString().trim().toUpperCase();
                                         let pc = null;
-                                        
-                                        // Check for separators like _, -, ., /
-                                        const separators = ['_', '-', '.', '/'];
-                                        let sepFound = null;
-                                        for (const s of separators) {
-                                            if (targetStr.includes(s)) {
-                                                sepFound = s;
-                                                break;
+
+                                        // NEW: Support numbered NOS prefix format e.g. "1PC1", "2PC1", "3PC2"
+                                        // Format: {NOS_number}{PC_code} where NOS_number is 1-based index
+                                        const numberedMatch = targetStr.match(/^(\d+)(.+)$/);
+                                        if (numberedMatch) {
+                                            const nosIndex = parseInt(numberedMatch[1]) - 1; // convert to 0-based
+                                            const pcCode = numberedMatch[2].trim();
+                                            if (nosIndex >= 0 && nosIndex < qpNOS.length) {
+                                                const targetNOS = qpNOS[nosIndex];
+                                                pc = qpPCs.find(p => p.nosId === targetNOS.id && p.code.toString().trim().toUpperCase() === pcCode);
                                             }
                                         }
                                         
-                                        if (sepFound) {
-                                            const partsTarget = targetStr.split(sepFound);
-                                            if (partsTarget.length === 2) {
-                                                const nosCodeToMatch = partsTarget[0].trim();
-                                                const pcCodeToMatch = partsTarget[1].trim();
-                                                const nos = qpNOS.find(n => n.code.toString().trim().toUpperCase() === nosCodeToMatch);
-                                                if (nos) {
-                                                    pc = qpPCs.find(p => p.nosId === nos.id && p.code.toString().trim().toUpperCase() === pcCodeToMatch);
+                                        // Check for separators like _, -, ., /
+                                        if (!pc) {
+                                            const separators = ['_', '-', '.', '/'];
+                                            let sepFound = null;
+                                            for (const s of separators) {
+                                                if (targetStr.includes(s)) {
+                                                    sepFound = s;
+                                                    break;
+                                                }
+                                            }
+                                            
+                                            if (sepFound) {
+                                                const partsTarget = targetStr.split(sepFound);
+                                                if (partsTarget.length === 2) {
+                                                    const nosCodeToMatch = partsTarget[0].trim();
+                                                    const pcCodeToMatch = partsTarget[1].trim();
+                                                    const nos = qpNOS.find(n => n.code.toString().trim().toUpperCase() === nosCodeToMatch);
+                                                    if (nos) {
+                                                        pc = qpPCs.find(p => p.nosId === nos.id && p.code.toString().trim().toUpperCase() === pcCodeToMatch);
+                                                    }
                                                 }
                                             }
                                         }

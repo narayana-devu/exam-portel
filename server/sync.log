@@ -1,0 +1,54 @@
+[2026-06-03T12:37:12.719Z] === START SYNC WORKER ===
+[2026-06-03T12:37:12.720Z] batchId: id_teswbl9io1775045212092, batchName: ABCD
+[2026-06-03T12:37:12.721Z] OAuth 2.0 credentials found. Authenticating via OAuth...
+[2026-06-03T12:37:13.090Z] Worker CRITICAL error: Failed to exchange refresh token: {"error":"invalid_grant","error_description":"Bad Request"}
+[2026-06-03T12:42:17.695Z] === START SYNC WORKER ===
+[2026-06-03T12:42:17.696Z] batchId: id_teswbl9io1775045212092, batchName: ABCD
+[2026-06-03T12:42:17.696Z] OAuth 2.0 credentials found. Authenticating via OAuth...
+[2026-06-03T12:42:17.893Z] Authenticated with Google OAuth successfully.
+[2026-06-03T12:42:17.896Z] Students in batch: 1, Total responses in DB: 1
+[2026-06-03T12:42:17.897Z] Month Folder: April_2026
+[2026-06-03T12:42:19.597Z] Created Month Folder ID: 11ltMXG9w093gTxJor1si07JDIXM58dhu
+[2026-06-03T12:42:21.055Z] Created Batch Folder ID: 1sRNm0JWsXnY_dJ66WVdFPirAc0nHB1bL
+[2026-06-03T12:42:22.574Z] Created subfolder 'photos' ID: 1Eqq9FDj8BPK61oh36rGdvoXFDtCOxUBz
+[2026-06-03T12:42:24.141Z] Created subfolder 'videos' ID: 1tEJezICj7c3ZfN9rCaN1aUfFhUyRvSgK
+[2026-06-03T12:42:25.591Z] Created subfolder 'documents' ID: 1iWeGq9sL0R8cMRvHvMgihZL9N_Gd7FvU
+[2026-06-03T12:42:27.171Z] Created subfolder 'evidence of each student' ID: 1Qsp-yiTelFOp88M9YkPAVLmvxJn6YcAQ
+[2026-06-03T12:42:27.171Z] Student: rc (101), responses found: 1
+[2026-06-03T12:42:27.172Z] Total upload tasks gathered: 1
+[2026-06-03T12:42:27.173Z] Processing task: student=rc, type=photo, url=https://www.google.com/images/branding/googlelogo/1x/googlelogo_color_272x92dp.png
+[2026-06-03T12:42:28.656Z] Created student folder 'rc_101' ID: 1EHR5WbChuSf8cBq9zx9xLccQOUsNbbab
+[2026-06-03T12:42:28.657Z] [getEvidenceBuffer] Fetching URL: https://www.google.com/images/branding/googlelogo/1x/googlelogo_color_272x92dp.png
+[2026-06-03T12:42:28.657Z] [getEvidenceBuffer] Attempting HTTP fetch: https://www.google.com/images/branding/googlelogo/1x/googlelogo_color_272x92dp.png
+[2026-06-03T12:42:28.853Z] [getEvidenceBuffer] HTTP fetch success. Size: 5969
+[2026-06-03T12:42:29.292Z] Uploading photo to shared folder: 101_rc_theory_VIOLATION_LOG_2026-06-02T13-05-03.jpg
+[2026-06-03T12:42:32.414Z] Uploading photo to student folder: theory_VIOLATION_LOG_2026-06-02T13-05-03.jpg
+[2026-06-03T12:42:35.171Z] === SYNC WORKER COMPLETE. Uploaded 1/1 tasks ===
+[2026-06-04T07:27:31.323Z] === START SYNC WORKER ===
+[2026-06-04T07:27:31.325Z] batchId: test_batch_auto_sync_id_mpz6ah65, batchName: Auto Sync Verification Batch
+[2026-06-04T07:27:31.328Z] OAuth 2.0 credentials found. Authenticating via OAuth...
+[2026-06-04T07:27:31.765Z] Authenticated with Google OAuth successfully.
+[2026-06-04T07:27:31.767Z] Students in batch: 0, Total responses in DB: 0
+[2026-06-04T07:27:31.767Z] Start Date: Year=2026, Month=June
+[2026-06-04T07:27:33.505Z] Created Year Folder '2026' ID: 1z7nJqLWwwpBeu06fgJGIr5WBC6RFvWO_
+[2026-06-04T07:27:35.945Z] Created Month Folder 'June' ID: 17TiryLtPuQxAkYvKpTpoujJNb69IvZVa
+[2026-06-04T07:27:35.946Z] End Date: Year=2026, Month=July
+[2026-06-04T07:27:37.803Z] Created End Month Folder 'July' ID: 1RUUZywRvcSHQNC7V4T0RGIB6v6QC22m1
+[2026-06-04T07:27:39.394Z] Created Batch Folder ID: 1cmQ9HdvoHorl73Z0U-uuEDxmr6mN4SzY
+[2026-06-04T07:27:40.924Z] Created subfolder 'photos' ID: 10WbLAa89BbWVB-s21JQagtuHdFzHOAjy
+[2026-06-04T07:27:42.457Z] Created subfolder 'videos' ID: 1fgFocMa1w8pX7hKuQWfmNxX5Aa1SuuW-
+[2026-06-04T07:27:44.665Z] Created subfolder 'documents' ID: 13eE4YMKQVjpml8XMFVt6B-9gNKJqPL8r
+[2026-06-04T07:27:46.410Z] Created subfolder 'evidence of each student' ID: 17T-apqNq4qis6pQRqVNj1XPGAAIk28Ra
+[2026-06-04T07:27:46.411Z] Total upload tasks gathered: 0
+[2026-06-04T07:27:46.411Z] Sync complete: No tasks.
+[2026-06-04T07:36:15.089Z] === START SYNC WORKER ===
+[2026-06-04T07:36:15.090Z] batchId: test_batch_auto_sync_id_mpz6lpce, batchName: Auto Sync Verification Batch
+[2026-06-04T07:36:15.091Z] OAuth 2.0 credentials found. Authenticating via OAuth...
+[2026-06-04T07:36:15.404Z] Authenticated with Google OAuth successfully.
+[2026-06-04T07:36:15.407Z] Students in batch: 0, Total responses in DB: 0
+[2026-06-04T07:36:15.407Z] Start Date: Year=2026, Month=June
+[2026-06-04T07:36:16.256Z] Found Year Folder '2026' ID: 1z7nJqLWwwpBeu06fgJGIr5WBC6RFvWO_
+[2026-06-04T07:36:16.815Z] Found Month Folder 'June' ID: 17TiryLtPuQxAkYvKpTpoujJNb69IvZVa
+[2026-06-04T07:36:17.305Z] Found Batch Folder ID: 1cmQ9HdvoHorl73Z0U-uuEDxmr6mN4SzY
+[2026-06-04T07:36:17.819Z] Found subfolder 'photos' ID: 10WbLAa89BbWVB-s21JQagtuHdFzHOAjy
+[2026-06-04T07:36:18.276Z] Found subfolder 'videos' ID: 1fgFocMa1w8pX7hKuQWfmNxX5Aa1SuuW-
