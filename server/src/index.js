@@ -8,6 +8,7 @@ const https = require('https');
 const querystring = require('querystring');
 const sqlite3 = require('sqlite3').verbose();
 const { GoogleGenerativeAI } = require("@google/generative-ai");
+const PDFDocument = require('pdfkit');
 
 // Manual .env parser (since dotenv is not installed and npm is blocked)
 if (fs.existsSync(path.join(__dirname, '../../.env'))) {
@@ -1323,6 +1324,81 @@ const getTableData = (table) => {
     });
 };
 
+// Generate Student Credentials PDF Buffer
+function generateStudentCredentialsPDF(batchName, students) {
+    return new Promise((resolve, reject) => {
+        try {
+            const doc = new PDFDocument({ margin: 40, size: 'A4' });
+            const buffers = [];
+            doc.on('data', chunk => buffers.push(chunk));
+            doc.on('end', () => resolve(Buffer.concat(buffers)));
+            doc.on('error', reject);
+
+            // --- Header ---
+            doc.rect(0, 0, doc.page.width, 70).fill('#1e3a8a');
+            doc.fillColor('white').fontSize(20).font('Helvetica-Bold')
+               .text('Student Login Credentials', 40, 20, { align: 'center' });
+            doc.fontSize(11).font('Helvetica')
+               .text(`Batch: ${batchName}`, 40, 46, { align: 'center' });
+
+            doc.moveDown(3);
+
+            // --- Table Header ---
+            const tableTop = 90;
+            const colX = { sno: 40, name: 80, username: 320, password: 440 };
+            const rowH = 24;
+
+            // Header background
+            doc.rect(40, tableTop, doc.page.width - 80, rowH).fill('#1e40af');
+            doc.fillColor('white').fontSize(10).font('Helvetica-Bold');
+            doc.text('S.No', colX.sno, tableTop + 7, { width: 35, align: 'center' });
+            doc.text('Name', colX.name, tableTop + 7, { width: 235, align: 'left' });
+            doc.text('Username', colX.username, tableTop + 7, { width: 115, align: 'left' });
+            doc.text('Password', colX.password, tableTop + 7, { width: 115, align: 'left' });
+
+            // --- Table Rows ---
+            doc.font('Helvetica').fontSize(9).fillColor('#1e293b');
+            let y = tableTop + rowH;
+            students.forEach((s, i) => {
+                const bg = i % 2 === 0 ? '#f0f4ff' : '#ffffff';
+                doc.rect(40, y, doc.page.width - 80, rowH).fill(bg);
+                // Row border
+                doc.rect(40, y, doc.page.width - 80, rowH).stroke('#d1d5db');
+                doc.fillColor('#1e293b');
+                doc.text(String(i + 1), colX.sno, y + 7, { width: 35, align: 'center' });
+                doc.text(s.name || '', colX.name, y + 7, { width: 235, align: 'left' });
+                doc.text(String(s.username || ''), colX.username, y + 7, { width: 115, align: 'left' });
+                doc.text(String(s.password || s.enrollmentNo || ''), colX.password, y + 7, { width: 115, align: 'left' });
+                y += rowH;
+
+                // New page if overflow
+                if (y > doc.page.height - 60) {
+                    doc.addPage();
+                    y = 40;
+                    // Repeat header on new page
+                    doc.rect(40, y, doc.page.width - 80, rowH).fill('#1e40af');
+                    doc.fillColor('white').fontSize(10).font('Helvetica-Bold');
+                    doc.text('S.No', colX.sno, y + 7, { width: 35, align: 'center' });
+                    doc.text('Name', colX.name, y + 7, { width: 235, align: 'left' });
+                    doc.text('Username', colX.username, y + 7, { width: 115, align: 'left' });
+                    doc.text('Password', colX.password, y + 7, { width: 115, align: 'left' });
+                    doc.font('Helvetica').fontSize(9).fillColor('#1e293b');
+                    y += rowH;
+                }
+            });
+
+            // --- Footer ---
+            doc.fillColor('#64748b').fontSize(8)
+               .text(`Generated on ${new Date().toLocaleDateString('en-IN')} | Total Students: ${students.length}`,
+                   40, doc.page.height - 30, { align: 'center', width: doc.page.width - 80 });
+
+            doc.end();
+        } catch (err) {
+            reject(err);
+        }
+    });
+}
+
 // Background Google Drive Sync State
 const gdriveSyncs = {};
 
@@ -1481,10 +1557,28 @@ async function runGDriveSync(batchId, batchName) {
         gdriveSyncs[batchId].total = totalTasks;
         syncLog(`Total upload tasks gathered: ${totalTasks}`);
 
+        // 5. Generate and upload Student Credentials PDF to 'documents' folder
+        try {
+            gdriveSyncs[batchId].progress = 'Generating student credentials PDF...';
+            syncLog('Generating student credentials PDF...');
+            const pdfBuffer = await generateStudentCredentialsPDF(batch.name, students);
+            const pdfFileName = `Student_Credentials_${batch.name.replace(/ /g, '_')}.pdf`;
+            const existingPDF = await findGDriveFile(token, pdfFileName, subFolderIds['documents']);
+            if (!existingPDF) {
+                await uploadGDriveFile(token, pdfFileName, 'application/pdf', subFolderIds['documents'], pdfBuffer);
+                syncLog(`Uploaded student credentials PDF: ${pdfFileName}`);
+            } else {
+                syncLog(`Student credentials PDF already exists: ${pdfFileName}`);
+            }
+        } catch (pdfErr) {
+            syncLog(`Warning: Could not generate/upload credentials PDF: ${pdfErr.message}`);
+            console.warn('[GDrive-Sync] PDF upload error:', pdfErr.message);
+        }
+
         if (totalTasks === 0) {
             gdriveSyncs[batchId].status = 'completed';
-            gdriveSyncs[batchId].progress = 'No student files or videos found to upload.';
-            syncLog("Sync complete: No tasks.");
+            gdriveSyncs[batchId].progress = 'Sync complete! Student credentials PDF uploaded to documents folder.';
+            syncLog("Sync complete: No media tasks, but PDF uploaded.");
             return;
         }
 
