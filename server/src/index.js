@@ -450,6 +450,23 @@ function createCRUDEndpoints(tableName, routeName) {
             dbAdapter.sync(tableName, body, (err) => {
                 if (err) return res.status(500).json({ error: err.message });
                 io.emit('data-change', { table: tableName, action: 'sync' });
+                
+                // v87.0: Auto trigger Google Drive Sync on Batch creation/update
+                if (tableName === 'batches') {
+                    body.forEach(b => {
+                        if (b && b.id) {
+                            gdriveSyncs[b.id] = {
+                                status: 'syncing',
+                                progress: 'Starting background job (Auto-Sync)...',
+                                completed: 0,
+                                total: 0,
+                                error: null
+                            };
+                            runGDriveSync(b.id, b.name);
+                        }
+                    });
+                }
+                
                 res.json({ success: true, count: body.length });
             });
         } else {
@@ -459,6 +476,19 @@ function createCRUDEndpoints(tableName, routeName) {
             dbAdapter.upsert(tableName, id, dataStr, (err) => {
                 if (err) return res.status(500).json({ error: err.message });
                 io.emit('data-change', { table: tableName, action: 'update', id: id });
+
+                // v87.0: Auto trigger Google Drive Sync on Batch creation/update
+                if (tableName === 'batches') {
+                    gdriveSyncs[id] = {
+                        status: 'syncing',
+                        progress: 'Starting background job (Auto-Sync)...',
+                        completed: 0,
+                        total: 0,
+                        error: null
+                    };
+                    runGDriveSync(id, body.name);
+                }
+
                 res.json({ success: true, id: id });
             });
         }
@@ -492,6 +522,23 @@ function createCRUDEndpoints(tableName, routeName) {
             dbAdapter.sync(tableName, finalItems, (err) => {
                 if (err) return res.status(500).json({ error: err.message });
                 io.emit('data-change', { table: tableName, action: 'sync' });
+
+                // v87.0: Auto trigger Google Drive Sync on Batch sync
+                if (tableName === 'batches') {
+                    finalItems.forEach(b => {
+                        if (b && b.id) {
+                            gdriveSyncs[b.id] = {
+                                status: 'syncing',
+                                progress: 'Starting background job (Auto-Sync)...',
+                                completed: 0,
+                                total: 0,
+                                error: null
+                            };
+                            runGDriveSync(b.id, b.name);
+                        }
+                    });
+                }
+
                 res.json({ success: true, count: finalItems.length });
             });
         };
@@ -1313,27 +1360,42 @@ async function runGDriveSync(batchId, batchName) {
 
         const parentFolderId = process.env.GOOGLE_DRIVE_FOLDER_ID || '1tv8GLA-8XWLGDnnzbMN4ivdf5uinvbOE';
         
-        // 1. Determine Month/Year Folder Name
-        gdriveSyncs[batchId].progress = 'Structuring Month folder...';
+        // 1. Determine Year and Month Folder Names (restructured nested folders)
+        gdriveSyncs[batchId].progress = 'Structuring Year and Month folders...';
         const monthNames = [
             "January", "February", "March", "April", "May", "June",
             "July", "August", "September", "October", "November", "December"
         ];
-        let date = new Date();
+        
+        let startDate = new Date();
         if (batch.startDate) {
             const d = new Date(batch.startDate);
-            if (!isNaN(d.getTime())) date = d;
+            if (!isNaN(d.getTime())) startDate = d;
         }
-        const monthFolderQueryName = `${monthNames[date.getMonth()]}_${date.getFullYear()}`;
-        syncLog(`Month Folder: ${monthFolderQueryName}`);
-        
-        let monthFolderId = await findGDriveFolder(token, monthFolderQueryName, parentFolderId);
-        if (!monthFolderId) {
-            monthFolderId = await createGDriveFolder(token, monthFolderQueryName, parentFolderId);
-            syncLog(`Created Month Folder ID: ${monthFolderId}`);
+
+        const startYearName = `${startDate.getFullYear()}`;
+        const startMonthName = monthNames[startDate.getMonth()];
+        syncLog(`Start Date: Year=${startYearName}, Month=${startMonthName}`);
+
+        // Find/Create Year Folder for Start Date under parent folder
+        let startYearFolderId = await findGDriveFolder(token, startYearName, parentFolderId);
+        if (!startYearFolderId) {
+            startYearFolderId = await createGDriveFolder(token, startYearName, parentFolderId);
+            syncLog(`Created Year Folder '${startYearName}' ID: ${startYearFolderId}`);
         } else {
-            syncLog(`Found Month Folder ID: ${monthFolderId}`);
+            syncLog(`Found Year Folder '${startYearName}' ID: ${startYearFolderId}`);
         }
+
+        // Find/Create Month Folder for Start Date under Year folder
+        let startMonthFolderId = await findGDriveFolder(token, startMonthName, startYearFolderId);
+        if (!startMonthFolderId) {
+            startMonthFolderId = await createGDriveFolder(token, startMonthName, startYearFolderId);
+            syncLog(`Created Month Folder '${startMonthName}' ID: ${startMonthFolderId}`);
+        } else {
+            syncLog(`Found Month Folder '${startMonthName}' ID: ${startMonthFolderId}`);
+        }
+
+        let monthFolderId = startMonthFolderId;
 
         // 2. Create/Find Batch Folder inside Month folder
         gdriveSyncs[batchId].progress = 'Structuring Batch folder...';
