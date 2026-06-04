@@ -4231,7 +4231,8 @@
             const filteredNOS = selectedQP ? nosList.filter(n => n.qpId === selectedQP.id) : nosList;
 
             return (
-                <div className="animate-fade-in-up space-y-4">
+                <>
+                    <div className="animate-fade-in-up space-y-4">
                     {selectedQP ? (
                         <div className="glass-effect rounded-[24px] p-5 border border-white/40 shadow-xl relative overflow-hidden">
                             <div className="absolute top-0 right-0 w-64 h-64 bg-primary-500/5 blur-[100px] -mr-32 -mt-32"></div>
@@ -4417,6 +4418,7 @@
                             </div>
                         </div>
                     )}
+                    </div>
 
                     {/* Modals with Glass Styling */}
 
@@ -4577,7 +4579,7 @@
                             </div>
                         </div>
                     )}
-                </div>
+                </>
             );
         };
 
@@ -5840,7 +5842,8 @@
             };
 
             return (
-                <div className="animate-fade-in-up space-y-8">
+                <>
+                    <div className="animate-fade-in-up space-y-8">
                     <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
                         <div>
                             <h2 className="text-3xl font-black text-gray-900 tracking-tight">Batches</h2>
@@ -6173,6 +6176,7 @@
                             </div>
                         </>
                     )}
+                    </div>
 
 
 
@@ -6705,7 +6709,7 @@
                     )}
 
                     {vivaSession && <VivaLobby batch={vivaSession.batch} onClose={() => setVivaSession(null)} />}
-                </div>
+                </>
             );
         };
 
