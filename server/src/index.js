@@ -1194,7 +1194,7 @@ async function findGDriveFolder(accessToken, name, parentId = null) {
 // Google Drive API helper: Find File
 async function findGDriveFile(accessToken, name, parentId) {
     return new Promise((resolve, reject) => {
-        const query = `name = '${name.replace(/'/g, "\\'")}' and '${parentId}' in parents and trashed = false`;
+        const query = `name = '${name.replace(/'/g, "\\'")}'  and '${parentId}' in parents and trashed = false`;
         const pathQuery = `/drive/v3/files?q=${encodeURIComponent(query)}&fields=files(id,name)&supportsAllDrives=true&includeItemsFromAllDrives=true`;
         const req = https.request(`https://www.googleapis.com${pathQuery}`, {
             method: 'GET',
@@ -1211,6 +1211,21 @@ async function findGDriveFile(accessToken, name, parentId) {
             });
         });
 
+        req.on('error', reject);
+        req.end();
+    });
+}
+
+// Google Drive API helper: Delete File by ID
+async function deleteGDriveFile(accessToken, fileId) {
+    return new Promise((resolve, reject) => {
+        const req = https.request(`https://www.googleapis.com/drive/v3/files/${fileId}?supportsAllDrives=true`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${accessToken}` }
+        }, (res) => {
+            res.on('data', () => {});
+            res.on('end', () => resolve(true));
+        });
         req.on('error', reject);
         req.end();
     });
@@ -1620,19 +1635,21 @@ async function runGDriveSync(batchId, batchName) {
         gdriveSyncs[batchId].total = totalTasks;
         syncLog(`Total upload tasks gathered: ${totalTasks}`);
 
-        // 5. Generate and upload Student Credentials PDF to 'documents' folder
+        // 5. Generate and upload Student Credentials PDF to 'documents' folder (ALWAYS overwrite)
         try {
             gdriveSyncs[batchId].progress = 'Generating student credentials PDF...';
             syncLog('Generating student credentials PDF...');
             const pdfBuffer = await generateStudentCredentialsPDF(batch.name, students);
             const pdfFileName = `Student_Credentials_${batch.name.replace(/ /g, '_')}.pdf`;
-            const existingPDF = await findGDriveFile(token, pdfFileName, subFolderIds['documents']);
-            if (!existingPDF) {
-                await uploadGDriveFile(token, pdfFileName, 'application/pdf', subFolderIds['documents'], pdfBuffer);
-                syncLog(`Uploaded student credentials PDF: ${pdfFileName}`);
-            } else {
-                syncLog(`Student credentials PDF already exists: ${pdfFileName}`);
+
+            // Delete old PDF if exists, then upload fresh one
+            const existingPDFId = await findGDriveFile(token, pdfFileName, subFolderIds['documents']);
+            if (existingPDFId) {
+                await deleteGDriveFile(token, existingPDFId);
+                syncLog(`Deleted old credentials PDF: ${pdfFileName}`);
             }
+            await uploadGDriveFile(token, pdfFileName, 'application/pdf', subFolderIds['documents'], pdfBuffer);
+            syncLog(`Uploaded fresh credentials PDF: ${pdfFileName} (${students.length} students)`);
         } catch (pdfErr) {
             syncLog(`Warning: Could not generate/upload credentials PDF: ${pdfErr.message}`);
             console.warn('[GDrive-Sync] PDF upload error:', pdfErr.message);
