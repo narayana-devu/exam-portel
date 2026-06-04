@@ -4105,7 +4105,15 @@
 
             const handleCreateNOS = (e) => {
                 e.preventDefault();
-                const nos = { ...newNOS, id: window.Utils.generateId(), qpId: selectedQP.id, createdAt: new Date().toISOString() };
+                const nos = {
+                    ...newNOS,
+                    id: window.Utils.generateId(),
+                    qpId: selectedQP.id,
+                    theoryCutoff: parseFloat(newNOS.theoryCutoff) || 0,
+                    practicalCutoff: parseFloat(newNOS.practicalCutoff) || 0,
+                    overallCutoff: parseFloat(newNOS.overallCutoff) || 0,
+                    createdAt: new Date().toISOString()
+                };
                 window.Utils.saveNOS(nos);
                 setNOSList(window.Utils.getNOS());
                 setShowNOSModal(false);
@@ -4183,9 +4191,9 @@
                                         qpId: selectedQP.id,
                                         code: nosCode,
                                         name: nosName,
-                                        theoryCutoff: row['Theory Cutoff %'] !== undefined ? row['Theory Cutoff %'] : (row['Theory Cutoff'] || 0),
-                                        practicalCutoff: row['Practical Cutoff %'] !== undefined ? row['Practical Cutoff %'] : (row['Practical Cutoff'] || 0),
-                                        overallCutoff: row['Overall Cutoff %'] !== undefined ? row['Overall Cutoff %'] : (row['Overall Cutoff'] || 0),
+                                        theoryCutoff: parseFloat(row['Theory Cutoff %'] !== undefined ? row['Theory Cutoff %'] : (row['Theory Cutoff'] || 0)) || 0,
+                                        practicalCutoff: parseFloat(row['Practical Cutoff %'] !== undefined ? row['Practical Cutoff %'] : (row['Practical Cutoff'] || 0)) || 0,
+                                        overallCutoff: parseFloat(row['Overall Cutoff %'] !== undefined ? row['Overall Cutoff %'] : (row['Overall Cutoff'] || 0)) || 0,
                                         createdAt: new Date().toISOString()
                                     };
                                     window.Utils.saveNOS(nos);
@@ -4512,13 +4520,13 @@
                                         </div>
                                         <div className="space-y-2">
                                             <label className="text-[10px] font-black text-gray-700 uppercase tracking-widest ml-4">Theory Cutoff %</label>
-                                            <input type="number" required className="w-full px-6 py-4 bg-gray-50 border border-gray-100 rounded-2xl text-gray-900 focus:bg-white focus:border-primary-500/50 transition-all outline-none"
-                                                value={newNOS.theoryCutoff} onChange={e => setNewNOS({ ...newNOS, theoryCutoff: e.target.value })} />
+                                            <input type="number" className="w-full px-6 py-4 bg-gray-50 border border-gray-100 rounded-2xl text-gray-900 focus:bg-white focus:border-primary-500/50 transition-all outline-none"
+                                                placeholder="Optional (defaults to 0)" value={newNOS.theoryCutoff} onChange={e => setNewNOS({ ...newNOS, theoryCutoff: e.target.value })} />
                                         </div>
                                         <div className="space-y-2">
                                             <label className="text-[10px] font-black text-gray-700 uppercase tracking-widest ml-4">Practical Cutoff %</label>
-                                            <input type="number" required className="w-full px-6 py-4 bg-gray-50 border border-gray-100 rounded-2xl text-gray-900 focus:bg-white focus:border-primary-500/50 transition-all outline-none"
-                                                value={newNOS.practicalCutoff} onChange={e => setNewNOS({ ...newNOS, practicalCutoff: e.target.value })} />
+                                            <input type="number" className="w-full px-6 py-4 bg-gray-50 border border-gray-100 rounded-2xl text-gray-900 focus:bg-white focus:border-primary-500/50 transition-all outline-none"
+                                                placeholder="Optional (defaults to 0)" value={newNOS.practicalCutoff} onChange={e => setNewNOS({ ...newNOS, practicalCutoff: e.target.value })} />
                                         </div>
                                     </div>
                                     <div className="flex gap-4 pt-4">
