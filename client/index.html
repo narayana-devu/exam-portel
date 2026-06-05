@@ -11127,6 +11127,26 @@
                 const pid = startMode === 'Theory' ? batch.theoryPaperId : (startMode === 'Viva' ? batch.vivaPaperId : batch.practicalPaperId);
                 console.log(`Starting ${startMode}: Batch=${batch.name}, AssignedID=${pid}, AvailableQPs=${window.Utils.getQuestionPapers().length}`);
 
+                // ── PRACTICAL: Allow starting WITHOUT a question paper (video-only mode) ──
+                if (!pid && startMode === 'Practical') {
+                    console.log("[Practical] No paper assigned — starting in free-record (video-only) mode.");
+                    setQuestions([]);  // empty = no questions
+                    setTimeLeft(0);   // no timer constraint
+                    if (batch) {
+                        setCaptureImage(batch.captureImage !== false);
+                        setCameraInterval(batch.cameraInterval || '60');
+                    }
+                    setExamMode('Practical');
+                    setPendingExamMode(null);
+                    setVerificationStep(null);
+                    setWebcamActive(true);
+                    startTimeRef.current = Date.now();
+                    await startCameraManual();
+                    setTimeout(() => { if (!isRecording) toggleRecording(); }, 2000);
+                    startMandatoryRecording('Practical');
+                    return;
+                }
+
                 if (!pid) {
                     alert(`No ${startMode} question paper has been assigned to this batch.\n\nPlease contact your administrator to assign a ${startMode} paper.`);
                     return;
@@ -11211,6 +11231,7 @@
                     alert("Unavailable: Question Paper not loaded for this batch.");
                 }
             };
+
 
 
 
@@ -11784,16 +11805,20 @@
                                     </div>
                                     <div>
                                         <h2 className="font-extrabold text-secondary-900 tracking-tight">{examMode} Protocol</h2>
-                                        <p className="text-xs font-bold text-secondary-700 uppercase tracking-widest">Question {questions.length > 0 ? (currentQ + 1) : 0} of {questions.length}</p>
+                                        <p className="text-xs font-bold text-secondary-700 uppercase tracking-widest">
+                                            {questions.length === 0 && examMode === 'Practical' ? 'Video-Only Mode' : `Question ${questions.length > 0 ? (currentQ + 1) : 0} of ${questions.length}`}
+                                        </p>
                                     </div>
                                 </div>
 
                                 <div className="flex items-center gap-3">
-                                    {/* Timer */}
+                                    {/* Timer — hidden in video-only practical mode */}
+                                    {(timeLeft > 0) && (
                                     <div className={`flex items-center gap-3 px-5 py-2 rounded-2xl border transition-all duration-500 ${timeLeft < 300 ? 'bg-rose-50 border-rose-100 text-rose-600 animate-pulse' : 'bg-secondary-50 border-secondary-200 text-secondary-700 font-bold'}`}>
                                         <Icons.Clock className="w-5 h-5 opacity-70" />
                                         <span className="font-mono text-xl">{Math.floor(timeLeft / 60)}:{(timeLeft % 60).toString().padStart(2, '0')}</span>
                                     </div>
+                                    )}
 
                                     {/* Mandatory Recording Status Pill */}
                                     {recStatus === 'idle' && (
@@ -11842,6 +11867,39 @@
                                             <div>
                                                 <p className="text-[10px] font-black uppercase tracking-[0.2em] mb-1 opacity-80">Security Alert</p>
                                                 <p className="text-lg font-bold leading-tight">{lastWarning}</p>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* ── PRACTICAL VIDEO-ONLY MODE (no paper assigned) ── */}
+                                    {examMode === 'Practical' && questions.length === 0 && (
+                                        <div className="space-y-6 animate-fade-in-up">
+                                            <div className="bg-white p-10 rounded-4xl shadow-xl shadow-secondary-200/50 border border-secondary-100 relative overflow-hidden">
+                                                <div className="absolute top-0 left-0 w-2 h-full bg-indigo-600"></div>
+                                                <div className="flex items-center gap-4 mb-6">
+                                                    <div className="w-12 h-12 bg-indigo-100 rounded-2xl flex items-center justify-center">
+                                                        <Icons.Video className="w-6 h-6 text-indigo-600" />
+                                                    </div>
+                                                    <div>
+                                                        <h3 className="text-xl font-bold text-secondary-900">Practical Assessment</h3>
+                                                        <p className="text-sm text-secondary-600">Record your practical demonstration below. Your assessor will review it.</p>
+                                                    </div>
+                                                </div>
+                                                <PracticalQuestionRunner
+                                                    question={{ id: 'free', question: 'Demonstrate your practical skills as instructed by your assessor.' }}
+                                                    answer={answers[0] || {}}
+                                                    onAnswer={val => handleAnswerChange(0, val)}
+                                                    studentId={user.id}
+                                                    examMode="Practical"
+                                                />
+                                            </div>
+                                            <div className="flex justify-center">
+                                                <button
+                                                    onClick={endExam}
+                                                    className="bg-rose-600 hover:bg-rose-700 text-white px-10 py-4 rounded-2xl font-black text-sm uppercase tracking-widest shadow-xl shadow-rose-500/20 active:scale-95 transition-all flex items-center gap-3"
+                                                >
+                                                    <Icons.PhoneMissed className="w-5 h-5" /> Submit & End Practical
+                                                </button>
                                             </div>
                                         </div>
                                     )}
@@ -12009,20 +12067,34 @@
 
                             <div className="w-full h-px bg-secondary-100"></div>
 
-                            {/* Question Grid */}
+                            {/* Question Grid — or Video-Only info panel */}
                             <div className="flex-1 overflow-y-auto p-6">
-                                <h4 className="text-[11px] font-black text-secondary-700 uppercase tracking-[0.2em] mb-6">Question Map</h4>
-                                <div className="grid grid-cols-5 gap-3">
-                                    {questions.map((_, i) => (
-                                        <div
-                                            key={i}
-                                            onClick={() => setCurrentQ(i)}
-                                            className={`h-10 flex items-center justify-center cursor-pointer rounded-xl font-bold text-sm transition-all duration-300 active:scale-90 shadow-sm ${currentQ === i ? 'bg-primary-600 text-gray-900 shadow-primary-200 -translate-y-1' : (answers[i] ? 'bg-emerald-100 text-emerald-700 border border-emerald-200' : 'bg-secondary-50 text-secondary-700 border border-secondary-100 hover:bg-secondary-100')}`}
-                                        >
-                                            {i + 1}
+                                {questions.length === 0 && examMode === 'Practical' ? (
+                                    <div className="flex flex-col items-center justify-center h-full gap-4 text-center px-2">
+                                        <div className="w-14 h-14 bg-indigo-100 rounded-2xl flex items-center justify-center">
+                                            <Icons.Video className="w-7 h-7 text-indigo-600" />
                                         </div>
-                                    ))}
-                                </div>
+                                        <div>
+                                            <p className="text-xs font-black text-secondary-700 uppercase tracking-widest mb-1">Video-Only Mode</p>
+                                            <p className="text-xs text-secondary-500">No question paper assigned. Record your demonstration and click Submit when done.</p>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <>
+                                        <h4 className="text-[11px] font-black text-secondary-700 uppercase tracking-[0.2em] mb-6">Question Map</h4>
+                                        <div className="grid grid-cols-5 gap-3">
+                                            {questions.map((_, i) => (
+                                                <div
+                                                    key={i}
+                                                    onClick={() => setCurrentQ(i)}
+                                                    className={`h-10 flex items-center justify-center cursor-pointer rounded-xl font-bold text-sm transition-all duration-300 active:scale-90 shadow-sm ${currentQ === i ? 'bg-primary-600 text-gray-900 shadow-primary-200 -translate-y-1' : (answers[i] ? 'bg-emerald-100 text-emerald-700 border border-emerald-200' : 'bg-secondary-50 text-secondary-700 border border-secondary-100 hover:bg-secondary-100')}`}
+                                                >
+                                                    {i + 1}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </>
+                                )}
                             </div>
 
                             {/* Sidebar Footer */}
