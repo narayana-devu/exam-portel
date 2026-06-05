@@ -10093,10 +10093,12 @@
         };
 
         // PRACTICAL QUESTION RUNNER
-        const PracticalQuestionRunner = ({ question, answer, onAnswer }) => {
+        const PracticalQuestionRunner = ({ question, answer, onAnswer, studentId, examMode }) => {
             const MAX_REC_SEC = 300; // 5 minutes
             const [isRecording, setIsRecording] = useState(false);
             const [recTimeLeft, setRecTimeLeft] = useState(MAX_REC_SEC);
+            const [isUploadingVideo, setIsUploadingVideo] = useState(false);
+            const [uploadStatus, setUploadStatus] = useState(null); // message
             const [previewUrl, setPreviewUrl] = useState(answer?.video || null);
             const [photoUrl, setPhotoUrl] = useState(answer?.photo || null);
             const videoRef = useRef(null);
@@ -10143,22 +10145,64 @@
                     : (MediaRecorder.isTypeSupported('video/webm') ? 'video/webm' : 'video/mp4');
                 const recorder = new MediaRecorder(streamRef.current, { mimeType, videoBitsPerSecond: 500000, audioBitsPerSecond: 64000 });
                 recorder.ondataavailable = e => { if (e.data && e.data.size > 0) chunksRef.current.push(e.data); };
-                recorder.onstop = () => {
+                recorder.onstop = async () => {
                     const blob = new Blob(chunksRef.current, { type: mimeType });
-                    const url = URL.createObjectURL(blob);
-                    setPreviewUrl(url);
+                    const localUrl = URL.createObjectURL(blob);
+                    setPreviewUrl(localUrl);
                     setIsRecording(false);
                     clearInterval(timerRef.current);
-                    // Convert to base64 and save as answer
-                    const reader = new FileReader();
-                    reader.onloadend = () => {
-                        onAnswer({ ...answer, video: reader.result, videoMime: mimeType });
-                    };
-                    reader.readAsDataURL(blob);
-                    // Stop camera tracks so indicator goes off
+
+                    // Stop camera tracks
                     if (streamRef.current) {
                         streamRef.current.getTracks().forEach(t => t.stop());
                         streamRef.current = null;
+                    }
+
+                    // Upload to server → Drive-ready URL
+                    setIsUploadingVideo(true);
+                    setUploadStatus('Uploading video...');
+                    try {
+                        const ext = mimeType.includes('mp4') ? 'mp4' : 'webm';
+                        const fileName = `practical_${Date.now()}_q${question.id || 'x'}.${ext}`;
+                        const formData = new FormData();
+                        formData.append('file', blob, fileName);
+                        const res = await fetch('/api/upload-media', {
+                            method: 'POST',
+                            headers: { 'x-api-key': 'portel_secure_key_2025' },
+                            body: formData
+                        });
+                        if (!res.ok) throw new Error(`Upload failed: ${res.status}`);
+                        const data = await res.json();
+                        const videoUrl = data.url;
+                        setUploadStatus('✅ Video uploaded to Drive!');
+                        setTimeout(() => setUploadStatus(null), 4000);
+                        // Save URL in answer (not base64) — Drive sync picks this up via evidence
+                        onAnswer({ ...answer, video: videoUrl, videoMime: mimeType, videoLocal: localUrl });
+                        // Also push as evidence so runGDriveSync finds it in the response
+                        if (window.Utils && window.Utils.saveResponse) {
+                            window.Utils.saveResponse({
+                                studentId: studentId,
+                                examType: examMode || 'Practical',
+                                evidence: [{
+                                    url: videoUrl,
+                                    type: 'PRACTICAL_VIDEO',
+                                    time: new Date().toISOString(),
+                                    questionId: question.id,
+                                    label: 'Practical Video Answer'
+                                }],
+                                status: 'draft'
+                            });
+                        }
+                    } catch (err) {
+                        console.error('[Practical Video Upload]', err);
+                        setUploadStatus('❌ Upload failed — saved locally only');
+                        setTimeout(() => setUploadStatus(null), 6000);
+                        // Fallback: save base64 locally
+                        const reader = new FileReader();
+                        reader.onloadend = () => onAnswer({ ...answer, video: reader.result, videoMime: mimeType });
+                        reader.readAsDataURL(blob);
+                    } finally {
+                        setIsUploadingVideo(false);
                     }
                 };
                 recorder.start(1000); // collect every 1s
@@ -10220,9 +10264,15 @@
                                     <button onClick={retakeRecording} className="absolute top-3 right-3 bg-white/90 backdrop-blur-md text-gray-900 px-3 py-1.5 rounded-full text-xs font-bold hover:bg-rose-500 hover:text-white transition-all shadow-md border border-gray-200 flex items-center gap-1">
                                         <Icons.X className="w-3 h-3" /> Retake
                                     </button>
-                                    <div className="absolute bottom-3 left-3 bg-emerald-600 text-white px-3 py-1 rounded-full text-xs font-black flex items-center gap-1">
-                                        <Icons.CheckCircle className="w-3 h-3" /> Video Saved
-                                    </div>
+                                    {isUploadingVideo ? (
+                                        <div className="absolute bottom-3 left-3 bg-indigo-600 text-white px-3 py-1 rounded-full text-xs font-black flex items-center gap-2 animate-pulse">
+                                            <Icons.Loader className="w-3 h-3 animate-spin" /> Uploading to Drive...
+                                        </div>
+                                    ) : (
+                                        <div className="absolute bottom-3 left-3 bg-emerald-600 text-white px-3 py-1 rounded-full text-xs font-black flex items-center gap-1">
+                                            <Icons.CheckCircle className="w-3 h-3" /> {uploadStatus || 'Video Saved'}
+                                        </div>
+                                    )}
                                 </div>
                             ) : (
                                 <video ref={videoRef} autoPlay muted playsInline className="w-full h-full object-contain" />
@@ -11840,6 +11890,8 @@
                                                                 question={questions[currentQ]}
                                                                 answer={answers[currentQ] || {}}
                                                                 onAnswer={val => handleAnswerChange(currentQ, val)}
+                                                                studentId={user.id}
+                                                                examMode={examMode}
                                                             />
                                                         </div>
                                                     ) : (
