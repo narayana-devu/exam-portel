@@ -10098,9 +10098,10 @@
             const [isRecording, setIsRecording] = useState(false);
             const [recTimeLeft, setRecTimeLeft] = useState(MAX_REC_SEC);
             const [isUploadingVideo, setIsUploadingVideo] = useState(false);
+            const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
             const [uploadStatus, setUploadStatus] = useState(null); // message
             const [previewUrl, setPreviewUrl] = useState(answer?.video || null);
-            const [photoUrl, setPhotoUrl] = useState(answer?.photo || null);
+            const [photos, setPhotos] = useState(answer?.photos || (answer?.photo ? [answer?.photo] : []));
             const videoRef = useRef(null);
             const streamRef = useRef(null);
             const recorderRef = useRef(null);
@@ -10233,24 +10234,124 @@
 
             const retakeRecording = () => {
                 setPreviewUrl(null);
-                setPhotoUrl(null);
                 setRecTimeLeft(MAX_REC_SEC);
-                onAnswer({ ...answer, video: null, photo: null });
+                onAnswer({ ...answer, video: null });
                 startCamera();
             };
 
-            const capturePhoto = () => {
+            const capturePhoto = async () => {
                 if ((!streamRef.current && !videoRef.current) || (videoRef.current && videoRef.current.readyState < 2)) {
                     console.warn("CapturePhoto: Stream/Video not ready. ReadyState:", videoRef.current?.readyState);
                     startCamera();
                     return;
                 }
-                const canvas = document.createElement('canvas');
-                canvas.width = 640; canvas.height = 480;
-                canvas.getContext('2d').drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
-                const data = canvas.toDataURL('image/jpeg', 0.7);
-                setPhotoUrl(data);
-                onAnswer({ ...answer, photo: data });
+                
+                setIsUploadingPhoto(true);
+                setUploadStatus('Uploading photo...');
+                try {
+                    const canvas = document.createElement('canvas');
+                    canvas.width = 640; canvas.height = 480;
+                    canvas.getContext('2d').drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
+                    
+                    const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+                    const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.85));
+                    
+                    const fileName = `practical_photo_${Date.now()}_q${question.id || 'x'}.jpg`;
+                    const formData = new FormData();
+                    formData.append('file', blob, fileName);
+                    
+                    const res = await fetch('/api/upload-media', {
+                        method: 'POST',
+                        headers: { 'x-api-key': 'portel_secure_key_2025' },
+                        body: formData
+                    });
+                    
+                    if (!res.ok) throw new Error(`Upload failed: ${res.status}`);
+                    const data = await res.json();
+                    const photoUrl = data.url;
+                    
+                    const newPhotos = [...photos, photoUrl];
+                    setPhotos(newPhotos);
+                    setUploadStatus('✅ Photo uploaded!');
+                    setTimeout(() => setUploadStatus(null), 3000);
+                    
+                    onAnswer({
+                        ...answer,
+                        photo: photoUrl, // Keep single photo compatibility
+                        photos: newPhotos
+                    });
+                    
+                    if (window.Utils && window.Utils.saveResponse) {
+                        window.Utils.saveResponse({
+                            studentId: studentId,
+                            examType: examMode || 'Practical',
+                            evidence: [{
+                                url: photoUrl,
+                                type: 'PRACTICAL_PHOTO',
+                                time: new Date().toISOString(),
+                                questionId: question.id,
+                                label: 'Practical Photo Answer'
+                            }],
+                            status: 'draft'
+                        });
+                    }
+                } catch (err) {
+                    console.error('[Practical Photo Capture]', err);
+                    setUploadStatus('❌ Photo upload failed — saved locally only');
+                    setTimeout(() => setUploadStatus(null), 5000);
+                    
+                    // Fallback to local base64 stored via saveResponse to IndexedDB
+                    const canvas = document.createElement('canvas');
+                    canvas.width = 640; canvas.height = 480;
+                    canvas.getContext('2d').drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
+                    const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
+                    
+                    const newPhotos = [...photos, dataUrl];
+                    setPhotos(newPhotos);
+                    onAnswer({
+                        ...answer,
+                        photo: dataUrl,
+                        photos: newPhotos
+                    });
+                    
+                    if (window.Utils && window.Utils.saveResponse) {
+                        window.Utils.saveResponse({
+                            studentId: studentId,
+                            examType: examMode || 'Practical',
+                            evidence: [{
+                                img: dataUrl, // saveResponse will convert base64 to Blob & save in IndexedDB
+                                type: 'PRACTICAL_PHOTO',
+                                time: new Date().toISOString(),
+                                questionId: question.id,
+                                label: 'Practical Photo Answer'
+                            }],
+                            status: 'draft'
+                        });
+                    }
+                } finally {
+                    setIsUploadingPhoto(false);
+                }
+            };
+
+            const deletePhoto = (urlToDelete) => {
+                const newPhotos = photos.filter(p => p !== urlToDelete);
+                setPhotos(newPhotos);
+                onAnswer({
+                    ...answer,
+                    photo: newPhotos[newPhotos.length - 1] || null,
+                    photos: newPhotos
+                });
+                
+                // Remove from local responses evidence
+                if (window.Utils) {
+                    const responses = window.Utils.getResponses();
+                    const idx = responses.findIndex(r => r.studentId === studentId && r.examType === (examMode || 'Practical'));
+                    if (idx !== -1) {
+                        responses[idx].evidence = (responses[idx].evidence || []).filter(e => e.url !== urlToDelete && e.img !== urlToDelete);
+                        localStorage.setItem('se_responses', JSON.stringify(responses));
+                        window.Utils.uploadToCloud(true, 'responses');
+                    }
+                }
             };
 
             return (
@@ -10338,18 +10439,47 @@
                             )}
 
                             {!isRecording && (
-                                <button onClick={capturePhoto} className="bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-2xl font-black text-[11px] uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg shadow-blue-500/20 transition-all">
-                                    <Icons.Camera className="w-4 h-4" /> Capture Photo
+                                <button 
+                                    onClick={capturePhoto} 
+                                    disabled={isUploadingPhoto}
+                                    className="bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-2xl font-black text-[11px] uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg shadow-blue-500/20 transition-all disabled:opacity-50"
+                                >
+                                    {isUploadingPhoto ? <Icons.Loader className="w-4 h-4 animate-spin" /> : <Icons.Camera className="w-4 h-4" />}
+                                    {isUploadingPhoto ? 'UPLOADING...' : 'Capture Photo'}
                                 </button>
                             )}
 
-                            {/* Photo Preview */}
-                            {photoUrl && (
-                                <div className="mt-auto border-2 border-dashed border-gray-300 rounded-lg p-2 relative bg-white">
-                                    <img src={photoUrl} className="w-full h-28 object-contain rounded" />
-                                    <button onClick={() => { setPhotoUrl(null); onAnswer({ ...answer, photo: null }); }} className="absolute -top-3 -right-3 bg-white text-gray-900 rounded-full p-1.5 shadow-lg hover:bg-rose-500 hover:text-white border border-gray-200 transition-all">
-                                        <Icons.X className="w-4 h-4" />
-                                    </button>
+                            {/* Photo Gallery Grid */}
+                            {photos.length > 0 && (
+                                <div className="mt-auto border border-gray-200 rounded-2xl p-2 relative bg-gray-50 max-h-48 overflow-y-auto">
+                                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1.5 px-1">Captured Photos ({photos.length})</p>
+                                    <div className="grid grid-cols-2 gap-1.5">
+                                        {photos.map((pUrl, idx) => {
+                                            let src = pUrl;
+                                            if (pUrl && pUrl.includes('amazonaws.com') && !pUrl.includes('media-stream')) {
+                                                try {
+                                                    const urlObj = new URL(pUrl);
+                                                    let s3Key = urlObj.pathname.startsWith('/') ? urlObj.pathname.substring(1) : urlObj.pathname;
+                                                    s3Key = decodeURIComponent(s3Key);
+                                                    src = `${window.location.origin}/api/media-stream?key=${encodeURIComponent(s3Key)}&apiKey=portel_secure_key_2025`;
+                                                } catch (e) {
+                                                    console.error("Proxy URL Parse Error", e);
+                                                }
+                                            }
+                                            return (
+                                                <div key={pUrl || idx} className="relative aspect-video rounded-lg overflow-hidden border border-gray-200 bg-white group">
+                                                    <img src={src} className="w-full h-full object-contain" />
+                                                    <button 
+                                                        onClick={() => deletePhoto(pUrl)} 
+                                                        className="absolute top-0.5 right-0.5 bg-rose-600 text-white rounded-full p-1 opacity-80 group-hover:opacity-100 hover:bg-rose-700 transition-all shadow-md"
+                                                        title="Delete Photo"
+                                                    >
+                                                        <Icons.X className="w-3 h-3" />
+                                                    </button>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
                                 </div>
                             )}
                         </div>
