@@ -10093,7 +10093,7 @@
         };
 
         // PRACTICAL QUESTION RUNNER
-        const PracticalQuestionRunner = ({ question, answer, onAnswer, studentId, examMode }) => {
+        const PracticalQuestionRunner = ({ question, answer, onAnswer, studentId, examMode, parentStream }) => {
             const MAX_REC_SEC = 300; // 5 minutes
             const [isRecording, setIsRecording] = useState(false);
             const [recTimeLeft, setRecTimeLeft] = useState(MAX_REC_SEC);
@@ -10108,21 +10108,33 @@
             const chunksRef = useRef([]);
             const timerRef = useRef(null);
 
-            // Cleanup stream on unmount
+            // Cleanup stream on unmount/parentStream updates
             useEffect(() => {
-                if (!previewUrl) startCamera();
+                if (parentStream && !previewUrl) {
+                    streamRef.current = parentStream;
+                    if (videoRef.current) {
+                        videoRef.current.srcObject = parentStream;
+                    }
+                } else if (!previewUrl) {
+                    startCamera();
+                }
                 return () => {
                     clearInterval(timerRef.current);
                     if (recorderRef.current && recorderRef.current.state !== 'inactive') {
                         recorderRef.current.stop();
                     }
-                    if (streamRef.current) {
+                    if (streamRef.current && streamRef.current !== parentStream) {
                         streamRef.current.getTracks().forEach(track => track.stop());
                     }
                 };
-            }, []);
+            }, [parentStream, previewUrl]);
 
             const startCamera = async () => {
+                if (parentStream) {
+                    streamRef.current = parentStream;
+                    if (videoRef.current) videoRef.current.srcObject = parentStream;
+                    return;
+                }
                 try {
                     const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
                     streamRef.current = stream;
@@ -10153,8 +10165,8 @@
                     setIsRecording(false);
                     clearInterval(timerRef.current);
 
-                    // Stop camera tracks
-                    if (streamRef.current) {
+                    // Stop camera tracks (only if not sharing parent stream)
+                    if (streamRef.current && streamRef.current !== parentStream) {
                         streamRef.current.getTracks().forEach(t => t.stop());
                         streamRef.current = null;
                     }
@@ -12022,6 +12034,7 @@
                                                     onAnswer={val => handleAnswerChange(0, val)}
                                                     studentId={user.id}
                                                     examMode="Practical"
+                                                    parentStream={mediaStream}
                                                 />
                                             </div>
                                             <div className="flex justify-center">
@@ -12034,7 +12047,7 @@
                                             </div>
                                         </div>
                                     )}
-
+ 
                                     {questions[currentQ] && (
                                         <div className="space-y-10 animate-fade-in-up">
                                             {/* Question Card */}
@@ -12043,7 +12056,7 @@
                                                 <h3 className="text-2xl font-bold text-secondary-900 leading-snug mb-8">
                                                     {questions[currentQ].question}
                                                 </h3>
-
+ 
                                                 {/* Interaction Area */}
                                                 <div className="mt-8">
                                                     {questions[currentQ].questionType === 'CODING' ? (
@@ -12081,6 +12094,7 @@
                                                                 onAnswer={val => handleAnswerChange(currentQ, val)}
                                                                 studentId={user.id}
                                                                 examMode={examMode}
+                                                                parentStream={mediaStream}
                                                             />
                                                         </div>
                                                     ) : (
