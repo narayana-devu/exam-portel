@@ -10537,10 +10537,11 @@
                         if (batch) {
                             const pid = savedState.examMode === 'Theory' ? batch.theoryPaperId : (savedState.examMode === 'Viva' ? batch.vivaPaperId : batch.practicalPaperId);
                             let qp = window.Utils.getQuestionPapers().find(q => String(q.id) === String(pid));
+                            const isPracticalVideoOnly = savedState.examMode === 'Practical' && !pid;
 
-                            if (qp && qp.questions && qp.questions.length > 0) {
+                            if (isPracticalVideoOnly || (qp && qp.questions && qp.questions.length > 0)) {
                                 // Restore states
-                                setQuestions(qp.questions);
+                                setQuestions(qp ? qp.questions : []);
                                 setAnswers(savedState.answers || {});
                                 setCurrentQ(savedState.currentQ || 0);
                                 setTimeLeft(savedState.timeLeft || 0);
@@ -10568,7 +10569,9 @@
                                 setRecElapsed(savedState.recElapsed || 0);
                                 setRecWait(savedState.recWait || 0);
 
-                                resumeMandatoryRecording(savedState.examMode, savedState.recStatus, savedState.recElapsed, savedState.recWait);
+                                if (!isPracticalVideoOnly) {
+                                    resumeMandatoryRecording(savedState.examMode, savedState.recStatus, savedState.recElapsed, savedState.recWait);
+                                }
 
                                 alert(`Exam Resumed: Continuing your ${savedState.examMode} exam from where you left off.`);
                             }
@@ -11272,8 +11275,6 @@
                     setWebcamActive(true);
                     startTimeRef.current = Date.now();
                     await startCameraManual();
-                    setTimeout(() => { if (!isRecording) toggleRecording(); }, 2000);
-                    startMandatoryRecording('Practical');
                     return;
                 }
 
