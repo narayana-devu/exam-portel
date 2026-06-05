@@ -8012,6 +8012,8 @@
             const [isFlashing, setIsFlashing] = useState(false); // v86.9.4: Shutter Effect
             const [lastCaptureToast, setLastCaptureToast] = useState(null); // v86.9.4: Success Notification
             const [zipStatus, setZipStatus] = useState(null); // v86.4: Student Dossier Progress
+            const [recTimeLeft, setRecTimeLeft] = useState(0);    // countdown timer (seconds)
+            const [isUploadingVideo, setIsUploadingVideo] = useState(false); // Drive upload status
 
             // Camera State
             const [isCamActive, setIsCamActive] = useState(false);
@@ -8024,6 +8026,7 @@
             const chunksRef = useRef([]);
             const recordingSessionRef = useRef(null);
             const segmentSequenceRef = useRef(0);
+            const recTimerRef = useRef(null);
 
             useEffect(() => {
                 loadStudentResponse(student);
@@ -8204,15 +8207,100 @@
             };
 
             const startSegment = () => {
-                // Video recording is disabled (v81)
-                console.log("Assessor Video Recording is disabled.");
+                // No-op: recording is now controlled by toggleRecording
+                console.log("[Assessor] startSegment called (no-op, use toggleRecording).");
             };
 
             const toggleRecording = () => {
-                alert("Manual video recording is currently disabled (v81).");
+                if (isRecording) {
+                    // --- STOP ---
+                    clearInterval(recTimerRef.current);
+                    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+                        mediaRecorderRef.current.stop(); // onstop fires async
+                    }
+                    setIsRecording(false);
+                } else {
+                    // --- START ---
+                    if (!mediaStreamRef.current) {
+                        alert("Camera is not active. Please start the camera first.");
+                        return;
+                    }
+                    chunksRef.current = [];
+                    const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp8')
+                        ? 'video/webm;codecs=vp8'
+                        : (MediaRecorder.isTypeSupported('video/webm') ? 'video/webm' : 'video/mp4');
+                    const recorder = new MediaRecorder(mediaStreamRef.current, {
+                        mimeType,
+                        videoBitsPerSecond: 800000,
+                        audioBitsPerSecond: 64000
+                    });
+
+                    recorder.ondataavailable = (e) => {
+                        if (e.data && e.data.size > 0) chunksRef.current.push(e.data);
+                    };
+
+                    recorder.onstop = async () => {
+                        const blob = new Blob(chunksRef.current, { type: mimeType });
+                        const ext = mimeType.includes('mp4') ? 'mp4' : 'webm';
+                        const fileName = `assessor_${student.username}_${examType}_${Date.now()}.${ext}`;
+
+                        setIsUploadingVideo(true);
+                        setLastCaptureToast("Uploading video to Drive...");
+
+                        try {
+                            const formData = new FormData();
+                            formData.append('file', blob, fileName);
+
+                            const res = await fetch('/api/upload-media', {
+                                method: 'POST',
+                                headers: { 'x-api-key': 'portel_secure_key_2025' },
+                                body: formData
+                            });
+
+                            if (!res.ok) throw new Error(`Upload failed: ${res.status}`);
+                            const data = await res.json();
+                            const videoUrl = data.url;
+
+                            // Save as evidence item (Drive sync picks it up automatically)
+                            const newEvidence = {
+                                url: videoUrl,
+                                type: 'MANUAL_VIDEO',
+                                time: new Date().toISOString(),
+                                label: `${examType} Manual Recording`,
+                                uploadedBy: 'assessor'
+                            };
+
+                            const partialResponse = {
+                                studentId: student.id,
+                                batchId: batch.id,
+                                examType: examType,
+                                evidence: [newEvidence],
+                                status: 'draft'
+                            };
+                            window.Utils.saveResponse(partialResponse);
+                            setEvidence(prev => [...prev, newEvidence]);
+                            if (!showGallery) setShowGallery(true);
+
+                            setLastCaptureToast("✅ Video saved & will sync to Drive!");
+                            setTimeout(() => setLastCaptureToast(null), 4000);
+                        } catch (err) {
+                            console.error("[Assessor Video Upload Error]", err);
+                            setLastCaptureToast("❌ Upload failed: " + err.message);
+                            setTimeout(() => setLastCaptureToast(null), 5000);
+                        } finally {
+                            setIsUploadingVideo(false);
+                        }
+                    };
+
+                    recorder.start(1000);
+                    mediaRecorderRef.current = recorder;
+                    setIsRecording(true);
+                    setRecTimeLeft(0); // count UP
+                    recTimerRef.current = setInterval(() => {
+                        setRecTimeLeft(prev => prev + 1);
+                    }, 1000);
+                }
             };
-
-
 
 
             const saveGrades = () => {
@@ -8493,7 +8581,13 @@
 
                                             {isRecording && (
                                                 <div className="absolute top-4 right-4 animate-pulse flex items-center gap-2 bg-red-600/90 backdrop-blur text-white px-3 py-1 rounded-full text-xs font-bold ring-2 ring-red-500/50">
-                                                    <span className="w-2 h-2 rounded-full bg-white"></span> RECORDING
+                                                    <span className="w-2 h-2 rounded-full bg-white"></span>
+                                                    RECORDING {String(Math.floor(recTimeLeft / 60)).padStart(2,'0')}:{String(recTimeLeft % 60).padStart(2,'0')}
+                                                </div>
+                                            )}
+                                            {isUploadingVideo && (
+                                                <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-indigo-600/90 backdrop-blur text-white px-4 py-2 rounded-full text-xs font-bold">
+                                                    <Icons.Loader className="w-4 h-4 animate-spin" /> Uploading to Drive...
                                                 </div>
                                             )}
                                         </div>
