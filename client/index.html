@@ -10126,6 +10126,87 @@
                 if (!window.VideoDB) alert("CRITICAL: Video Storage System Missing!");
                 else window.VideoDB.init().catch(e => alert("CRITICAL: Video Storage Init Failed: " + e.message));
             }, []);
+
+            useEffect(() => {
+                const checkAndResumeExam = async () => {
+                    const localKey = `se_in_progress_exam_${user.id}`;
+                    let savedState = JSON.parse(localStorage.getItem(localKey) || 'null');
+
+                    // If not found in localStorage, search in responses database
+                    if (!savedState) {
+                        const allResponses = window.Utils.getResponses();
+                        const inProgressResponse = allResponses.find(r => 
+                            r.studentId === user.id && 
+                            String(r.examType).endsWith('_InProgress')
+                        );
+
+                        if (inProgressResponse) {
+                            const mode = inProgressResponse.examType.replace('_InProgress', '');
+                            savedState = {
+                                examMode: mode,
+                                answers: inProgressResponse.answers || {},
+                                currentQ: inProgressResponse.currentQ || 0,
+                                timeLeft: inProgressResponse.timeLeft || 0,
+                                warnings: inProgressResponse.warnings || 0,
+                                startTime: inProgressResponse.startTime || Date.now(),
+                                verificationEvidence: inProgressResponse.evidence || [],
+                                verificationDetails: inProgressResponse.details || { fatherName: '', aadharNumber: '' },
+                                recStatus: inProgressResponse.recStatus || 'idle',
+                                recElapsed: inProgressResponse.recElapsed || 0,
+                                recWait: inProgressResponse.recWait || 0
+                            };
+                            console.log("[Resume] Found in-progress exam response from cloud/db, recovering...");
+                        }
+                    }
+
+                    if (savedState && savedState.examMode) {
+                        console.log("[Resume] Resuming exam:", savedState);
+
+                        let batch = window.Utils.getBatches().find(b => String(b.id || '').trim() === String(user.batchId || '').trim());
+                        if (batch) {
+                            const pid = savedState.examMode === 'Theory' ? batch.theoryPaperId : (savedState.examMode === 'Viva' ? batch.vivaPaperId : batch.practicalPaperId);
+                            let qp = window.Utils.getQuestionPapers().find(q => String(q.id) === String(pid));
+
+                            if (qp && qp.questions && qp.questions.length > 0) {
+                                // Restore states
+                                setQuestions(qp.questions);
+                                setAnswers(savedState.answers || {});
+                                setCurrentQ(savedState.currentQ || 0);
+                                setTimeLeft(savedState.timeLeft || 0);
+                                setWarnings(savedState.warnings || 0);
+                                setVerificationEvidence(savedState.verificationEvidence || []);
+                                setVerificationDetails(savedState.verificationDetails || { fatherName: '', aadharNumber: '' });
+                                startTimeRef.current = savedState.startTime || Date.now();
+
+                                // Update mutable refs immediately
+                                answersRef.current = savedState.answers || {};
+                                currentQRef.current = savedState.currentQ || 0;
+                                timeLeftRef.current = savedState.timeLeft || 0;
+                                warningsRef.current = savedState.warnings || 0;
+                                verificationEvidenceRef.current = savedState.verificationEvidence || [];
+                                verificationDetailsRef.current = savedState.verificationDetails || { fatherName: '', aadharNumber: '' };
+                                recStatusRef.current = savedState.recStatus || 'idle';
+                                recElapsedRef.current = savedState.recElapsed || 0;
+                                recWaitRef.current = savedState.recWait || 0;
+                                examModeRef.current = savedState.examMode;
+
+                                setExamMode(savedState.examMode);
+                                setWebcamActive(true);
+
+                                setRecStatus(savedState.recStatus || 'idle');
+                                setRecElapsed(savedState.recElapsed || 0);
+                                setRecWait(savedState.recWait || 0);
+
+                                resumeMandatoryRecording(savedState.examMode, savedState.recStatus, savedState.recElapsed, savedState.recWait);
+
+                                alert(`Exam Resumed: Continuing your ${savedState.examMode} exam from where you left off.`);
+                            }
+                        }
+                    }
+                };
+
+                checkAndResumeExam();
+            }, [user.id]);
             const [examMode, setExamMode] = useState(null); // 'Theory', 'Practical', 'VivaWait'
             const [captureImage, setCaptureImage] = useState(true); // v57
             const [cameraInterval, setCameraInterval] = useState('60'); // v57
@@ -10186,6 +10267,91 @@
             const mandatoryUploadPromiseRef = useRef(null); // Ref to track active upload promise
             const REC_WAIT_SEC  = 120; // 2 minutes before recording starts
             const REC_DUR_SEC   = 300; // 5 minutes of mandatory recording
+
+            // State tracking refs for auto-save and resumption robustness
+            const answersRef = useRef(answers);
+            const currentQRef = useRef(currentQ);
+            const timeLeftRef = useRef(timeLeft);
+            const warningsRef = useRef(warnings);
+            const verificationEvidenceRef = useRef(verificationEvidence);
+            const verificationDetailsRef = useRef(verificationDetails);
+            const recStatusRef = useRef(recStatus);
+            const recElapsedRef = useRef(recElapsed);
+            const recWaitRef = useRef(recWait);
+            const examModeRef = useRef(examMode);
+
+            useEffect(() => { answersRef.current = answers; }, [answers]);
+            useEffect(() => { currentQRef.current = currentQ; }, [currentQ]);
+            useEffect(() => { timeLeftRef.current = timeLeft; }, [timeLeft]);
+            useEffect(() => { warningsRef.current = warnings; }, [warnings]);
+            useEffect(() => { verificationEvidenceRef.current = verificationEvidence; }, [verificationEvidence]);
+            useEffect(() => { verificationDetailsRef.current = verificationDetails; }, [verificationDetails]);
+            useEffect(() => { recStatusRef.current = recStatus; }, [recStatus]);
+            useEffect(() => { recElapsedRef.current = recElapsed; }, [recElapsed]);
+            useEffect(() => { recWaitRef.current = recWait; }, [recWait]);
+            useEffect(() => { examModeRef.current = examMode; }, [examMode]);
+
+            const saveExamProgress = () => {
+                const currentExamMode = examModeRef.current;
+                if (!currentExamMode) return;
+
+                const progressState = {
+                    examMode: currentExamMode,
+                    answers: answersRef.current,
+                    currentQ: currentQRef.current,
+                    timeLeft: timeLeftRef.current,
+                    warnings: warningsRef.current,
+                    startTime: startTimeRef.current,
+                    verificationEvidence: verificationEvidenceRef.current,
+                    verificationDetails: verificationDetailsRef.current,
+                    recStatus: recStatusRef.current,
+                    recElapsed: recElapsedRef.current,
+                    recWait: recWaitRef.current
+                };
+
+                // 1. Save to localStorage under key unique to student
+                localStorage.setItem(`se_in_progress_exam_${user.id}`, JSON.stringify(progressState));
+
+                // 2. Save in response local database list (to be automatically synced to cloud)
+                const inProgressResponse = {
+                    id: `${user.id}_${currentExamMode}_InProgress`,
+                    studentId: user.id,
+                    examType: `${currentExamMode}_InProgress`,
+                    answers: answersRef.current,
+                    timeLeft: timeLeftRef.current,
+                    currentQ: currentQRef.current,
+                    warnings: warningsRef.current,
+                    startTime: startTimeRef.current,
+                    evidence: verificationEvidenceRef.current,
+                    details: verificationDetailsRef.current,
+                    recStatus: recStatusRef.current,
+                    recElapsed: recElapsedRef.current,
+                    recWait: recWaitRef.current,
+                    synced: false,
+                    updatedAt: new Date().toISOString()
+                };
+
+                const list = window.Utils.getResponses();
+                const existing = list.findIndex(r => r.id === inProgressResponse.id);
+                if (existing >= 0) {
+                    list[existing] = { ...list[existing], ...inProgressResponse };
+                } else {
+                    list.push(inProgressResponse);
+                }
+                localStorage.setItem(DB_KEYS.RESPONSES, JSON.stringify(list));
+            };
+
+            const handleAnswerChange = (qIdx, val) => {
+                setAnswers(prev => {
+                    const next = { ...prev, [qIdx]: val };
+                    answersRef.current = next;
+                    saveExamProgress();
+                    window.Utils.uploadToCloud(true, 'responses');
+                    return next;
+                });
+            };
+
+
 
             const [streamActive, setStreamActive] = useState(false);
             const compositeReqRef = useRef(null); // Reference for Canvas Animation Frame
@@ -10582,7 +10748,18 @@
 
             useEffect(() => {
                 let interval;
-                if (examMode && timeLeft > 0 && !isSubmitting) interval = setInterval(() => setTimeLeft(t => t - 1), 1000);
+                if (examMode && timeLeft > 0 && !isSubmitting) {
+                    interval = setInterval(() => {
+                        setTimeLeft(t => {
+                            const nextTime = t - 1;
+                            // Periodically save every 5 seconds
+                            if (nextTime % 5 === 0) {
+                                saveExamProgress();
+                            }
+                            return nextTime;
+                        });
+                    }, 1000);
+                }
                 return () => clearInterval(interval);
             }, [examMode, timeLeft, isSubmitting]);
 
@@ -10949,7 +11126,116 @@
                 }, 1000);
             };
 
+            const beginActualRecordingFromResume = async (examType, startingElapsed) => {
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia({
+                        video: { width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { ideal: 15, max: 20 } },
+                        audio: { channelCount: 1, sampleRate: 22050, echoCancellation: true, noiseSuppression: true }
+                    });
+                    recStreamRef.current = stream;
+
+                    const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp8')
+                        ? 'video/webm;codecs=vp8'
+                        : (MediaRecorder.isTypeSupported('video/webm') ? 'video/webm' : 'video/mp4');
+
+                    const recorder = new MediaRecorder(stream, { mimeType, videoBitsPerSecond: 200000, audioBitsPerSecond: 32000 });
+                    recRecorderRef.current = recorder;
+
+                    recorder.ondataavailable = (e) => {
+                        if (e.data && e.data.size > 0) recChunksRef.current.push(e.data);
+                    };
+
+                    recorder.onstop = async () => {
+                        const blob = new Blob(recChunksRef.current, { type: mimeType });
+                        recBlobRef.current = blob;
+                        console.log(`[MandatoryRec] Done. Size: ${(blob.size/1024/1024).toFixed(2)} MB`);
+                        setRecStatus('complete');
+                        setIsRecording(false);
+                        
+                        const uploadProc = (async () => {
+                            try {
+                                await uploadRecordingBlob(blob, examType);
+                            } catch (err) {
+                                console.error("Upload failed in onstop:", err);
+                            }
+                        })();
+                        mandatoryUploadPromiseRef.current = uploadProc;
+                        await uploadProc;
+                        mandatoryUploadPromiseRef.current = null;
+
+                        if (mandatoryUploadResolveRef.current) {
+                            mandatoryUploadResolveRef.current();
+                            mandatoryUploadResolveRef.current = null;
+                        }
+                    };
+
+                    recorder.start(10000);
+                    setRecStatus('recording');
+                    setIsRecording(true);
+                    setRecElapsed(startingElapsed);
+
+                    let elapsedCount = startingElapsed;
+                    recTimerRef.current = setInterval(() => {
+                        elapsedCount++;
+                        setRecElapsed(elapsedCount);
+                        if (elapsedCount >= REC_DUR_SEC) {
+                            clearInterval(recTimerRef.current);
+                            if (recRecorderRef.current && recRecorderRef.current.state === 'recording') {
+                                recRecorderRef.current.stop();
+                            }
+                        }
+                    }, 1000);
+
+                } catch (err) {
+                    console.error('[MandatoryRec] Camera error:', err);
+                    setRecStatus('failed');
+                }
+            };
+
+            const resumeMandatoryRecording = (examType, status, elapsed, waitTime) => {
+                recChunksRef.current = [];
+                recBlobRef.current = null;
+                
+                if (status === 'waiting') {
+                    setRecStatus('waiting');
+                    setRecElapsed(0);
+                    setRecWait(waitTime);
+                    
+                    let waitCount = waitTime;
+                    recWaitTimerRef.current = setInterval(() => {
+                        waitCount++;
+                        setRecWait(waitCount);
+                        if (waitCount >= REC_WAIT_SEC) {
+                            clearInterval(recWaitTimerRef.current);
+                            beginActualRecording(examType);
+                        }
+                    }, 1000);
+                } else if (status === 'recording') {
+                    setRecStatus('recording');
+                    setRecElapsed(elapsed);
+                    beginActualRecordingFromResume(examType, elapsed);
+                }
+            };
+
+
             const endExam = () => {
+                // Clear local and remote in-progress states
+                const currentExamMode = examModeRef.current;
+                if (currentExamMode) {
+                    const targetInProgressId = `${user.id}_${currentExamMode}_InProgress`;
+                    
+                    // 1. Remove from local progress key
+                    localStorage.removeItem(`se_in_progress_exam_${user.id}`);
+                    
+                    // 2. Remove from local responses array
+                    const responses = window.Utils.getResponses();
+                    const updatedResponses = responses.filter(r => r.id !== targetInProgressId);
+                    localStorage.setItem(DB_KEYS.RESPONSES, JSON.stringify(updatedResponses));
+                    
+                    // 3. Delete from cloud database
+                    window.Utils.deleteFromCloud('responses', targetInProgressId);
+                }
+
                 // Stop mandatory recording first
                 stopMandatoryRecording();
 
@@ -11334,7 +11620,27 @@
                                                         <div className="rounded-2xl overflow-hidden border border-secondary-200 shadow-inner h-[500px]">
                                                             <CodeRunner
                                                                 code={answers[currentQ] || ''}
-                                                                onChange={val => setAnswers({ ...answers, [currentQ]: val })}
+                                                                onChange={val => {
+                                                                    setAnswers(prev => {
+                                                                        const next = { ...prev, [currentQ]: val };
+                                                                        answersRef.current = next;
+                                                                        const progressState = {
+                                                                            examMode: examModeRef.current,
+                                                                            answers: next,
+                                                                            currentQ: currentQRef.current,
+                                                                            timeLeft: timeLeftRef.current,
+                                                                            warnings: warningsRef.current,
+                                                                            startTime: startTimeRef.current,
+                                                                            verificationEvidence: verificationEvidenceRef.current,
+                                                                            verificationDetails: verificationDetailsRef.current,
+                                                                            recStatus: recStatusRef.current,
+                                                                            recElapsed: recElapsedRef.current,
+                                                                            recWait: recWaitRef.current
+                                                                        };
+                                                                        localStorage.setItem(`se_in_progress_exam_${user.id}`, JSON.stringify(progressState));
+                                                                        return next;
+                                                                    });
+                                                                }}
                                                             />
                                                         </div>
                                                     ) : (questions[currentQ].questionType === 'PRACTICAL' || questions[currentQ].questionType === 'VIVA') ? (
@@ -11342,7 +11648,7 @@
                                                             <PracticalQuestionRunner
                                                                 question={questions[currentQ]}
                                                                 answer={answers[currentQ] || {}}
-                                                                onAnswer={val => setAnswers({ ...answers, [currentQ]: val })}
+                                                                onAnswer={val => handleAnswerChange(currentQ, val)}
                                                             />
                                                         </div>
                                                     ) : (
@@ -11350,7 +11656,7 @@
                                                             {questions[currentQ].options.map((o, idx) => (
                                                                 <button
                                                                     key={o}
-                                                                    onClick={() => setAnswers({ ...answers, [currentQ]: o })}
+                                                                    onClick={() => handleAnswerChange(currentQ, o)}
                                                                     className={`group flex items-center w-full text-left p-6 border-2 rounded-3xl transition-all duration-300 active:scale-[0.98] ${answers[currentQ] === o ? 'bg-primary-50 border-primary-500 shadow-lg shadow-primary-100' : 'bg-white border-secondary-100 hover:border-secondary-300 hover:bg-secondary-50'}`}
                                                                 >
                                                                     <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold text-sm mr-4 transition-colors ${answers[currentQ] === o ? 'bg-primary-600 text-gray-900' : 'bg-secondary-100 text-secondary-800 group-hover:bg-secondary-200'}`}>
