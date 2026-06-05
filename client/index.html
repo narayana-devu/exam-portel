@@ -10108,40 +10108,88 @@
             const chunksRef = useRef([]);
             const timerRef = useRef(null);
 
-            // Cleanup stream on unmount/parentStream updates
-            useEffect(() => {
-                if (parentStream && !previewUrl) {
-                    streamRef.current = parentStream;
+            const [facingMode, setFacingMode] = useState('environment'); // Default to environment (back camera)
+            const [isDualStreamFailed, setIsDualStreamFailed] = useState(false);
+
+            const stopRunnerStream = () => {
+                if (streamRef.current && streamRef.current !== parentStream) {
+                    streamRef.current.getTracks().forEach(track => track.stop());
+                }
+                streamRef.current = null;
+            };
+
+            const startCamera = async (mode = facingMode) => {
+                stopRunnerStream();
+                try {
+                    // Attempt 1: Separate camera stream with audio
+                    console.log(`[Practical Runner] Attempt 1: Requesting camera (${mode}) with audio`);
+                    const stream = await navigator.mediaDevices.getUserMedia({
+                        video: { facingMode: { ideal: mode } },
+                        audio: true
+                    });
+                    streamRef.current = stream;
                     if (videoRef.current) {
-                        videoRef.current.srcObject = parentStream;
+                        videoRef.current.srcObject = stream;
                     }
-                } else if (!previewUrl) {
-                    startCamera();
+                    setIsDualStreamFailed(false);
+                } catch (err1) {
+                    console.warn(`[Practical Runner] Attempt 1 failed (maybe mic in use?):`, err1);
+                    try {
+                        // Attempt 2: Request camera stream WITHOUT audio (video only)
+                        console.log(`[Practical Runner] Attempt 2: Requesting camera (${mode}) video-only`);
+                        const stream = await navigator.mediaDevices.getUserMedia({
+                            video: { facingMode: { ideal: mode } }
+                        });
+                        streamRef.current = stream;
+                        if (videoRef.current) {
+                            videoRef.current.srcObject = stream;
+                        }
+                        setIsDualStreamFailed(false);
+                    } catch (err2) {
+                        console.warn(`[Practical Runner] Attempt 2 failed (dual camera blocked or unavailable):`, err2);
+                        // Fallback: Re-use parent proctoring stream if available
+                        if (parentStream) {
+                            streamRef.current = parentStream;
+                            if (videoRef.current) {
+                                videoRef.current.srcObject = parentStream;
+                            }
+                            setIsDualStreamFailed(true);
+                        } else {
+                            // Last resort: try generic getUserMedia video-only
+                            try {
+                                console.log(`[Practical Runner] Attempt 3: Generic video-only`);
+                                const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+                                streamRef.current = stream;
+                                if (videoRef.current) {
+                                    videoRef.current.srcObject = stream;
+                                }
+                            } catch (err3) {
+                                console.error(`[Practical Runner] Final camera fallback failed:`, err3);
+                            }
+                            setIsDualStreamFailed(false);
+                        }
+                    }
+                }
+            };
+
+            // Cleanup stream on unmount/parentStream updates/facingMode updates
+            useEffect(() => {
+                if (!previewUrl) {
+                    startCamera(facingMode);
                 }
                 return () => {
                     clearInterval(timerRef.current);
                     if (recorderRef.current && recorderRef.current.state !== 'inactive') {
                         recorderRef.current.stop();
                     }
-                    if (streamRef.current && streamRef.current !== parentStream) {
-                        streamRef.current.getTracks().forEach(track => track.stop());
-                    }
+                    stopRunnerStream();
                 };
-            }, [parentStream, previewUrl]);
+            }, [parentStream, previewUrl, facingMode]);
 
-            const startCamera = async () => {
-                if (parentStream) {
-                    streamRef.current = parentStream;
-                    if (videoRef.current) videoRef.current.srcObject = parentStream;
-                    return;
-                }
-                try {
-                    const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-                    streamRef.current = stream;
-                    if (videoRef.current) videoRef.current.srcObject = stream;
-                } catch (e) {
-                    console.error("Camera Error", e);
-                }
+            const flipCamera = () => {
+                if (isRecording) return;
+                const nextMode = facingMode === 'environment' ? 'user' : 'environment';
+                setFacingMode(nextMode);
             };
 
             const startRecording = async () => {
@@ -10388,12 +10436,41 @@
                                     )}
                                 </div>
                             ) : (
-                                <video ref={videoRef} autoPlay muted playsInline className="w-full h-full object-contain" />
+                                <div className="relative w-full h-full bg-gray-950 flex items-center justify-center">
+                                    <video ref={videoRef} autoPlay muted playsInline className="w-full h-full object-contain" />
+                                    
+                                    {/* Active Camera Indicator Badge */}
+                                    {!isRecording && (
+                                        <div className="absolute top-3 left-3 bg-black/60 text-white px-2.5 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest flex items-center gap-1.5 backdrop-blur-sm border border-white/10 z-10">
+                                            <div className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse"></div>
+                                            Runner: {facingMode === 'environment' ? 'Back Cam' : 'Front Cam'}
+                                        </div>
+                                    )}
+
+                                    {/* Flip Camera Button */}
+                                    {!isRecording && (
+                                        <button 
+                                            onClick={flipCamera} 
+                                            className="absolute top-3 right-3 bg-white/90 backdrop-blur-md text-gray-900 px-3.5 py-2 rounded-full text-xs font-bold hover:bg-indigo-600 hover:text-white transition-all shadow-md border border-gray-200 flex items-center gap-1.5 z-10 active:scale-95 cursor-pointer"
+                                            title="Switch Camera (Front/Back)"
+                                        >
+                                            <Icons.RefreshCw className="w-3.5 h-3.5" />
+                                            {facingMode === 'environment' ? 'Use Front Cam' : 'Use Back Cam'}
+                                        </button>
+                                    )}
+
+                                    {/* Single Feed Fallback Warning Badge */}
+                                    {isDualStreamFailed && !isRecording && (
+                                        <div className="absolute bottom-3 right-3 bg-amber-500/90 text-white px-2.5 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest flex items-center gap-1.5 backdrop-blur-sm shadow-md border border-white/20 z-10">
+                                            <Icons.Info className="w-3.5 h-3.5 animate-pulse" /> Single Feed Mode
+                                        </div>
+                                    )}
+                                </div>
                             )}
 
                             {/* Recording Indicator with Timer */}
                             {isRecording && (
-                                <div className="absolute top-0 left-0 right-0 flex items-center justify-between px-4 py-3 bg-black/60 backdrop-blur-sm">
+                                <div className="absolute top-0 left-0 right-0 flex items-center justify-between px-4 py-3 bg-black/60 backdrop-blur-sm z-20">
                                     <div className="flex items-center gap-2 text-white">
                                         <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse"></div>
                                         <span className="text-xs font-black uppercase tracking-widest">REC</span>
