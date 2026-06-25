@@ -10580,7 +10580,25 @@
 
         // STUDENT PORTAL
         const StudentPortal = ({ user }) => {
-
+            const getDeterministicShuffle = (length, seedStr) => {
+                const arr = Array.from({ length }, (_, i) => i);
+                if (!seedStr) return arr;
+                let seed = 0;
+                for (let i = 0; i < seedStr.length; i++) {
+                    seed = (seed + seedStr.charCodeAt(i)) % 4294967296;
+                }
+                const lcg = () => {
+                    seed = (seed * 1664525 + 1013904223) % 4294967296;
+                    return seed / 4294967296;
+                };
+                for (let i = arr.length - 1; i > 0; i--) {
+                    const j = Math.floor(lcg() * (i + 1));
+                    const temp = arr[i];
+                    arr[i] = arr[j];
+                    arr[j] = temp;
+                }
+                return arr;
+            };
 
             useEffect(() => {
                 if (!window.VideoDB) alert("CRITICAL: Video Storage System Missing!");
@@ -10613,7 +10631,8 @@
                                 verificationDetails: inProgressResponse.details || { fatherName: '', aadharNumber: '' },
                                 recStatus: inProgressResponse.recStatus || 'idle',
                                 recElapsed: inProgressResponse.recElapsed || 0,
-                                recWait: inProgressResponse.recWait || 0
+                                recWait: inProgressResponse.recWait || 0,
+                                shuffledIndices: inProgressResponse.shuffledIndices || []
                             };
                             console.log("[Resume] Found in-progress exam response from cloud/db, recovering...");
                         }
@@ -10631,6 +10650,11 @@
                             if (isPracticalVideoOnly || (qp && qp.questions && qp.questions.length > 0)) {
                                 // Restore states
                                 setQuestions(qp ? qp.questions : []);
+                                const restoredShuffled = (savedState.shuffledIndices && savedState.shuffledIndices.length === (qp ? qp.questions.length : 0))
+                                    ? savedState.shuffledIndices
+                                    : getDeterministicShuffle(qp ? qp.questions.length : 0, user.id + '_' + pid);
+                                setShuffledIndices(restoredShuffled);
+                                shuffledIndicesRef.current = restoredShuffled;
                                 setAnswers(savedState.answers || {});
                                 setCurrentQ(savedState.currentQ || 0);
                                 setTimeLeft(savedState.timeLeft || 0);
@@ -10674,8 +10698,13 @@
             const [captureImage, setCaptureImage] = useState(true); // v57
             const [cameraInterval, setCameraInterval] = useState('60'); // v57
             const [questions, setQuestions] = useState([]);
+            const [shuffledIndices, setShuffledIndices] = useState([]);
+            const shuffledIndicesRef = useRef([]);
+            useEffect(() => { shuffledIndicesRef.current = shuffledIndices; }, [shuffledIndices]);
             const [currentQ, setCurrentQ] = useState(0);
             const [answers, setAnswers] = useState({});
+            const realIdx = (shuffledIndices && shuffledIndices.length > 0 && shuffledIndices[currentQ] !== undefined) ? shuffledIndices[currentQ] : currentQ;
+            const questionObj = questions[realIdx];
             const [isLoading, setIsLoading] = useState(false); // v86.2: Fix ReferenceError during Deep Sync
 
             // Poll for Assessor "Admit" signal (Replaced by Socket.io in VivaWait)
@@ -10769,7 +10798,8 @@
                     verificationDetails: verificationDetailsRef.current,
                     recStatus: recStatusRef.current,
                     recElapsed: recElapsedRef.current,
-                    recWait: recWaitRef.current
+                    recWait: recWaitRef.current,
+                    shuffledIndices: shuffledIndicesRef.current
                 };
 
                 // 1. Save to localStorage under key unique to student
@@ -10790,6 +10820,7 @@
                     recStatus: recStatusRef.current,
                     recElapsed: recElapsedRef.current,
                     recWait: recWaitRef.current,
+                    shuffledIndices: shuffledIndicesRef.current,
                     synced: false,
                     updatedAt: new Date().toISOString()
                 };
@@ -11424,6 +11455,9 @@
                     // v30.7: Explicit Recording Start logic for BOTH modes
                     // v86.2: Final Cleanup for Student Initialization
                     setQuestions(qp.questions || []);
+                    const freshShuffled = getDeterministicShuffle(qp.questions ? qp.questions.length : 0, user.id + '_' + pid);
+                    setShuffledIndices(freshShuffled);
+                    shuffledIndicesRef.current = freshShuffled;
                     setTimeLeft((qp.duration || 60) * 60);
 
                     if (batch) {
@@ -12125,24 +12159,27 @@
                                         </div>
                                     )}
  
-                                    {questions[currentQ] && (
+                                    {(() => {
+                                        const realIdx = (shuffledIndices && shuffledIndices.length > 0) ? shuffledIndices[currentQ] : currentQ;
+                                        const questionObj = questions[realIdx];
+                                        return questionObj && (
                                         <div className="space-y-10 animate-fade-in-up">
                                             {/* Question Card */}
                                             <div className="bg-white p-10 rounded-4xl shadow-xl shadow-secondary-200/50 border border-secondary-100 relative overflow-hidden">
                                                 <div className="absolute top-0 left-0 w-2 h-full bg-primary-600"></div>
                                                 <h3 className="text-2xl font-bold text-secondary-900 leading-snug mb-8">
-                                                    {questions[currentQ].question}
+                                                    {questionObj.question}
                                                 </h3>
  
                                                 {/* Interaction Area */}
                                                 <div className="mt-8">
-                                                    {questions[currentQ].questionType === 'CODING' ? (
+                                                    {questionObj.questionType === 'CODING' ? (
                                                         <div className="rounded-2xl overflow-hidden border border-secondary-200 shadow-inner h-[500px]">
                                                             <CodeRunner
-                                                                code={answers[currentQ] || ''}
+                                                                code={answers[realIdx] || ''}
                                                                 onChange={val => {
                                                                     setAnswers(prev => {
-                                                                        const next = { ...prev, [currentQ]: val };
+                                                                        const next = { ...prev, [realIdx]: val };
                                                                         answersRef.current = next;
                                                                         const progressState = {
                                                                             examMode: examModeRef.current,
@@ -12155,7 +12192,8 @@
                                                                             verificationDetails: verificationDetailsRef.current,
                                                                             recStatus: recStatusRef.current,
                                                                             recElapsed: recElapsedRef.current,
-                                                                            recWait: recWaitRef.current
+                                                                            recWait: recWaitRef.current,
+                                                                            shuffledIndices: shuffledIndicesRef.current
                                                                         };
                                                                         localStorage.setItem(`se_in_progress_exam_${user.id}`, JSON.stringify(progressState));
                                                                         return next;
@@ -12163,12 +12201,12 @@
                                                                 }}
                                                             />
                                                         </div>
-                                                    ) : (questions[currentQ].questionType === 'PRACTICAL' || questions[currentQ].questionType === 'VIVA') ? (
+                                                    ) : (questionObj.questionType === 'PRACTICAL' || questionObj.questionType === 'VIVA') ? (
                                                         <div className="bg-secondary-50 p-6 rounded-3xl border border-secondary-200">
                                                             <PracticalQuestionRunner
-                                                                question={questions[currentQ]}
-                                                                answer={answers[currentQ] || {}}
-                                                                onAnswer={val => handleAnswerChange(currentQ, val)}
+                                                                question={questionObj}
+                                                                answer={answers[realIdx] || {}}
+                                                                onAnswer={val => handleAnswerChange(realIdx, val)}
                                                                 studentId={user.id}
                                                                 examMode={examMode}
                                                                 parentStream={mediaStream}
@@ -12176,17 +12214,17 @@
                                                         </div>
                                                     ) : (
                                                         <div className="grid gap-4">
-                                                            {questions[currentQ].options.map((o, idx) => (
+                                                            {questionObj.options.map((o, idx) => (
                                                                 <button
                                                                     key={o}
-                                                                    onClick={() => handleAnswerChange(currentQ, o)}
-                                                                    className={`group flex items-center w-full text-left p-6 border-2 rounded-3xl transition-all duration-300 active:scale-[0.98] ${answers[currentQ] === o ? 'bg-primary-50 border-primary-500 shadow-lg shadow-primary-100' : 'bg-white border-secondary-100 hover:border-secondary-300 hover:bg-secondary-50'}`}
+                                                                    onClick={() => handleAnswerChange(realIdx, o)}
+                                                                    className={`group flex items-center w-full text-left p-6 border-2 rounded-3xl transition-all duration-300 active:scale-[0.98] ${answers[realIdx] === o ? 'bg-primary-50 border-primary-500 shadow-lg shadow-primary-100' : 'bg-white border-secondary-100 hover:border-secondary-300 hover:bg-secondary-50'}`}
                                                                 >
-                                                                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold text-sm mr-4 transition-colors ${answers[currentQ] === o ? 'bg-primary-600 text-gray-900' : 'bg-secondary-100 text-secondary-800 group-hover:bg-secondary-200'}`}>
+                                                                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold text-sm mr-4 transition-colors ${answers[realIdx] === o ? 'bg-primary-600 text-gray-900' : 'bg-secondary-100 text-secondary-800 group-hover:bg-secondary-200'}`}>
                                                                         {String.fromCharCode(65 + idx)}
                                                                     </div>
-                                                                    <span className={`text-lg font-semibold ${answers[currentQ] === o ? 'text-primary-900' : 'text-secondary-700'}`}>{o}</span>
-                                                                    {answers[currentQ] === o && (
+                                                                    <span className={`text-lg font-semibold ${answers[realIdx] === o ? 'text-primary-900' : 'text-secondary-700'}`}>{o}</span>
+                                                                    {answers[realIdx] === o && (
                                                                         <div className="ml-auto">
                                                                             <Icons.CheckCircle className="w-6 h-6 text-primary-600" />
                                                                         </div>
@@ -12227,7 +12265,7 @@
                                                 )}
                                             </div>
                                         </div>
-                                    )}
+                                    )})()}
                                 </div>
                             </div>
                         </div>
@@ -12305,15 +12343,18 @@
                                     <>
                                         <h4 className="text-[11px] font-black text-secondary-700 uppercase tracking-[0.2em] mb-6">Question Map</h4>
                                         <div className="grid grid-cols-5 gap-3">
-                                            {questions.map((_, i) => (
-                                                <div
-                                                    key={i}
-                                                    onClick={() => setCurrentQ(i)}
-                                                    className={`h-10 flex items-center justify-center cursor-pointer rounded-xl font-bold text-sm transition-all duration-300 active:scale-90 shadow-sm ${currentQ === i ? 'bg-primary-600 text-gray-900 shadow-primary-200 -translate-y-1' : (answers[i] ? 'bg-emerald-100 text-emerald-700 border border-emerald-200' : 'bg-secondary-50 text-secondary-700 border border-secondary-100 hover:bg-secondary-100')}`}
-                                                >
-                                                    {i + 1}
-                                                </div>
-                                            ))}
+                                            {questions.map((_, i) => {
+                                                const mappedIdx = (shuffledIndices && shuffledIndices.length > 0 && shuffledIndices[i] !== undefined) ? shuffledIndices[i] : i;
+                                                return (
+                                                    <div
+                                                        key={i}
+                                                        onClick={() => setCurrentQ(i)}
+                                                        className={`h-10 flex items-center justify-center cursor-pointer rounded-xl font-bold text-sm transition-all duration-300 active:scale-90 shadow-sm ${currentQ === i ? 'bg-primary-600 text-gray-900 shadow-primary-200 -translate-y-1' : (answers[mappedIdx] ? 'bg-emerald-100 text-emerald-700 border border-emerald-200' : 'bg-secondary-50 text-secondary-700 border border-secondary-100 hover:bg-secondary-100')}`}
+                                                    >
+                                                        {i + 1}
+                                                    </div>
+                                                );
+                                            })}
                                         </div>
                                     </>
                                 )}
