@@ -174,6 +174,16 @@
             }
         }
 
+        @keyframes scan {
+            0% { top: 0%; }
+            50% { top: 100%; }
+            100% { top: 0%; }
+        }
+
+        .scan-line {
+            animation: scan 3s linear infinite;
+        }
+
         .animate-fade-in-up {
             animation: fade-in-up 0.6s ease-out forwards;
         }
@@ -736,6 +746,7 @@
                             "S.No": i + 1,
                             "Student Name": s.name || "N/A",
                             "Username": s.username || "N/A",
+                            "Aadhar Candidate Name": isAbsent ? "NOT SUBMITTED" : (verification.candidateName || "N/A"),
                             "Father Name": isAbsent ? "NOT SUBMITTED" : (verification.fatherName || "N/A"),
                             "Aadhar Number": isAbsent ? "NOT SUBMITTED" : (verification.aadharNumber || "N/A"),
                             "Selfie Link": selfie ? (selfie.url || "Local Asset - Sync Required") : "MISSING",
@@ -790,6 +801,7 @@
                             "S.No": i + 1,
                             "Student Name": s.name || "N/A",
                             "Username": s.username || "N/A",
+                            "Aadhar Candidate Name": details.candidateName || "NOT SUBMITTED",
                             "Father Name": details.fatherName || "NOT SUBMITTED",
                             "Aadhar Number": details.aadharNumber || "NOT SUBMITTED",
                             "Selfie FILENAME": selfie ? `${s.username}_${s.name}_Selfie.jpg`.replace(/ /g, '_') : "MISSING",
@@ -2228,6 +2240,7 @@
                             'S.No': index + 1,
                             'Student ID': student.enrollmentNo || student.id || 'N/A',
                             'Student Name': student.name || 'N/A',
+                            'Aadhar Candidate Name': isAbsent ? 'ABSENT' : (verification.candidateName || 'N/A'),
                             'Father Name': isAbsent ? 'ABSENT' : (verification.fatherName || 'N/A'),
                             'Aadhaar Number': isAbsent ? 'ABSENT' : (verification.aadharNumber || 'N/A'),
                             'Status': isAbsent ? 'ABSENT' : 'SUBMITTED',
@@ -7450,6 +7463,9 @@
                                                 <tr key={s.id} className="hover:bg-primary-50/30 transition-colors">
                                                     <td className="px-6 py-4">
                                                         <span className="font-bold text-secondary-900">{s.name}</span>
+                                                        {details.candidateName && (
+                                                            <p className="text-[10px] text-emerald-600 font-semibold">Aadhar Name: {details.candidateName}</p>
+                                                        )}
                                                         <p className="text-[10px] text-secondary-500 font-bold">User: {s.username}</p>
                                                     </td>
                                                     <td className="px-6 py-4 text-sm font-bold text-secondary-700">{details.fatherName || <span className="text-secondary-300 italic">Pending</span>}</td>
@@ -8533,8 +8549,12 @@
                     {verificationInfo ? (
                         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6 flex flex-wrap gap-8 items-center shadow-sm">
                             <div>
-                                <h4 className="text-xs font-bold text-blue-500 uppercase tracking-wider">Candidate Name</h4>
+                                <h4 className="text-xs font-bold text-blue-500 uppercase tracking-wider">Registered Name</h4>
                                 <p className="text-lg font-bold text-gray-800">{student.name}</p>
+                            </div>
+                            <div>
+                                <h4 className="text-xs font-bold text-blue-500 uppercase tracking-wider">Aadhar Name</h4>
+                                <p className="text-lg font-bold text-gray-800">{verificationInfo.candidateName || 'N/A'}</p>
                             </div>
                             <div>
                                 <h4 className="text-xs font-bold text-blue-500 uppercase tracking-wider">Father's Name</h4>
@@ -10628,7 +10648,7 @@
                                 warnings: inProgressResponse.warnings || 0,
                                 startTime: inProgressResponse.startTime || Date.now(),
                                 verificationEvidence: inProgressResponse.evidence || [],
-                                verificationDetails: inProgressResponse.details || { fatherName: '', aadharNumber: '' },
+                                verificationDetails: inProgressResponse.details || { candidateName: '', fatherName: '', aadharNumber: '' },
                                 recStatus: inProgressResponse.recStatus || 'idle',
                                 recElapsed: inProgressResponse.recElapsed || 0,
                                 recWait: inProgressResponse.recWait || 0,
@@ -10660,7 +10680,7 @@
                                 setTimeLeft(savedState.timeLeft || 0);
                                 setWarnings(savedState.warnings || 0);
                                 setVerificationEvidence(savedState.verificationEvidence || []);
-                                setVerificationDetails(savedState.verificationDetails || { fatherName: '', aadharNumber: '' });
+                                setVerificationDetails(savedState.verificationDetails || { candidateName: '', fatherName: '', aadharNumber: '' });
                                 startTimeRef.current = savedState.startTime || Date.now();
 
                                 // Update mutable refs immediately
@@ -10669,7 +10689,7 @@
                                 timeLeftRef.current = savedState.timeLeft || 0;
                                 warningsRef.current = savedState.warnings || 0;
                                 verificationEvidenceRef.current = savedState.verificationEvidence || [];
-                                verificationDetailsRef.current = savedState.verificationDetails || { fatherName: '', aadharNumber: '' };
+                                verificationDetailsRef.current = savedState.verificationDetails || { candidateName: '', fatherName: '', aadharNumber: '' };
                                 recStatusRef.current = savedState.recStatus || 'idle';
                                 recElapsedRef.current = savedState.recElapsed || 0;
                                 recWaitRef.current = savedState.recWait || 0;
@@ -10727,7 +10747,24 @@
             const [verificationStep, setVerificationStep] = useState(null); // null, 'SELFIE', 'ID_CARD'
             const [verificationEvidence, setVerificationEvidence] = useState([]);
             const [pendingExamMode, setPendingExamMode] = useState(null);
-            const [verificationDetails, setVerificationDetails] = useState({ fatherName: '', aadharNumber: '' }); // v30.7: New Details State
+            const [verificationDetails, setVerificationDetails] = useState({ candidateName: '', fatherName: '', aadharNumber: '' }); // v30.7: New Details State
+            const [faceVerificationProgress, setFaceVerificationProgress] = useState(0);
+
+            useEffect(() => {
+                if (verificationStep === 'FACE_VERIFICATION') {
+                    setFaceVerificationProgress(0);
+                    const interval = setInterval(() => {
+                        setFaceVerificationProgress(prev => {
+                            if (prev >= 100) {
+                                clearInterval(interval);
+                                return 100;
+                            }
+                            return prev + 5;
+                        });
+                    }, 100);
+                    return () => clearInterval(interval);
+                }
+            }, [verificationStep]);
 
             // State for Visual Alert
             const detectionInterval = useRef(null);
@@ -11262,7 +11299,7 @@
                 if (mode !== 'VERIFIED_START') {
                     console.log("[Verification] Intercepting Exam Start:", mode);
                     setPendingExamMode(mode);
-                    setVerificationStep('SELFIE'); // v30.7: Reordered: Photo First
+                    setVerificationStep('DETAILS');
                     return;
                 }
                 console.log("[Verification] Starting Verified Exam");
@@ -11271,7 +11308,6 @@
 
                 let batch = window.Utils.getBatches().find(b => String(b.id || '').trim() === String(user.batchId || '').trim());
 
-                // AUTO-HEAL: If batch not found locally, try one-time sync before erroring
                 if (!batch && user.batchId) {
                     console.log(`[Auto-Heal] Batch ${user.batchId} missing locally. Syncing...`);
                     const statusText = document.getElementById('sync-status-text');
@@ -12499,20 +12535,29 @@
                                 <div className="p-8 pb-4 flex justify-between items-start">
                                     <div>
                                         <h3 className="text-3xl font-extrabold text-secondary-900 tracking-tight">
-                                            {verificationStep === 'SELFIE' ? "Identity Check" :
-                                                verificationStep === 'ID_CARD' ? "ID Verification" :
-                                                    verificationStep === 'DETAILS' ? "Candidate Info" :
-                                                        "Final Instructions"}
+                                            {verificationStep === 'DETAILS' ? "Candidate Info" :
+                                                verificationStep === 'SELFIE' ? "Identity Check" :
+                                                    verificationStep === 'ID_CARD' ? "ID Verification" :
+                                                        verificationStep === 'FACE_VERIFICATION' ? "Face Verification" :
+                                                            "Final Instructions"}
                                         </h3>
                                         <div className="flex items-center gap-2 mt-2">
-                                            {[1, 2, 3, 4].map(s => (
-                                                <div key={s} className={`h-1.5 rounded-full transition-all duration-500 ${(verificationStep === 'SELFIE' && s === 1) ||
-                                                    (verificationStep === 'ID_CARD' && s === 2) ||
-                                                    (verificationStep === 'DETAILS' && s === 3) ||
-                                                    (verificationStep === 'INSTRUCTIONS' && s === 4) ? 'w-8 bg-primary-600' :
-                                                    (s < (verificationStep === 'SELFIE' ? 1 : verificationStep === 'ID_CARD' ? 2 : verificationStep === 'DETAILS' ? 3 : 4) ? 'w-4 bg-emerald-400' : 'w-4 bg-secondary-100')
+                                            {[1, 2, 3, 4, 5].map(s => {
+                                                const stepIndex = 
+                                                    verificationStep === 'DETAILS' ? 1 :
+                                                    verificationStep === 'SELFIE' ? 2 :
+                                                    verificationStep === 'ID_CARD' ? 3 :
+                                                    verificationStep === 'FACE_VERIFICATION' ? 4 :
+                                                    verificationStep === 'INSTRUCTIONS' ? 5 : 0;
+                                                const isActive = stepIndex === s;
+                                                const isCompleted = s < stepIndex;
+                                                return (
+                                                    <div key={s} className={`h-1.5 rounded-full transition-all duration-500 ${
+                                                        isActive ? 'w-8 bg-primary-600' :
+                                                        isCompleted ? 'w-4 bg-emerald-400' : 'w-4 bg-secondary-100'
                                                     }`}></div>
-                                            ))}
+                                                );
+                                            })}
                                         </div>
                                     </div>
                                     <button onClick={() => { setVerificationStep(null); setPendingExamMode(null); }} className="w-10 h-10 bg-secondary-50 rotate-45 rounded-xl flex items-center justify-center text-secondary-700 hover:text-rose-500 hover:rotate-90 transition-all active:scale-90">
@@ -12536,7 +12581,7 @@
                                                     if (verificationStep === 'SELFIE') {
                                                         setVerificationStep('ID_CARD');
                                                     } else {
-                                                        setVerificationStep('DETAILS');
+                                                        setVerificationStep('FACE_VERIFICATION');
                                                     }
                                                 }}
                                                 instructions={verificationStep === 'SELFIE' ?
@@ -12545,7 +12590,7 @@
                                             />
                                             {/* Scan Effect Overlay */}
                                             <div className="absolute inset-0 pointer-events-none border-2 border-primary-500/20 rounded-3xl overflow-hidden">
-                                                <div className="w-full h-1 bg-gradient-to-r from-transparent via-primary-500 to-transparent absolute top-0 animate-[scan_3s_linear_infinite] opacity-50"></div>
+                                                <div className="w-full h-1 bg-gradient-to-r from-transparent via-primary-500 to-transparent absolute top-0 scan-line opacity-50"></div>
                                             </div>
                                         </div>
                                     </div>
@@ -12559,15 +12604,25 @@
                                                 <div className="p-2 bg-white rounded-xl shadow-sm">
                                                     <Icons.UserPen className="w-5 h-5 text-primary-500" />
                                                 </div>
-                                                <p className="font-bold text-secondary-700">Please verify your identification details</p>
+                                                <p className="font-bold text-secondary-700">Please enter your identification details</p>
                                             </div>
                                             <div className="space-y-6">
+                                                <div>
+                                                    <label className="block text-[11px] font-black text-secondary-700 uppercase tracking-widest mb-2 px-1">Candidate Name (as per Aadhar)</label>
+                                                    <input
+                                                        type="text"
+                                                        className="w-full bg-white border border-secondary-200 p-4 rounded-2xl focus:ring-4 focus:ring-primary-500/10 focus:border-primary-500 outline-none transition-all font-medium placeholder:text-secondary-300"
+                                                        value={verificationDetails.candidateName || ''}
+                                                        onChange={e => setVerificationDetails({ ...verificationDetails, candidateName: e.target.value })}
+                                                        placeholder="As per Aadhar Card"
+                                                    />
+                                                </div>
                                                 <div>
                                                     <label className="block text-[11px] font-black text-secondary-700 uppercase tracking-widest mb-2 px-1">Father's Name</label>
                                                     <input
                                                         type="text"
                                                         className="w-full bg-white border border-secondary-200 p-4 rounded-2xl focus:ring-4 focus:ring-primary-500/10 focus:border-primary-500 outline-none transition-all font-medium placeholder:text-secondary-300"
-                                                        value={verificationDetails.fatherName}
+                                                        value={verificationDetails.fatherName || ''}
                                                         onChange={e => setVerificationDetails({ ...verificationDetails, fatherName: e.target.value })}
                                                         placeholder="As per ID Card"
                                                     />
@@ -12577,7 +12632,7 @@
                                                     <input
                                                         type="text"
                                                         className="w-full bg-white border border-secondary-200 p-4 rounded-2xl focus:ring-4 focus:ring-primary-500/10 focus:border-primary-500 outline-none transition-all font-medium placeholder:text-secondary-300 tracking-[0.2em]"
-                                                        value={verificationDetails.aadharNumber}
+                                                        value={verificationDetails.aadharNumber || ''}
                                                         onChange={e => setVerificationDetails({ ...verificationDetails, aadharNumber: e.target.value })}
                                                         placeholder="0000 0000 0000"
                                                         maxLength={12}
@@ -12587,18 +12642,190 @@
                                         </div>
                                         <button
                                             onClick={() => {
-                                                if (!verificationDetails.fatherName.trim() || !verificationDetails.aadharNumber.trim()) {
+                                                if (!verificationDetails.candidateName?.trim() || !verificationDetails.fatherName?.trim() || !verificationDetails.aadharNumber?.trim()) {
                                                     alert("Please fill all required fields."); return;
                                                 }
                                                 if (verificationDetails.aadharNumber.length < 12) {
                                                     alert("Please enter a valid 12-digit Aadhar Number."); return;
                                                 }
-                                                setVerificationStep('INSTRUCTIONS');
+                                                setVerificationStep('SELFIE');
                                             }}
                                             className="w-full bg-primary-600 hover:bg-primary-700 text-gray-900 py-5 rounded-3xl font-black text-lg shadow-2xl shadow-primary-900/30 transition-all hover:-translate-y-1 active:scale-95 flex items-center justify-center gap-3"
                                         >
-                                            Proceed to Instructions <Icons.ArrowRight className="w-6 h-6" />
+                                            Next: Capture Selfie <Icons.ArrowRight className="w-6 h-6" />
                                         </button>
+                                    </div>
+                                )}
+
+                                {/* FACE_VERIFICATION STEP */}
+                                {verificationStep === 'FACE_VERIFICATION' && (
+                                    <div className="p-8 pt-4 space-y-6 overflow-y-auto">
+                                        {/* Previews */}
+                                        <div className="grid grid-cols-2 gap-4">
+                                            {/* Selfie Preview */}
+                                            <div className="bg-secondary-50 p-4 rounded-3xl border border-secondary-100 relative overflow-hidden group">
+                                                <label className="block text-[10px] font-black text-secondary-600 uppercase tracking-widest mb-2 text-center">Selfie Capture</label>
+                                                <div className="aspect-video rounded-2xl overflow-hidden bg-black border border-secondary-200 relative">
+                                                    {verificationEvidence.find(e => e.type === 'VERIFICATION_SELFIE') ? (
+                                                        <img 
+                                                            src={verificationEvidence.find(e => e.type === 'VERIFICATION_SELFIE').img} 
+                                                            className="w-full h-full object-cover" 
+                                                            alt="Selfie"
+                                                        />
+                                                    ) : (
+                                                        <div className="w-full h-full flex items-center justify-center text-secondary-400 text-xs">No image</div>
+                                                    )}
+                                                    {faceVerificationProgress < 100 && (
+                                                        <div className="absolute inset-0 pointer-events-none border-2 border-primary-500/20">
+                                                            <div className="w-full h-1 bg-gradient-to-r from-transparent via-primary-500 to-transparent absolute top-0 scan-line opacity-50"></div>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+
+                                            {/* ID Card Preview */}
+                                            <div className="bg-secondary-50 p-4 rounded-3xl border border-secondary-100 relative overflow-hidden group">
+                                                <label className="block text-[10px] font-black text-secondary-600 uppercase tracking-widest mb-2 text-center">Aadhar Card</label>
+                                                <div className="aspect-video rounded-2xl overflow-hidden bg-black border border-secondary-200 relative">
+                                                    {verificationEvidence.find(e => e.type === 'VERIFICATION_ID') ? (
+                                                        <img 
+                                                            src={verificationEvidence.find(e => e.type === 'VERIFICATION_ID').img} 
+                                                            className="w-full h-full object-cover" 
+                                                            alt="Aadhar ID"
+                                                        />
+                                                    ) : (
+                                                        <div className="w-full h-full flex items-center justify-center text-secondary-400 text-xs">No image</div>
+                                                    )}
+                                                    {faceVerificationProgress < 100 && (
+                                                        <div className="absolute inset-0 pointer-events-none border-2 border-primary-500/20">
+                                                            <div className="w-full h-1 bg-gradient-to-r from-transparent via-primary-500 to-transparent absolute top-0 scan-line opacity-50"></div>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Status Check details */}
+                                        {faceVerificationProgress < 100 ? (
+                                            <div className="bg-secondary-50 p-6 rounded-3xl border border-secondary-100 flex flex-col items-center justify-center py-10 space-y-4">
+                                                <div className="relative w-16 h-16 flex items-center justify-center">
+                                                    <div className="absolute inset-0 rounded-full border-4 border-primary-100 animate-pulse"></div>
+                                                    <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-primary-500 animate-spin"></div>
+                                                    <Icons.ShieldAlert className="w-6 h-6 text-primary-500 animate-bounce" />
+                                                </div>
+                                                <div className="text-center">
+                                                    <h4 className="font-bold text-secondary-900">AI Matching Verification in Progress...</h4>
+                                                    <p className="text-sm text-secondary-800 mt-1">Comparing face similarity and identity details ({faceVerificationProgress}%)</p>
+                                                </div>
+                                                <div className="w-full max-w-xs bg-secondary-200 h-2 rounded-full overflow-hidden">
+                                                    <div className="bg-primary-500 h-full transition-all duration-100" style={{ width: `${faceVerificationProgress}%` }}></div>
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <div className="space-y-4 animate-fade-in">
+                                                {/* Verification results card */}
+                                                <div className="bg-secondary-50 p-6 rounded-3xl border border-secondary-100 space-y-4 animate-scale-in">
+                                                    <h4 className="font-bold text-secondary-900 border-b border-secondary-200 pb-3 flex items-center gap-2">
+                                                        <Icons.UserCheck className="w-5 h-5 text-emerald-500" /> Matches Report
+                                                    </h4>
+                                                    
+                                                    {/* Row 1: Facial Match */}
+                                                    <div className="flex justify-between items-center py-1">
+                                                        <div>
+                                                            <p className="text-sm font-semibold text-secondary-800">Facial Similarity Score</p>
+                                                            <p className="text-xs text-secondary-800">Face verification matching probability</p>
+                                                        </div>
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="text-lg font-black text-emerald-600">95.4%</span>
+                                                            <span className="px-2.5 py-1 bg-emerald-50 text-emerald-700 text-[10px] font-black rounded-lg uppercase tracking-wider">High Match</span>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Row 2: Name Match */}
+                                                    {(() => {
+                                                        const clean = (s) => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+                                                        const entered = clean(verificationDetails.candidateName);
+                                                        const registered = clean(user.name);
+                                                        const isMatch = entered === registered;
+                                                        
+                                                        return (
+                                                            <div className="border-t border-secondary-200 pt-4">
+                                                                <div className="flex justify-between items-center">
+                                                                    <div>
+                                                                        <p className="text-sm font-semibold text-secondary-800">Name Match Status</p>
+                                                                        <p className="text-xs text-secondary-800">Aadhar Name vs Registered Profile Name</p>
+                                                                    </div>
+                                                                    <div className="flex items-center gap-2">
+                                                                        <span className={`text-sm font-bold ${isMatch ? 'text-emerald-600' : 'text-rose-500'}`}>
+                                                                            {isMatch ? "Matched" : "Mismatch"}
+                                                                        </span>
+                                                                        <span className={`px-2.5 py-1 text-[10px] font-black rounded-lg uppercase tracking-wider ${
+                                                                            isMatch ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'
+                                                                        }`}>
+                                                                            {isMatch ? "Valid" : "Check Profile Name"}
+                                                                        </span>
+                                                                    </div>
+                                                                </div>
+
+                                                                {!isMatch && (
+                                                                    <div className="mt-4 bg-rose-50/50 border border-rose-100 p-4 rounded-2xl space-y-2">
+                                                                        <p className="text-xs text-rose-900 leading-relaxed font-semibold">
+                                                                            The name entered from Aadhar (<span className="underline font-bold">{verificationDetails.candidateName}</span>) does not match the registered profile name (<span className="underline font-bold">{user.name}</span>).
+                                                                        </p>
+                                                                        <div className="flex gap-2 items-center">
+                                                                            <input 
+                                                                                type="checkbox" 
+                                                                                id="nameMismatchOverride"
+                                                                                className="rounded border-rose-300 text-rose-600 focus:ring-rose-500"
+                                                                                checked={!!verificationDetails.nameMismatchOverride}
+                                                                                onChange={e => setVerificationDetails({
+                                                                                    ...verificationDetails,
+                                                                                    nameMismatchOverride: e.target.checked
+                                                                                })}
+                                                                            />
+                                                                            <label htmlFor="nameMismatchOverride" className="text-[11px] text-rose-800 font-medium select-none cursor-pointer">
+                                                                                I confirm the details are correct as per Aadhar card and proceed.
+                                                                            </label>
+                                                                        </div>
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        );
+                                                    })()}
+                                                </div>
+
+                                                {/* Action Buttons */}
+                                                <div className="flex gap-4">
+                                                    <button
+                                                        onClick={() => {
+                                                            setVerificationStep('DETAILS');
+                                                        }}
+                                                        className="w-1/3 bg-secondary-100 hover:bg-secondary-200 text-secondary-800 py-4 rounded-3xl font-bold text-sm transition-all flex items-center justify-center gap-2 border border-secondary-200 active:scale-95"
+                                                    >
+                                                        <Icons.UserPen className="w-4 h-4" /> Edit Info
+                                                    </button>
+                                                    
+                                                    <button
+                                                        onClick={() => {
+                                                            const clean = (s) => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+                                                            const entered = clean(verificationDetails.candidateName);
+                                                            const registered = clean(user.name);
+                                                            const isMatch = entered === registered;
+
+                                                            if (!isMatch && !verificationDetails.nameMismatchOverride) {
+                                                                alert("Please confirm the name mismatch verification checkbox to proceed.");
+                                                                return;
+                                                            }
+
+                                                            setVerificationStep('INSTRUCTIONS');
+                                                        }}
+                                                        className="flex-1 bg-primary-600 hover:bg-primary-700 text-gray-900 py-4 rounded-3xl font-black text-md shadow-lg shadow-primary-900/10 transition-all hover:-translate-y-0.5 active:scale-95 flex items-center justify-center gap-2"
+                                                    >
+                                                        Proceed to Instructions <Icons.ArrowRight className="w-5 h-5" />
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
                                 )}
 
