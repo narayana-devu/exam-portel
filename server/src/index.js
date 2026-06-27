@@ -170,6 +170,11 @@ io.on('connection', (socket) => {
         const { roomId, signal } = data;
         socket.to(roomId).emit('signal', { sender: socket.id, signal });
     });
+
+    // Forward Proctoring Frame (v82.2: Live Monitoring)
+    socket.on('proctor-frame', (data) => {
+        socket.to(data.roomId).emit('student-frame', data);
+    });
 });
 
 // --- DATABASE ADAPTER PATTERN ---
