@@ -10750,6 +10750,11 @@
             const [verificationDetails, setVerificationDetails] = useState({ candidateName: '', fatherName: '', aadharNumber: '' }); // v30.7: New Details State
             const [faceVerificationProgress, setFaceVerificationProgress] = useState(0);
 
+            // Audio Analyser references
+            const audioContextRef = useRef(null);
+            const audioAnalyserRef = useRef(null);
+            const audioSourceRef = useRef(null);
+
             useEffect(() => {
                 if (verificationStep === 'FACE_VERIFICATION') {
                     setFaceVerificationProgress(0);
@@ -11226,8 +11231,17 @@
                     }
                 };
 
+                const handleBlur = () => {
+                    logViolation("Window / Tab Focus Lost");
+                };
+
                 document.addEventListener('visibilitychange', handleVisibility);
-                return () => document.removeEventListener('visibilitychange', handleVisibility);
+                window.addEventListener('blur', handleBlur);
+
+                return () => {
+                    document.removeEventListener('visibilitychange', handleVisibility);
+                    window.removeEventListener('blur', handleBlur);
+                };
             }, [examMode, isLocked, warnings]);
 
             // Object Detection Loop
@@ -11238,6 +11252,7 @@
                 }
 
                 let tick = 0;
+                let outOfFrameCount = 0; // Track consecutive ticks with 0 persons
                 detectionInterval.current = setInterval(async () => {
                     tick++;
                     const video = videoRef.current;
@@ -11268,6 +11283,22 @@
                                 studentId: user.id, examType: examMode,
                                 evidence: [{ img: c.toDataURL(), time: new Date().toISOString(), type: 'VIOLATION_MULTIPLE_PERSONS' }]
                             });
+                            outOfFrameCount = 0; // reset
+                        } else if (personCount === 0) {
+                            outOfFrameCount++;
+                            if (outOfFrameCount >= 2) { // ~6 seconds out of frame
+                                logViolation("Candidate Out of Frame");
+                                // Capture Violation Evidence
+                                const c = document.createElement('canvas'); c.width = 300; c.height = 200;
+                                c.getContext('2d').drawImage(video, 0, 0, 300, 200);
+                                window.Utils.saveResponse({
+                                    studentId: user.id, examType: examMode,
+                                    evidence: [{ img: c.toDataURL(), time: new Date().toISOString(), type: 'VIOLATION_OUT_OF_FRAME' }]
+                                });
+                                outOfFrameCount = 0; // reset
+                            }
+                        } else {
+                            outOfFrameCount = 0; // reset
                         }
 
                         // PERIODIC SNAPSHOT REMOVED (Moved to independent loop)
@@ -11276,6 +11307,85 @@
 
                 return () => clearInterval(detectionInterval.current);
             }, [examMode, webcamActive, isLocked, proctoringModel, warnings]);
+
+            // Audio & Speaking Analysis Loop
+            useEffect(() => {
+                if (!mediaStream || !examMode || isLocked) {
+                    if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
+                        audioContextRef.current.close().catch(e => console.warn(e));
+                    }
+                    return;
+                }
+
+                let audioCtx = null;
+                let checkAudio = null;
+
+                try {
+                    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+                    if (AudioContextClass) {
+                        audioCtx = new AudioContextClass();
+                        audioContextRef.current = audioCtx;
+
+                        const source = audioCtx.createMediaStreamSource(mediaStream);
+                        audioSourceRef.current = source;
+
+                        const analyser = audioCtx.createAnalyser();
+                        analyser.fftSize = 512;
+                        audioAnalyserRef.current = analyser;
+
+                        source.connect(analyser);
+
+                        const bufferLength = analyser.frequencyBinCount;
+                        const dataArray = new Float32Array(bufferLength);
+                        let highNoiseDuration = 0;
+
+                        checkAudio = setInterval(() => {
+                            if (isLocked || !examMode) return;
+                            analyser.getFloatTimeDomainData(dataArray);
+
+                            // Calculate RMS (Root Mean Square) volume level
+                            let sum = 0;
+                            for (let i = 0; i < bufferLength; i++) {
+                                sum += dataArray[i] * dataArray[i];
+                            }
+                            const rms = Math.sqrt(sum / bufferLength);
+
+                            // 0.05 represents standard speaking/loud sound threshold
+                            if (rms > 0.05) {
+                                highNoiseDuration++;
+                                if (highNoiseDuration >= 3) { // 3 consecutive seconds
+                                    logViolation("Speaking / Background Noise Detected");
+                                    
+                                    // Capture frame snapshot as evidence
+                                    const video = videoRef.current;
+                                    let img = null;
+                                    if (video && video.readyState >= 2) {
+                                        const c = document.createElement('canvas'); c.width = 300; c.height = 200;
+                                        c.getContext('2d').drawImage(video, 0, 0, 300, 200);
+                                        img = c.toDataURL();
+                                    }
+                                    window.Utils.saveResponse({
+                                        studentId: user.id, examType: examMode,
+                                        evidence: [{ img, time: new Date().toISOString(), type: 'VIOLATION_AUDIO', message: "High volume speaking/noise" }]
+                                    });
+                                    highNoiseDuration = 0; // reset
+                                }
+                            } else {
+                                if (highNoiseDuration > 0) highNoiseDuration--; // decay
+                            }
+                        }, 1000);
+                    }
+                } catch (err) {
+                    console.warn("[Audio-Proctor] Failed to initialize audio context", err);
+                }
+
+                return () => {
+                    if (checkAudio) clearInterval(checkAudio);
+                    if (audioCtx && audioCtx.state !== 'closed') {
+                        audioCtx.close().catch(e => console.warn(e));
+                    }
+                };
+            }, [mediaStream, examMode, isLocked]);
 
             useEffect(() => {
                 let interval;
