@@ -12912,66 +12912,24 @@
                                 </div>
                             </div>
 
-                            <div className="grid gap-8 md:grid-cols-3">
-                                {/* THEORY EXAM CARD */}
+                            <div className="flex justify-center">
+                                {/* THEORY EXAM CARD — Only exam visible to students */}
                                 <div
                                     onClick={() => startExam('Theory')}
-                                    className="group relative bg-white p-8 rounded-4xl shadow-xl hover:shadow-2xl transition-all duration-500 cursor-pointer overflow-hidden border border-secondary-100 flex flex-col h-full"
+                                    className="group relative bg-white p-10 rounded-4xl shadow-xl hover:shadow-2xl transition-all duration-500 cursor-pointer overflow-hidden border border-secondary-100 flex flex-col w-full max-w-lg"
                                 >
-                                    <div className="absolute top-0 right-0 w-32 h-32 bg-primary-50 rounded-full -mr-16 -mt-16 transition-transform group-hover:scale-150 duration-700"></div>
+                                    <div className="absolute top-0 right-0 w-48 h-48 bg-primary-50 rounded-full -mr-20 -mt-20 transition-transform group-hover:scale-150 duration-700"></div>
                                     <div className="relative z-10">
-                                        <div className="w-14 h-14 bg-primary-100 rounded-2xl flex items-center justify-center mb-6 group-hover:bg-primary-600 transition-colors duration-500">
-                                            <Icons.FileText className="w-7 h-7 text-primary-600 group-hover:text-white transition-colors duration-500" />
+                                        <div className="w-16 h-16 bg-primary-100 rounded-3xl flex items-center justify-center mb-6 group-hover:bg-primary-600 transition-colors duration-500">
+                                            <Icons.FileText className="w-8 h-8 text-primary-600 group-hover:text-white transition-colors duration-500" />
                                         </div>
-                                        <h3 className="text-2xl font-bold text-secondary-900 mb-2">Theory Exam</h3>
-                                        <p className="text-secondary-800 text-sm leading-relaxed mb-8">Objective questions covering core concepts and theoretical knowledge.</p>
+                                        <h3 className="text-3xl font-bold text-secondary-900 mb-3">Theory Exam</h3>
+                                        <p className="text-secondary-800 text-base leading-relaxed mb-10">Objective questions covering core concepts and theoretical knowledge. Your responses are auto-saved and submitted at the end.</p>
                                     </div>
                                     <div className="mt-auto relative z-10 flex items-center justify-between">
                                         <span className="text-primary-600 font-bold text-sm tracking-wider uppercase">Start Now</span>
-                                        <div className="w-10 h-10 rounded-full bg-secondary-50 flex items-center justify-center group-hover:bg-primary-600 group-hover:text-white transition-all duration-500">
-                                            <Icons.ArrowRight className="w-5 h-5" />
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {/* PRACTICAL EXAM CARD */}
-                                <div
-                                    onClick={() => startExam('Practical')}
-                                    className="group relative bg-white p-8 rounded-4xl shadow-xl hover:shadow-2xl transition-all duration-500 cursor-pointer overflow-hidden border border-secondary-100 flex flex-col h-full"
-                                >
-                                    <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-50 rounded-full -mr-16 -mt-16 transition-transform group-hover:scale-150 duration-700"></div>
-                                    <div className="relative z-10">
-                                        <div className="w-14 h-14 bg-indigo-100 rounded-2xl flex items-center justify-center mb-6 group-hover:bg-indigo-600 transition-colors duration-500">
-                                            <Icons.Terminal className="w-7 h-7 text-indigo-600 group-hover:text-white transition-colors duration-500" />
-                                        </div>
-                                        <h3 className="text-2xl font-bold text-secondary-900 mb-2">Practical Exam</h3>
-                                        <p className="text-secondary-800 text-sm leading-relaxed mb-8">Hands-on assessment through coding tasks and interactive scenarios.</p>
-                                    </div>
-                                    <div className="mt-auto relative z-10 flex items-center justify-between">
-                                        <span className="text-indigo-600 font-bold text-sm tracking-wider uppercase">Begin Session</span>
-                                        <div className="w-10 h-10 rounded-full bg-secondary-50 flex items-center justify-center group-hover:bg-indigo-600 group-hover:text-white transition-all duration-500">
-                                            <Icons.ArrowRight className="w-5 h-5" />
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {/* LIVE VIVA CARD */}
-                                <div
-                                    onClick={() => setExamMode('VivaWait')}
-                                    className="group relative bg-white p-8 rounded-4xl shadow-xl hover:shadow-2xl transition-all duration-500 cursor-pointer overflow-hidden border border-secondary-100 flex flex-col h-full"
-                                >
-                                    <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-50 rounded-full -mr-16 -mt-16 transition-transform group-hover:scale-150 duration-700"></div>
-                                    <div className="relative z-10">
-                                        <div className="w-14 h-14 bg-emerald-100 rounded-2xl flex items-center justify-center mb-6 group-hover:bg-emerald-600 transition-colors duration-500">
-                                            <Icons.Video className="w-7 h-7 text-emerald-600 group-hover:text-white transition-colors duration-500" />
-                                        </div>
-                                        <h3 className="text-2xl font-bold text-secondary-900 mb-2">Live Viva</h3>
-                                        <p className="text-secondary-800 text-sm leading-relaxed mb-8">Direct video interaction with an expert assessor for oral examination.</p>
-                                    </div>
-                                    <div className="mt-auto relative z-10 flex items-center justify-between">
-                                        <span className="text-emerald-600 font-bold text-sm tracking-wider uppercase">Join Lobby</span>
-                                        <div className="w-10 h-10 rounded-full bg-secondary-50 flex items-center justify-center group-hover:bg-emerald-600 group-hover:text-white transition-all duration-500">
-                                            <Icons.ArrowRight className="w-5 h-5" />
+                                        <div className="w-12 h-12 rounded-full bg-secondary-50 flex items-center justify-center group-hover:bg-primary-600 group-hover:text-white transition-all duration-500 shadow-md">
+                                            <Icons.ArrowRight className="w-6 h-6" />
                                         </div>
                                     </div>
                                 </div>
