@@ -2728,7 +2728,9 @@
             ArrowDownCloud: ({ className }) => <LucideIcon name="download-cloud" className={className || "w-5 h-5"} />,
             SearchCode: ({ className }) => <LucideIcon name="search-code" className={className || "w-5 h-5"} />,
             RotateCcw: ({ className }) => <LucideIcon name="rotate-ccw" className={className || "w-5 h-5"} />,
-            CloudOff: ({ className }) => <LucideIcon name="cloud-off" className={className || "w-5 h-5"} />
+            CloudOff: ({ className }) => <LucideIcon name="cloud-off" className={className || "w-5 h-5"} />,
+            UserMinus: ({ className }) => <LucideIcon name="user-x" className={className || "w-5 h-5"} />,
+            Maximize2: ({ className }) => <LucideIcon name="maximize-2" className={className || "w-5 h-5"} />
         };
 
         class ErrorBoundary extends React.Component {
@@ -3609,19 +3611,101 @@
                 });
                 setNOSList(qpNOS);
 
-                // 3. Load Existing Marks
+                // 3. Load Existing Marks (with Fallback to actual Student Exam Submissions)
                 const responses = window.Utils.getResponses().filter(r => r.batchId === selectedBatch && r.examType === 'MarksEntry');
+                const allResponses = window.Utils.getResponses();
+                const qp = window.Utils.getQuestionPapers().find(q => q.id === selectedQP);
+                const qpTheoryQuestions = qp ? (qp.questions || []).filter(q => q.questionType !== 'CODING' && q.questionType !== 'PRACTICAL' && q.questionType !== 'VIVA') : [];
+                const totalQPTheory = qpTheoryQuestions.reduce((sum, q) => sum + (parseFloat(q.totalMarks) || 1), 0) || 1;
+
                 const initialMarks = {};
                 const initialAttendance = {};
 
-                responses.forEach(r => {
-                    initialAttendance[r.studentId] = r.attendance !== false; // Default true if undefined
-                    if (r.nosMarks) {
-                        Object.entries(r.nosMarks).forEach(([key, val]) => {
-                            initialMarks[`${r.studentId}_${key}`] = val;
-                        });
+                batchStudents.forEach(student => {
+                    // Find existing MarksEntry response first
+                    const marksEntryResp = responses.find(r => r.studentId === student.id);
+                    
+                    // Look up actual student exam responses
+                    const theoryExamResp = allResponses.find(r => r.studentId === student.id && r.examType === 'Theory');
+                    const practicalExamResp = allResponses.find(r => r.studentId === student.id && r.examType === 'Practical');
+                    const vivaExamResp = allResponses.find(r => r.studentId === student.id && r.examType === 'Viva');
+
+                    // Set attendance (Present if they took any exam)
+                    let isPresent = true;
+                    if (marksEntryResp) {
+                        isPresent = marksEntryResp.attendance !== false;
+                    } else if (theoryExamResp || practicalExamResp || vivaExamResp) {
+                        isPresent = true;
                     }
+                    initialAttendance[student.id] = isPresent;
+
+                    qpNOS.forEach(nos => {
+                        // A. Theory Marks
+                        const theoryKey = `${student.id}_${nos.id}_theory`;
+                        if (marksEntryResp && marksEntryResp.nosMarks && marksEntryResp.nosMarks[`${nos.id}_theory`] !== undefined) {
+                            initialMarks[theoryKey] = marksEntryResp.nosMarks[`${nos.id}_theory`];
+                        } else if (theoryExamResp) {
+                            let studentNOSTheory = 0;
+                            let hasPCMapping = false;
+
+                            if (qp && qp.questions) {
+                                qp.questions.forEach((q, qIdx) => {
+                                    const score = theoryExamResp.assessorMarks ? parseFloat(theoryExamResp.assessorMarks[qIdx] || 0) : 0;
+                                    if (score > 0 && q.pcMapping) {
+                                        Object.entries(q.pcMapping).forEach(([pcId, pcMarks]) => {
+                                            const pc = allPCs.find(p => p.id === pcId);
+                                            if (pc && pc.nosId === nos.id) {
+                                                studentNOSTheory += parseFloat(pcMarks || 0);
+                                                hasPCMapping = true;
+                                            }
+                                        });
+                                    }
+                                });
+                            }
+
+                            if (hasPCMapping) {
+                                initialMarks[theoryKey] = studentNOSTheory.toFixed(1);
+                            } else {
+                                // Fallback: Proportional distribution
+                                const totalTheoryScore = parseFloat(theoryExamResp.totalScore || 0);
+                                const nosMaxTheory = parseFloat(nos.theoryMarks || 0);
+                                const proportion = totalTheoryScore / totalQPTheory;
+                                initialMarks[theoryKey] = (proportion * nosMaxTheory).toFixed(1);
+                            }
+                        }
+
+                        // B. Practical Marks
+                        const practicalKey = `${student.id}_${nos.id}_practical`;
+                        if (marksEntryResp && marksEntryResp.nosMarks && marksEntryResp.nosMarks[`${nos.id}_practical`] !== undefined) {
+                            initialMarks[practicalKey] = marksEntryResp.nosMarks[`${nos.id}_practical`];
+                        } else if (practicalExamResp) {
+                            const totalPracScore = parseFloat(practicalExamResp.totalScore || 0);
+                            const nosMaxPrac = parseFloat(nos.practicalMarks || 0);
+                            if (qpNOS.length === 1) {
+                                initialMarks[practicalKey] = totalPracScore.toFixed(1);
+                            } else {
+                                const totalQPPrac = qpNOS.reduce((sum, n) => sum + (parseFloat(n.practicalMarks) || 0), 0) || 1;
+                                initialMarks[practicalKey] = ((totalPracScore / totalQPPrac) * nosMaxPrac).toFixed(1);
+                            }
+                        }
+
+                        // C. Viva Marks
+                        const vivaKey = `${student.id}_${nos.id}_viva`;
+                        if (marksEntryResp && marksEntryResp.nosMarks && marksEntryResp.nosMarks[`${nos.id}_viva`] !== undefined) {
+                            initialMarks[vivaKey] = marksEntryResp.nosMarks[`${nos.id}_viva`];
+                        } else if (vivaExamResp) {
+                            const totalVivaScore = parseFloat(vivaExamResp.totalScore || 0);
+                            const nosMaxViva = parseFloat(nos.vivaMarks || 0);
+                            if (qpNOS.length === 1) {
+                                initialMarks[vivaKey] = totalVivaScore.toFixed(1);
+                            } else {
+                                const totalQPViva = qpNOS.reduce((sum, n) => sum + (parseFloat(n.vivaMarks) || 0), 0) || 1;
+                                initialMarks[vivaKey] = ((totalVivaScore / totalQPViva) * nosMaxViva).toFixed(1);
+                            }
+                        }
+                    });
                 });
+
                 setMarksData(initialMarks);
                 setAttendance(initialAttendance);
 
