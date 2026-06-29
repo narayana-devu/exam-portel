@@ -13435,11 +13435,11 @@
                     <div className="p-5 flex items-center justify-between flex-wrap gap-3">
                         <div className="flex items-center gap-4">
                             <div className={`w-11 h-11 rounded-2xl flex items-center justify-center font-black text-lg ${att.present === true ? 'bg-indigo-100 text-indigo-700' : att.present === false ? 'bg-rose-100 text-rose-400' : 'bg-secondary-100 text-secondary-500'}`}>
-                                {student.name.charAt(0).toUpperCase()}
+                                {(student?.name || student?.username || 'S').charAt(0).toUpperCase()}
                             </div>
                             <div>
-                                <p className="font-bold text-secondary-900">{student.name}</p>
-                                <p className="text-xs text-secondary-500">{student.username}</p>
+                                <p className="font-bold text-secondary-900">{student?.name || student?.username || 'Student'}</p>
+                                <p className="text-xs text-secondary-500">{student?.username}</p>
                             </div>
                         </div>
                         <div className="flex items-center gap-2 flex-wrap">
@@ -13586,18 +13586,30 @@
 
             // ── Camera helpers ──
             const stopStream = (ref) => {
-                if (ref.current) { ref.current.getTracks().forEach(t => t.stop()); ref.current = null; }
+                try {
+                    if (ref && ref.current) {
+                        const tracks = typeof ref.current.getTracks === 'function' ? ref.current.getTracks() : [];
+                        tracks.forEach(t => { try { t.stop(); } catch(e) {} });
+                        ref.current = null;
+                    }
+                } catch(e) { console.warn('Failed to stop stream', e); }
             };
 
             const startSingleCamera = async (facing = 'environment') => {
                 stopStream(mediaStreamRef);
                 try {
+                    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                        throw new Error('getUserMedia not supported');
+                    }
                     const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: facing }, audio: false });
                     mediaStreamRef.current = stream;
                     if (videoRef.current) videoRef.current.srcObject = stream;
                     setCameraActive(true);
                 } catch(e) {
                     try {
+                        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                            throw new Error('getUserMedia not supported');
+                        }
                         const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
                         mediaStreamRef.current = stream;
                         if (videoRef.current) videoRef.current.srcObject = stream;
@@ -13609,6 +13621,9 @@
             const startDualCamera = async () => {
                 stopStream(frontStreamRef); stopStream(backStreamRef);
                 try {
+                    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                        throw new Error('getUserMedia not supported');
+                    }
                     const [back, front] = await Promise.all([
                         navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false }),
                         navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false })
@@ -13620,6 +13635,9 @@
                     setCameraActive(true);
                 } catch(e) {
                     try {
+                        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                            throw new Error('getUserMedia not supported');
+                        }
                         const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
                         backStreamRef.current = stream;
                         if (backVideoRef.current) backVideoRef.current.srcObject = stream;
@@ -13876,6 +13894,7 @@
                 const totalQ = practicalQuestions.length;
 
                 const setScore = (val) => {
+                    if (!student) return;
                     setPracticalScores(prev => ({ ...prev, [student.id]: { ...(prev[student.id] || {}), [practicalQIdx]: val } }));
                 };
 
@@ -13899,9 +13918,9 @@
                     <div className="h-screen flex flex-col bg-slate-900 overflow-hidden animate-fade-in">
                         <div className="bg-slate-800 text-white px-6 py-3 flex items-center justify-between shrink-0">
                             <div className="flex items-center gap-3">
-                                <div className="w-8 h-8 bg-indigo-600 rounded-xl flex items-center justify-center font-black text-sm">{student.name.charAt(0)}</div>
+                                <div className="w-8 h-8 bg-indigo-600 rounded-xl flex items-center justify-center font-black text-sm">{(student?.name || student?.username || 'S').charAt(0).toUpperCase()}</div>
                                 <div>
-                                    <p className="font-bold text-sm">{student.name}</p>
+                                    <p className="font-bold text-sm">{student?.name || student?.username || 'Student'}</p>
                                     <p className="text-slate-400 text-[10px] uppercase tracking-widest">Practical Assessment</p>
                                 </div>
                             </div>
@@ -13999,9 +14018,9 @@
                     <div className="h-screen flex flex-col bg-slate-900 overflow-hidden animate-fade-in">
                         <div className="bg-slate-800 text-white px-6 py-3 flex items-center justify-between shrink-0">
                             <div className="flex items-center gap-3">
-                                <div className="w-8 h-8 bg-violet-600 rounded-xl flex items-center justify-center font-black text-sm">{student.name.charAt(0)}</div>
+                                <div className="w-8 h-8 bg-violet-600 rounded-xl flex items-center justify-center font-black text-sm">{(student?.name || student?.username || 'S').charAt(0).toUpperCase()}</div>
                                 <div>
-                                    <p className="font-bold text-sm">{student.name}</p>
+                                    <p className="font-bold text-sm">{student?.name || student?.username || 'Student'}</p>
                                     <p className="text-slate-400 text-[10px] uppercase tracking-widest">Viva Assessment</p>
                                 </div>
                             </div>
@@ -14130,10 +14149,10 @@
                                     return (
                                         <div key={student.id} className="grid grid-cols-5 px-6 py-4 border-b border-secondary-50 items-center hover:bg-secondary-50 transition-colors">
                                             <div className="col-span-2 flex items-center gap-3">
-                                                <div className="w-9 h-9 rounded-xl bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold">{student.name.charAt(0)}</div>
+                                                <div className="w-9 h-9 rounded-xl bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold">{(student?.name || student?.username || 'S').charAt(0).toUpperCase()}</div>
                                                 <div>
-                                                    <p className="font-bold text-secondary-900 text-sm">{student.name}</p>
-                                                    <p className="text-xs text-secondary-400">{student.username}</p>
+                                                    <p className="font-bold text-secondary-900 text-sm">{student?.name || student?.username || 'Student'}</p>
+                                                    <p className="text-xs text-secondary-400">{student?.username}</p>
                                                 </div>
                                             </div>
                                             <div className="text-center">
