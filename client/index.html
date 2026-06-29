@@ -13310,178 +13310,39 @@
             );
         };
 
-        // ASSESSOR PORTAL
+        // ASSESSOR PORTAL — New flow coming (to be built per assessor requirements)
         const AssessorPortal = ({ user }) => {
-            const [view, setView] = useState('dashboard'); // dashboard, batches, students, exam_type, capture
-            const [flowMode, setFlowMode] = useState('MANUAL'); // 'MANUAL' or 'VIVA'
-
-            // Workflow State
-            const [selectedBatch, setSelectedBatch] = useState(null);
-            const [selectedStudent, setSelectedStudent] = useState(null);
-            const [selectedExamType, setSelectedExamType] = useState(null);
-
-            // Data
-            const [batches, setBatches] = useState([]);
-            const [batchStudents, setBatchStudents] = useState([]);
-            const [allQPapers, setAllQPapers] = useState([]);
-            const [showVivaLobby, setShowVivaLobby] = useState(false);
-
-            useEffect(() => {
-                // Initialize Data
-                setBatches(window.Utils.getBatches());
-                setAllQPapers(window.Utils.getQuestionPapers());
-            }, []);
-
-            // Effect to load students when batch changes
-            useEffect(() => {
-                if (selectedBatch) {
-                    setBatchStudents(window.Utils.getStudentsByBatch(selectedBatch.id));
-                }
-            }, [selectedBatch]);
-
-            if (showVivaLobby) return <VivaLobby batch={selectedBatch || user} onClose={() => setShowVivaLobby(false)} />;
-
-            // VIEW 1: DASHBOARD
-            if (view === 'dashboard') {
-                return (
-                    <div className="p-8">
-                        <h2 className="text-2xl font-bold mb-6">Assessor Dashboard</h2>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                            <button onClick={() => { setFlowMode('MANUAL'); setView('batches'); }} className="h-48 bg-white rounded shadow hover:shadow-xl transition-all border-l-8 border-indigo-600 flex flex-col items-center justify-center gap-4 group">
-                                <div className="bg-indigo-100 p-4 rounded-full group-hover:bg-indigo-200 transition-colors">
-                                    <Icons.FileText className="w-12 h-12 text-indigo-700" />
-                                </div>
-                                <div className="text-center">
-                                    <h3 className="text-xl font-bold text-gray-800">Capture Evidence</h3>
-                                    <p className="text-gray-800">Capture photos & videos</p>
-                                </div>
-                            </button>
-
-                            <button onClick={() => { setFlowMode('VIVA'); setView('batches'); }} className="h-48 bg-white rounded shadow hover:shadow-xl transition-all border-l-8 border-green-600 flex flex-col items-center justify-center gap-4 group">
-                                <div className="bg-green-100 p-4 rounded-full group-hover:bg-green-200 transition-colors">
-                                    <Icons.Video className="w-12 h-12 text-green-700" />
-                                </div>
-                                <div className="text-center">
-                                    <h3 className="text-xl font-bold text-gray-800">Live Viva Lobby</h3>
-                                    <p className="text-gray-800">Join virtual assessment room</p>
-                                </div>
-                            </button>
+            return (
+                <div className="min-h-screen bg-secondary-50 flex items-center justify-center p-8 animate-fade-in">
+                    <div className="max-w-2xl w-full text-center">
+                        {/* Logo/Icon */}
+                        <div className="w-24 h-24 bg-indigo-100 rounded-3xl flex items-center justify-center mx-auto mb-8 shadow-xl shadow-indigo-100">
+                            <Icons.ClipboardList className="w-12 h-12 text-indigo-600" />
                         </div>
 
+                        {/* Greeting */}
+                        <h1 className="text-4xl font-extrabold text-secondary-900 tracking-tight mb-3">
+                            Assessor Portal
+                        </h1>
+                        <p className="text-lg text-secondary-600 mb-2">
+                            Welcome, <span className="text-indigo-600 font-bold">{user.name}</span>
+                        </p>
+                        <p className="text-sm text-secondary-400 mb-10">
+                            The new assessor workflow is being set up. Please check back shortly.
+                        </p>
 
-
-                    </div>
-                );
-            }
-
-
-            // VIEW 2: SELECT BATCH (Common for both flows)
-            if (view === 'batches') {
-                return (
-                    <div className="p-8">
-                        <button onClick={() => setView('dashboard')} className="mb-6 text-gray-800 hover:text-gray-800 flex items-center gap-1 font-bold text-lg">&larr; Back to Dashboard</button>
-                        <h2 className="text-2xl font-bold mb-6">Select Batch for {flowMode === 'MANUAL' ? 'Capture Evidence' : 'Viva'}</h2>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                            {batches.map(batch => (
-                                <div key={batch.id} onClick={() => {
-                                    setSelectedBatch(batch);
-                                    if (flowMode === 'MANUAL') setView('exam_type'); // Manual: Batch -> Exam Type
-                                    else { setShowVivaLobby(true); } // Viva: Batch -> Lobby (Zoom)
-                                }}
-                                    className="bg-white p-6 rounded shadow cursor-pointer hover:border-indigo-500 border-2 border-transparent transition-all">
-                                    <h3 className="font-bold text-lg mb-1">{String(batch.name)}</h3>
-                                    <p className="text-xs text-gray-800 mb-4">ID: {String(batch.batchId || batch.id)}</p>
-                                    <div className="flex items-center gap-2 text-sm text-gray-600">
-                                        <span>{window.Utils.getStudentsByBatch(batch.id).length} Students</span>
-                                    </div>
-                                </div>
-                            ))}
-                            {batches.length === 0 && <p className="text-gray-800">No batches found.</p>}
+                        {/* Status pill */}
+                        <div className="inline-flex items-center gap-3 bg-white border border-indigo-100 rounded-2xl px-6 py-3 shadow-sm">
+                            <div className="w-2.5 h-2.5 bg-amber-400 rounded-full animate-pulse"></div>
+                            <span className="text-sm font-bold text-secondary-700 uppercase tracking-widest">New Flow Coming Soon</span>
                         </div>
                     </div>
-                );
-            }
-
-            // VIEW 3: SELECT STUDENT (Moved before Exam Type as requested)
-            if (view === 'students') {
-                return (
-                    <div className="p-8">
-                        <button onClick={() => setView('exam_type')} className="mb-6 text-gray-800 hover:text-gray-800 flex items-center gap-1 font-bold text-lg">&larr; Back to Exam Type</button>
-                        <h2 className="text-2xl font-bold mb-2">Select Student for {selectedExamType}</h2>
-                        <div className="flex gap-2 mb-6 text-sm">
-                            <span className="bg-gray-200 px-2 py-1 rounded text-gray-700">{selectedBatch.name}</span>
-                            <span className="bg-indigo-100 text-indigo-700 px-2 py-1 rounded font-bold">{selectedExamType}</span>
-                        </div>
-
-                        <div className="bg-white rounded shadow text-sm">
-                            <div className="p-4 border-b font-bold bg-gray-50 flex justify-between">
-                                <span>Student Name</span>
-                                <span>Action</span>
-                            </div>
-                            {batchStudents.map(s => (
-                                <div key={s.id} onClick={() => { setSelectedStudent(s); setView('capture'); }}
-                                    className="p-4 border-b hover:bg-indigo-50 cursor-pointer flex justify-between items-center group transition-colors">
-                                    <div className="flex items-center gap-3">
-                                        <div className="w-8 h-8 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center font-bold group-hover:bg-indigo-200 group-hover:text-indigo-700 transition-colors">
-                                            {s.name.charAt(0)}
-                                        </div>
-                                        <div>
-                                            <p className="font-medium">{s.name}</p>
-                                            <p className="text-xs text-gray-700">{s.username}</p>
-                                        </div>
-                                    </div>
-                                    <span className="text-indigo-600 font-bold opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1">
-                                        <Icons.ChevronRight className="w-4 h-4" /> Select
-                                    </span>
-                                </div>
-                            ))}
-                            {batchStudents.length === 0 && <p className="p-8 text-center text-gray-800">No students found in this batch.</p>}
-                        </div>
-                    </div>
-                );
-            }
-
-            // VIEW 4: SELECT EXAM TYPE (Moved after Student as requested)
-            if (view === 'exam_type') {
-                return (
-                    <div className="p-8">
-                        <button onClick={() => setView('batches')} className="mb-6 text-gray-800 hover:text-gray-800 flex items-center gap-1 font-bold text-lg">&larr; Back to Batches</button>
-                        <h2 className="text-2xl font-bold mb-2">Select Assessment Type</h2>
-                        <div className="flex gap-2 mb-6 text-sm">
-                            <span className="bg-gray-200 px-2 py-1 rounded text-gray-700">{selectedBatch.name}</span>
-                        </div>
-
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                            {['Theory', 'Practical', 'Viva'].map(type => (
-                                <button key={type} onClick={() => { setSelectedExamType(type); setView('students'); }}
-                                    className="bg-white p-8 rounded shadow hover:shadow-lg transition-all text-left group border-t-4 border-indigo-500">
-                                    <h3 className="text-xl font-bold group-hover:text-indigo-600 transition-colors mb-2">{type}</h3>
-                                    <p className="text-sm text-gray-800">Capture evidence for {type}.</p>
-                                </button>
-                            ))}
-                        </div>
-                    </div>
-                );
-            }
-
-            // VIEW 5: CAPTURE INTERFACE (StudentGradingView)
-            if (view === 'capture') {
-                return (
-                    <div className="p-8">
-                        <StudentGradingView
-                            student={selectedStudent}
-                            batch={selectedBatch}
-                            examType={selectedExamType}
-                            allQPapers={allQPapers}
-                            onBack={() => setView('students')}
-                            captureOnly={true} // Hide grading controls
-                        />
-                    </div>
-                );
-            }
-
-            return <div>Unknown View</div>;
+                </div>
+            );
         };
+
+
+
 
 
         // SYNC STATUS HUD COMPONENT (v17.15)
