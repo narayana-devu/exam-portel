@@ -13519,18 +13519,92 @@
         // ════════════════════════════════════════════════════════════
         // ASSESSOR PORTAL — Main Component (ALL hooks at top)
         // ════════════════════════════════════════════════════════════
+        const recDb = {
+            dbName: 'AssessorVideosDB',
+            storeName: 'videos',
+            getDb() {
+                return new Promise((resolve, reject) => {
+                    const req = indexedDB.open(this.dbName, 1);
+                    req.onupgradeneeded = () => { req.result.createObjectStore(this.storeName); };
+                    req.onsuccess = () => resolve(req.result);
+                    req.onerror = () => reject(req.error);
+                });
+            },
+            async saveVideoChunks(studentId, chunks) {
+                try {
+                    const db = await this.getDb();
+                    return new Promise((resolve, reject) => {
+                        const tx = db.transaction(this.storeName, 'readwrite');
+                        const store = tx.objectStore(this.storeName);
+                        store.put(chunks, studentId);
+                        tx.oncomplete = () => resolve();
+                        tx.onerror = () => reject(tx.error);
+                    });
+                } catch(e) { console.error('DB save error:', e); }
+            },
+            async loadVideoChunks(studentId) {
+                try {
+                    const db = await this.getDb();
+                    return new Promise((resolve, reject) => {
+                        const tx = db.transaction(this.storeName, 'readonly');
+                        const store = tx.objectStore(this.storeName);
+                        const req = store.get(studentId);
+                        tx.oncomplete = () => resolve(req.result || null);
+                        tx.onerror = () => reject(tx.error);
+                    });
+                } catch(e) { return null; }
+            },
+            async clearAll() {
+                try {
+                    const db = await this.getDb();
+                    return new Promise((resolve, reject) => {
+                        const tx = db.transaction(this.storeName, 'readwrite');
+                        const store = tx.objectStore(this.storeName);
+                        store.clear();
+                        tx.oncomplete = () => resolve();
+                        tx.onerror = () => reject(tx.error);
+                    });
+                } catch(e) {}
+            }
+        };
+
         const AssessorPortal = ({ user, handleLogout }) => {
             // ── ALL HOOKS AT TOP LEVEL (Rules of Hooks) ──
-            const [view, setView] = useState('dashboard');
+            const [view, setView] = useState(() => localStorage.getItem('assessor_view') || 'dashboard');
             const [batches, setBatches] = useState([]);
-            const [selectedBatch, setSelectedBatch] = useState(null);
+            const [selectedBatch, setSelectedBatch] = useState(() => {
+                try {
+                    const val = localStorage.getItem('assessor_selected_batch');
+                    return val ? JSON.parse(val) : null;
+                } catch(e) { return null; }
+            });
             const [batchStudents, setBatchStudents] = useState([]);
-            const [centerPhotos, setCenterPhotos] = useState({});
-            const [attendance, setAttendance] = useState({});
-            const [practicalScores, setPracticalScores] = useState({});
+            const [centerPhotos, setCenterPhotos] = useState(() => {
+                try {
+                    const val = localStorage.getItem('assessor_center_photos');
+                    return val ? JSON.parse(val) : {};
+                } catch(e) { return {}; }
+            });
+            const [attendance, setAttendance] = useState(() => {
+                try {
+                    const val = localStorage.getItem('assessor_attendance');
+                    return val ? JSON.parse(val) : {};
+                } catch(e) { return {}; }
+            });
+            const [practicalScores, setPracticalScores] = useState(() => {
+                try {
+                    const val = localStorage.getItem('assessor_practical_scores');
+                    return val ? JSON.parse(val) : {};
+                } catch(e) { return {}; }
+            });
             const [practicalQIdx, setPracticalQIdx] = useState(0);
             const [practicalQuestions, setPracticalQuestions] = useState([]);
-            const [vivaScores, setVivaScores] = useState({});
+            const [vivaScores, setVivaScores] = useState(() => {
+                try {
+                    const val = localStorage.getItem('assessor_viva_scores');
+                    return val ? JSON.parse(val) : {};
+                } catch(e) { return {}; }
+            });
             const [vivaQIdx, setVivaQIdx] = useState(0);
             const [vivaQuestions, setVivaQuestions] = useState([]);
             const [cameraActive, setCameraActive] = useState(false);
@@ -13539,9 +13613,19 @@
             const [activeStudent, setActiveStudent] = useState(null);
             const [attendanceModalStudent, setAttendanceModalStudent] = useState(null);
             // ── Per-candidate recording state (Practical only) ──
-            const [recState, setRecState] = useState({});      // { [sid]: 'idle'|'recording'|'paused'|'done' }
-            const [recDuration, setRecDuration] = useState({}); // { [sid]: seconds }
-            const [recVideoUrl, setRecVideoUrl] = useState({}); // { [sid]: blobUrl }
+            const [recState, setRecState] = useState(() => {
+                try {
+                    const val = localStorage.getItem('assessor_rec_state');
+                    return val ? JSON.parse(val) : {};
+                } catch(e) { return {}; }
+            });
+            const [recDuration, setRecDuration] = useState(() => {
+                try {
+                    const val = localStorage.getItem('assessor_rec_duration');
+                    return val ? JSON.parse(val) : {};
+                } catch(e) { return {}; }
+            });
+            const [recVideoUrl, setRecVideoUrl] = useState({});
 
             const videoRef = React.useRef(null);
             const frontVideoRef = React.useRef(null);
@@ -13560,14 +13644,50 @@
             // Load batches on mount
             useEffect(() => { setBatches(window.Utils.getBatches()); }, []);
 
+            // Sync states to localStorage
+            useEffect(() => { localStorage.setItem('assessor_view', view); }, [view]);
+            useEffect(() => { localStorage.setItem('assessor_selected_batch', JSON.stringify(selectedBatch)); }, [selectedBatch]);
+            useEffect(() => { localStorage.setItem('assessor_center_photos', JSON.stringify(centerPhotos)); }, [centerPhotos]);
+            useEffect(() => { localStorage.setItem('assessor_attendance', JSON.stringify(attendance)); }, [attendance]);
+            useEffect(() => { localStorage.setItem('assessor_practical_scores', JSON.stringify(practicalScores)); }, [practicalScores]);
+            useEffect(() => { localStorage.setItem('assessor_viva_scores', JSON.stringify(vivaScores)); }, [vivaScores]);
+            useEffect(() => { localStorage.setItem('assessor_rec_state', JSON.stringify(recState)); }, [recState]);
+            useEffect(() => { localStorage.setItem('assessor_rec_duration', JSON.stringify(recDuration)); }, [recDuration]);
+
+            // Restore recorded video chunks from IndexedDB on mount
+            useEffect(() => {
+                const restoreData = async () => {
+                    const restoredState = JSON.parse(localStorage.getItem('assessor_rec_state') || '{}');
+                    const urls = {};
+                    for (const sid of Object.keys(restoredState)) {
+                        const chunks = await recDb.loadVideoChunks(sid);
+                        if (chunks && chunks.length > 0) {
+                            candidateChunksRef.current[sid] = chunks;
+                            if (restoredState[sid] === 'done') {
+                                const blob = new Blob(chunks, { type: 'video/webm' });
+                                urls[sid] = URL.createObjectURL(blob);
+                            }
+                        }
+                    }
+                    setRecVideoUrl(urls);
+                };
+                restoreData();
+            }, []);
+
             // Load students + questions when batch changes
             useEffect(() => {
                 if (!selectedBatch) return;
                 const students = window.Utils.getStudentsByBatch(selectedBatch.id);
                 setBatchStudents(students);
-                const att = {};
-                students.forEach(s => { att[s.id] = { present: null, facePhoto: null, aadhaarPhoto: null }; });
-                setAttendance(att);
+                
+                // Only initialize attendance if not already set or restored from localStorage
+                setAttendance(prev => {
+                    if (prev && Object.keys(prev).length > 0) return prev;
+                    const att = {};
+                    students.forEach(s => { att[s.id] = { present: null, facePhoto: null, aadhaarPhoto: null }; });
+                    return att;
+                });
+
                 const allQPs = window.Utils.getQuestionPapers();
                 const pqp = allQPs.find(q => String(q.id) === String(selectedBatch.practicalPaperId));
                 const vqp = allQPs.find(q => String(q.id) === String(selectedBatch.vivaPaperId));
@@ -13708,7 +13828,13 @@
                     try {
                         const recorder = new MediaRecorder(stream, { mimeType });
                         recorder._sid = sid;
-                        recorder.ondataavailable = e => { if (e.data.size > 0) candidateChunksRef.current[sid].push(e.data); };
+                        recorder.ondataavailable = e => { 
+                            if (e.data.size > 0) {
+                                if (!candidateChunksRef.current[sid]) candidateChunksRef.current[sid] = [];
+                                candidateChunksRef.current[sid].push(e.data);
+                                recDb.saveVideoChunks(sid, candidateChunksRef.current[sid]);
+                            }
+                        };
                         recorder.start(500);
                         practicalRecorderRef.current = recorder;
                     } catch(e) { console.warn('MediaRecorder error:', e.message); return; }
@@ -13734,9 +13860,10 @@
                 clearInterval(recTimerRef.current);
                 activeRecStudentRef.current = null;
                 const recorder = practicalRecorderRef.current;
-                const saveBlob = () => {
+                const saveBlob = async () => {
                     const chunks = candidateChunksRef.current[sid] || [];
                     if (chunks.length > 0) {
+                        await recDb.saveVideoChunks(sid, chunks);
                         const blob = new Blob(chunks, { type: 'video/webm' });
                         const url = URL.createObjectURL(blob);
                         setRecVideoUrl(p => ({ ...p, [sid]: url }));
@@ -13807,6 +13934,18 @@
                             localStorage.setItem(DB_KEYS.RESPONSES, JSON.stringify(updatedResponses));
                         }
                     }
+
+                    // Clear draft states
+                    localStorage.removeItem('assessor_view');
+                    localStorage.removeItem('assessor_selected_batch');
+                    localStorage.removeItem('assessor_center_photos');
+                    localStorage.removeItem('assessor_attendance');
+                    localStorage.removeItem('assessor_practical_scores');
+                    localStorage.removeItem('assessor_viva_scores');
+                    localStorage.removeItem('assessor_rec_state');
+                    localStorage.removeItem('assessor_rec_duration');
+                    await recDb.clearAll();
+
                     setSubmitted(true);
                 } catch(e) {
                     alert('Submission failed: ' + e.message);
@@ -15042,6 +15181,17 @@
 
             const handleLogout = () => {
                 localStorage.removeItem('se_user');
+                localStorage.removeItem('assessor_view');
+                localStorage.removeItem('assessor_selected_batch');
+                localStorage.removeItem('assessor_center_photos');
+                localStorage.removeItem('assessor_attendance');
+                localStorage.removeItem('assessor_practical_scores');
+                localStorage.removeItem('assessor_viva_scores');
+                localStorage.removeItem('assessor_rec_state');
+                localStorage.removeItem('assessor_rec_duration');
+                try {
+                    indexedDB.deleteDatabase('AssessorVideosDB');
+                } catch(e) {}
                 setUser(null);
             };
 
