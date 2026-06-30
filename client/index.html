@@ -8675,10 +8675,25 @@
             const showCamera = captureOnly;
 
             if (examType === 'Theory') {
+                const getEvidenceUrl = (item) => {
+                    let finalUrl = item.img || item.url;
+                    if (finalUrl && finalUrl.includes('amazonaws.com') && !finalUrl.includes('media-stream')) {
+                        try {
+                            const urlObj = new URL(finalUrl);
+                            let s3Key = urlObj.pathname.startsWith('/') ? urlObj.pathname.substring(1) : urlObj.pathname;
+                            s3Key = decodeURIComponent(s3Key);
+                            finalUrl = `${API_BASE}/media-stream?key=${encodeURIComponent(s3Key)}&apiKey=portel_secure_key_2025`;
+                        } catch (e) {
+                            console.error("Proxy URL Parse Error", e);
+                        }
+                    }
+                    return finalUrl;
+                };
+
                 const videoItem = evidence.find(e => e.type === 'VIDEO_FULL_MERGED' || e.isFullVideo || e.type?.includes('VIDEO'));
                 const autoPhotos = evidence.filter(e => e.type === 'AUTO_CAPTURE_PHOTO');
                 const violations = evidence.filter(e => e.type && (e.type.includes('VIOLATION') || e.type.includes('WARNING')));
-                const videoSrc = videoItem ? (videoItem.url || videoItem.img) : null;
+                const videoSrc = videoItem ? getEvidenceUrl(videoItem) : null;
 
                 return (
                     <div className="space-y-6">
@@ -8768,14 +8783,20 @@
                                     </h4>
                                     {autoPhotos.length > 0 ? (
                                         <div className="grid grid-cols-3 gap-3 max-h-60 overflow-y-auto pr-1">
-                                            {autoPhotos.map((item, idx) => (
-                                                <div key={idx} className="relative aspect-video rounded-xl overflow-hidden border bg-secondary-50 group hover:shadow-md transition-shadow">
-                                                    <img src={item.url || item.img} className="w-full h-full object-cover" onClick={() => window.open(item.url || item.img, '_blank')} style={{ cursor: 'pointer' }} />
-                                                    <div className="absolute bottom-0 inset-x-0 bg-black/60 text-white text-[8px] font-bold text-center py-0.5">
-                                                        {new Date(item.time).toLocaleTimeString()}
+                                            {autoPhotos.map((item, idx) => {
+                                                const srcUrl = getEvidenceUrl(item);
+                                                return (
+                                                    <div key={idx} className="relative aspect-video rounded-xl overflow-hidden border bg-secondary-50 group hover:shadow-md transition-shadow">
+                                                        <img src={srcUrl} className="w-full h-full object-cover" onClick={() => {
+                                                            const w = window.open("");
+                                                            w.document.write(`<img src="${srcUrl}" style="max-width:100%"/>`);
+                                                        }} style={{ cursor: 'pointer' }} />
+                                                        <div className="absolute bottom-0 inset-x-0 bg-black/60 text-white text-[8px] font-bold text-center py-0.5">
+                                                            {new Date(item.time).toLocaleTimeString()}
+                                                        </div>
                                                     </div>
-                                                </div>
-                                            ))}
+                                                );
+                                            })}
                                         </div>
                                     ) : (
                                         <p className="text-xs text-secondary-400 font-bold text-center py-6">No auto-captured photos found</p>
@@ -8791,11 +8812,15 @@
                                         <div className="space-y-3 max-h-72 overflow-y-auto pr-1">
                                             {violations.map((item, idx) => {
                                                 const isLogOnly = item.type === 'VIOLATION_LOG' || !item.img;
+                                                const srcUrl = isLogOnly ? null : getEvidenceUrl(item);
                                                 return (
                                                     <div key={idx} className={`p-3 rounded-2xl border flex gap-3 items-center ${isLogOnly ? 'bg-amber-50 border-amber-200 text-amber-900' : 'bg-rose-50 border-rose-200 text-rose-900'}`}>
                                                         {!isLogOnly && (
                                                             <div className="w-16 h-12 rounded-lg overflow-hidden border bg-black shrink-0">
-                                                                <img src={item.url || item.img} className="w-full h-full object-cover" onClick={() => window.open(item.url || item.img, '_blank')} style={{ cursor: 'pointer' }} />
+                                                                <img src={srcUrl} className="w-full h-full object-cover" onClick={() => {
+                                                                    const w = window.open("");
+                                                                    w.document.write(`<img src="${srcUrl}" style="max-width:100%"/>`);
+                                                                }} style={{ cursor: 'pointer' }} />
                                                             </div>
                                                         )}
                                                         <div className="flex-1 min-w-0">
