@@ -13519,7 +13519,7 @@
         // ════════════════════════════════════════════════════════════
         // ASSESSOR PORTAL — Main Component (ALL hooks at top)
         // ════════════════════════════════════════════════════════════
-        const AssessorPortal = ({ user }) => {
+        const AssessorPortal = ({ user, handleLogout }) => {
             // ── ALL HOOKS AT TOP LEVEL (Rules of Hooks) ──
             const [view, setView] = useState('dashboard');
             const [batches, setBatches] = useState([]);
@@ -14498,7 +14498,154 @@
                 );
             };
 
-            return null;
+            // Main view selection routing
+            let content = null;
+            if (view === 'dashboard') {
+                content = renderDashboardTab();
+            } else if (view === 'batches') {
+                content = renderBatchesTab();
+            } else if (view === 'practical') {
+                content = renderPracticalTab();
+            } else if (view === 'viva') {
+                content = renderVivaTab();
+            } else if (view === 'documents') {
+                content = renderDocumentsTab();
+            } else if (view === 'submit') {
+                content = renderSubmitTab();
+            }
+
+            // If activeStudent evaluates camera stream, let it take full screen directly for viva / practical evaluations
+            if (activeStudent && (view === 'practical' || view === 'viva')) {
+                return content;
+            }
+
+            return (
+                <div className="flex h-screen bg-secondary-50 overflow-hidden font-sans">
+                    {/* Left Sidebar Navigation */}
+                    <div className="w-64 bg-slate-900 text-slate-100 flex flex-col shrink-0">
+                        {/* Header/Logo */}
+                        <div className="p-6 border-b border-slate-800 flex items-center gap-3">
+                            <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-500/30">
+                                <Icons.ShieldCheck className="w-5 h-5 text-white" />
+                            </div>
+                            <div>
+                                <h2 className="font-extrabold text-sm tracking-tight text-white">KP PORTAL</h2>
+                                <p className="text-[10px] text-indigo-400 font-bold uppercase tracking-wider">Assessor Terminal</p>
+                            </div>
+                        </div>
+
+                        {/* Navigation Links */}
+                        <nav className="flex-1 p-4 space-y-1.5 overflow-y-auto">
+                            <button
+                                onClick={() => setView('dashboard')}
+                                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold transition-all ${view === 'dashboard' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/10' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}
+                            >
+                                <Icons.Grid className="w-4 h-4" /> Dashboard
+                            </button>
+                            <button
+                                onClick={() => setView('batches')}
+                                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold transition-all ${view === 'batches' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/10' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}
+                            >
+                                <Icons.Users className="w-4 h-4" /> Batches
+                            </button>
+                            <button
+                                onClick={() => {
+                                    if (!selectedBatch) {
+                                        alert("Please select a batch first under Batches tab.");
+                                        setView('batches');
+                                    } else {
+                                        setView('practical');
+                                    }
+                                }}
+                                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold transition-all ${view === 'practical' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/10' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}
+                            >
+                                <Icons.GraduationCap className="w-4 h-4" /> Practical
+                            </button>
+                            <button
+                                onClick={() => {
+                                    if (!selectedBatch) {
+                                        alert("Please select a batch first under Batches tab.");
+                                        setView('batches');
+                                    } else {
+                                        setView('viva');
+                                    }
+                                }}
+                                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold transition-all ${view === 'viva' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/10' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}
+                            >
+                                <Icons.Mic className="w-4 h-4" /> Viva Voce
+                            </button>
+                            <button
+                                onClick={() => {
+                                    if (!selectedBatch) {
+                                        alert("Please select a batch first under Batches tab.");
+                                        setView('batches');
+                                    } else {
+                                        setView('documents');
+                                    }
+                                }}
+                                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold transition-all ${view === 'documents' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/10' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}
+                            >
+                                <Icons.FileText className="w-4 h-4" /> Documents
+                            </button>
+                            <button
+                                onClick={() => {
+                                    if (!selectedBatch) {
+                                        alert("Please select a batch first under Batches tab.");
+                                        setView('batches');
+                                    } else {
+                                        setView('submit');
+                                    }
+                                }}
+                                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold transition-all ${view === 'submit' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/10' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}
+                            >
+                                <Icons.Send className="w-4 h-4" /> Review & Submit
+                            </button>
+                        </nav>
+
+                        {/* Footer / User Profile */}
+                        <div className="p-4 border-t border-slate-800 bg-slate-950/40 flex items-center justify-between shrink-0">
+                            <div className="flex items-center gap-3 overflow-hidden">
+                                <div className="w-9 h-9 rounded-xl bg-slate-800 text-indigo-400 flex items-center justify-center font-bold text-sm shrink-0">
+                                    {(user.name || 'A').charAt(0).toUpperCase()}
+                                </div>
+                                <div className="overflow-hidden">
+                                    <p className="text-xs font-bold text-white truncate">{user.name || 'Assessor'}</p>
+                                    <p className="text-[10px] text-slate-500 truncate uppercase">Assessor</p>
+                                </div>
+                            </div>
+                            <button
+                                onClick={handleLogout}
+                                className="p-2 rounded-lg text-slate-500 hover:text-rose-400 hover:bg-slate-800 transition-colors shrink-0"
+                                title="Logout"
+                            >
+                                <Icons.LogOut className="w-4 h-4" />
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Main Content Area */}
+                    <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+                        {/* Top Bar */}
+                        <header className="h-16 bg-white border-b border-secondary-100 flex items-center justify-between px-8 shrink-0 z-10">
+                            <div className="flex items-center gap-2">
+                                <span className="text-xs font-bold text-secondary-400 uppercase tracking-wider">Active Batch:</span>
+                                <span className={`text-xs font-black px-2.5 py-1 rounded-full ${selectedBatch ? 'bg-indigo-50 text-indigo-700' : 'bg-secondary-100 text-secondary-500'}`}>
+                                    {selectedBatch ? selectedBatch.name : 'None Selected'}
+                                </span>
+                            </div>
+                            <div className="flex items-center gap-3">
+                                <div className="w-2.5 h-2.5 bg-emerald-500 rounded-full animate-ping" />
+                                <span className="text-xs font-black text-secondary-500 uppercase tracking-widest">System Online</span>
+                            </div>
+                        </header>
+
+                        {/* Tab Content Router */}
+                        <main className="flex-1 overflow-y-auto bg-slate-50">
+                            {content}
+                        </main>
+                    </div>
+                </div>
+            );
         };
         // SYNC STATUS HUD COMPONENT (v17.15)
         const SyncStatusHUD = () => {
@@ -14660,16 +14807,18 @@
                         <React.Fragment>
                             {user.role === 'admin' && <AdminDashboard />}
                             {user.role === 'student' && <StudentPortal user={user} />}
-                            {user.role === 'assessor' && <AssessorPortal user={user} />}
+                            {user.role === 'assessor' && <AssessorPortal user={user} handleLogout={handleLogout} />}
 
                             {/* Global Logout for Safety */}
-                            <button
-                                onClick={handleLogout}
-                                className="fixed bottom-4 left-4 z-[100] bg-red-600 text-white px-4 py-2 rounded-full shadow-lg text-xs font-bold opacity-50 hover:opacity-100 transition-opacity"
-                                title="Logout"
-                            >
-                                <Icons.Lock className="w-4 h-4 inline mr-1" /> Logout
-                            </button>
+                            {user.role !== 'assessor' && (
+                                <button
+                                    onClick={handleLogout}
+                                    className="fixed bottom-4 left-4 z-[100] bg-red-600 text-white px-4 py-2 rounded-full shadow-lg text-xs font-bold opacity-50 hover:opacity-100 transition-opacity"
+                                    title="Logout"
+                                >
+                                    <Icons.Lock className="w-4 h-4 inline mr-1" /> Logout
+                                </button>
+                            )}
 
                             <SyncStatusHUD />
                         </React.Fragment>
