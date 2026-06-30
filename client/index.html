@@ -13538,6 +13538,10 @@
             const [submitting, setSubmitting] = useState(false);
             const [activeStudent, setActiveStudent] = useState(null);
             const [attendanceModalStudent, setAttendanceModalStudent] = useState(null);
+            // ── Per-candidate recording state (Practical only) ──
+            const [recState, setRecState] = useState({});      // { [sid]: 'idle'|'recording'|'paused'|'done' }
+            const [recDuration, setRecDuration] = useState({}); // { [sid]: seconds }
+            const [recVideoUrl, setRecVideoUrl] = useState({}); // { [sid]: blobUrl }
 
             const videoRef = React.useRef(null);
             const frontVideoRef = React.useRef(null);
@@ -13545,6 +13549,10 @@
             const mediaStreamRef = React.useRef(null);
             const frontStreamRef = React.useRef(null);
             const backStreamRef = React.useRef(null);
+            const practicalRecorderRef = React.useRef(null); // active MediaRecorder
+            const candidateChunksRef = React.useRef({});     // { [sid]: Blob[] }
+            const activeRecStudentRef = React.useRef(null);  // which student is recording
+            const recTimerRef = React.useRef(null);          // setInterval for duration
 
             const STEPS = ['Dashboard', 'Center Photos', 'Attendance', 'Practical', 'Viva', 'Submit'];
             const stepIndex = { dashboard: 0, center_photos: 1, attendance: 2, practical: 3, viva: 4, submit: 5 };
@@ -13666,6 +13674,82 @@
             };
 
             const calcTotal = (scores) => Object.values(scores || {}).reduce((s, v) => s + (parseFloat(v) || 0), 0);
+
+            // ── Recording helpers (Practical only) ──
+            const fmtDuration = (secs) => {
+                const m = Math.floor(secs / 60).toString().padStart(2, '0');
+                const s = (secs % 60).toString().padStart(2, '0');
+                return `${m}:${s}`;
+            };
+
+            const startCandidateRec = async (sid) => {
+                // Auto-pause whoever is currently recording
+                if (activeRecStudentRef.current && activeRecStudentRef.current !== sid) {
+                    const prevId = activeRecStudentRef.current;
+                    clearInterval(recTimerRef.current);
+                    if (practicalRecorderRef.current?._sid === prevId && practicalRecorderRef.current?.state === 'recording') {
+                        practicalRecorderRef.current.pause();
+                    }
+                    activeRecStudentRef.current = null;
+                    setRecState(p => ({ ...p, [prevId]: 'paused' }));
+                }
+                // Ensure camera is live
+                if (!mediaStreamRef.current) await startSingleCamera('environment');
+                const stream = mediaStreamRef.current;
+                if (!stream) { alert('Camera not available. Please allow camera access.'); return; }
+
+                // Resume paused recorder for same student
+                if (practicalRecorderRef.current?._sid === sid && practicalRecorderRef.current?.state === 'paused') {
+                    practicalRecorderRef.current.resume();
+                } else {
+                    // New recorder for this student
+                    if (!candidateChunksRef.current[sid]) candidateChunksRef.current[sid] = [];
+                    const mimeType = (typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported('video/webm;codecs=vp8')) ? 'video/webm;codecs=vp8' : 'video/webm';
+                    try {
+                        const recorder = new MediaRecorder(stream, { mimeType });
+                        recorder._sid = sid;
+                        recorder.ondataavailable = e => { if (e.data.size > 0) candidateChunksRef.current[sid].push(e.data); };
+                        recorder.start(500);
+                        practicalRecorderRef.current = recorder;
+                    } catch(e) { console.warn('MediaRecorder error:', e.message); return; }
+                }
+                activeRecStudentRef.current = sid;
+                setRecState(p => ({ ...p, [sid]: 'recording' }));
+                clearInterval(recTimerRef.current);
+                recTimerRef.current = setInterval(() => {
+                    setRecDuration(p => ({ ...p, [sid]: (p[sid] || 0) + 1 }));
+                }, 1000);
+            };
+
+            const pauseCandidateRec = (sid) => {
+                clearInterval(recTimerRef.current);
+                if (practicalRecorderRef.current?._sid === sid && practicalRecorderRef.current?.state === 'recording') {
+                    practicalRecorderRef.current.pause();
+                }
+                activeRecStudentRef.current = null;
+                setRecState(p => ({ ...p, [sid]: 'paused' }));
+            };
+
+            const finishCandidateRec = (sid) => {
+                clearInterval(recTimerRef.current);
+                activeRecStudentRef.current = null;
+                const recorder = practicalRecorderRef.current;
+                const saveBlob = () => {
+                    const chunks = candidateChunksRef.current[sid] || [];
+                    if (chunks.length > 0) {
+                        const blob = new Blob(chunks, { type: 'video/webm' });
+                        const url = URL.createObjectURL(blob);
+                        setRecVideoUrl(p => ({ ...p, [sid]: url }));
+                    }
+                    setRecState(p => ({ ...p, [sid]: 'done' }));
+                };
+                if (recorder && recorder._sid === sid && recorder.state !== 'inactive') {
+                    recorder.onstop = saveBlob;
+                    recorder.stop();
+                } else {
+                    saveBlob();
+                }
+            };
 
             const handleSubmit = async () => {
                 setSubmitting(true);
@@ -14187,39 +14271,131 @@
                             <p className="text-secondary-600 text-sm">Batch: <span className="font-bold text-indigo-600">{selectedBatch.name}</span></p>
                         </div>
                         
-                        <div className="bg-white rounded-3xl border border-secondary-100 p-6 shadow-sm space-y-4">
-                            <h2 className="text-base font-bold text-secondary-900">Select candidate to score Practical exam</h2>
-                            <div className="divide-y divide-secondary-100">
+                        <div className="bg-white rounded-3xl border border-secondary-100 shadow-sm overflow-hidden">
+                            <div className="px-6 py-4 border-b border-secondary-100 flex items-center justify-between">
+                                <h2 className="text-base font-bold text-secondary-900">Candidates — Record & Score</h2>
+                                <span className="text-xs text-secondary-400 font-bold uppercase tracking-wider">Practical Exam</span>
+                            </div>
+                            <div className="divide-y divide-secondary-50">
                                 {presentStudents.map(s => {
                                     const scores = practicalScores[s.id] || {};
                                     const count = Object.keys(scores).length;
                                     const isDone = count === practicalQuestions.length && practicalQuestions.length > 0;
+                                    const rs = recState[s.id] || 'idle';
+                                    const dur = recDuration[s.id] || 0;
+                                    const videoUrl = recVideoUrl[s.id];
+                                    const isActiveRec = activeRecStudentRef.current === s.id;
 
                                     return (
-                                        <div key={s.id} className="py-4 flex items-center justify-between flex-wrap gap-2">
-                                            <div className="flex items-center gap-3">
-                                                <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-700 flex items-center justify-center font-bold">
+                                        <div key={s.id} className={`px-6 py-4 flex items-center justify-between gap-3 flex-wrap transition-colors ${isActiveRec ? 'bg-rose-50/60' : 'hover:bg-secondary-50/50'}`}>
+                                            {/* Avatar + Name */}
+                                            <div className="flex items-center gap-3 min-w-0">
+                                                <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold text-sm shrink-0 ${rs === 'recording' ? 'bg-rose-100 text-rose-700 ring-2 ring-rose-400 ring-offset-1' : rs === 'paused' ? 'bg-amber-100 text-amber-700' : rs === 'done' ? 'bg-emerald-100 text-emerald-700' : 'bg-indigo-50 text-indigo-700'}`}>
                                                     {(s.name || s.username || 'S').charAt(0).toUpperCase()}
                                                 </div>
-                                                <div>
-                                                    <p className="font-bold text-secondary-900">{s.name || s.username}</p>
-                                                    <p className="text-xs text-secondary-500">Scored: {count}/{practicalQuestions.length} questions</p>
+                                                <div className="min-w-0">
+                                                    <p className="font-bold text-secondary-900 truncate">{s.name || s.username}</p>
+                                                    <p className="text-xs text-secondary-500">Marks: {count}/{practicalQuestions.length} scored</p>
                                                 </div>
                                             </div>
-                                            <button
-                                                onClick={() => {
-                                                    setActiveStudent(s);
-                                                    setPracticalQIdx(0);
-                                                }}
-                                                className={`px-5 py-2 rounded-xl text-xs font-bold border transition-all ${isDone ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-indigo-600 text-white border-indigo-500 hover:bg-indigo-700'}`}
-                                            >
-                                                {isDone ? 'Edit Marks' : 'Evaluate'}
-                                            </button>
+
+                                            {/* Controls */}
+                                            <div className="flex items-center gap-2 shrink-0 flex-wrap">
+                                                {/* Duration badge */}
+                                                {rs !== 'idle' && (
+                                                    <span className={`text-xs font-black px-2.5 py-1 rounded-full flex items-center gap-1.5 ${
+                                                        rs === 'recording' ? 'bg-rose-100 text-rose-600' :
+                                                        rs === 'paused' ? 'bg-amber-100 text-amber-700' :
+                                                        'bg-emerald-100 text-emerald-700'
+                                                    }`}>
+                                                        {rs === 'recording' && <span className="w-1.5 h-1.5 bg-rose-500 rounded-full animate-pulse inline-block" />}
+                                                        {fmtDuration(dur)}
+                                                    </span>
+                                                )}
+
+                                                {/* IDLE: Record button */}
+                                                {rs === 'idle' && (
+                                                    <button onClick={() => startCandidateRec(s.id)}
+                                                        className="flex items-center gap-1.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold px-3 py-2 rounded-xl transition-all active:scale-95 shadow-sm shadow-rose-200">
+                                                        <Icons.Video className="w-3.5 h-3.5" /> Record
+                                                    </button>
+                                                )}
+
+                                                {/* RECORDING: Pause + Done */}
+                                                {rs === 'recording' && (
+                                                    <>
+                                                        <button onClick={() => pauseCandidateRec(s.id)}
+                                                            className="flex items-center gap-1.5 bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold px-3 py-2 rounded-xl transition-all active:scale-95">
+                                                            <Icons.Square className="w-3.5 h-3.5" /> Pause
+                                                        </button>
+                                                        <button onClick={() => finishCandidateRec(s.id)}
+                                                            className="flex items-center gap-1.5 bg-slate-700 hover:bg-slate-800 text-white text-xs font-bold px-3 py-2 rounded-xl transition-all active:scale-95">
+                                                            <Icons.Check className="w-3.5 h-3.5" /> Done
+                                                        </button>
+                                                    </>
+                                                )}
+
+                                                {/* PAUSED: Resume + Done */}
+                                                {rs === 'paused' && (
+                                                    <>
+                                                        <button onClick={() => startCandidateRec(s.id)}
+                                                            className="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold px-3 py-2 rounded-xl transition-all active:scale-95 shadow-sm shadow-indigo-200">
+                                                            <Icons.Play className="w-3.5 h-3.5" /> Resume
+                                                        </button>
+                                                        <button onClick={() => finishCandidateRec(s.id)}
+                                                            className="flex items-center gap-1.5 bg-slate-700 hover:bg-slate-800 text-white text-xs font-bold px-3 py-2 rounded-xl transition-all active:scale-95">
+                                                            <Icons.Check className="w-3.5 h-3.5" /> Done
+                                                        </button>
+                                                    </>
+                                                )}
+
+                                                {/* DONE: Download + recorded badge */}
+                                                {rs === 'done' && (
+                                                    <>
+                                                        <span className="text-xs text-emerald-600 font-bold flex items-center gap-1">
+                                                            <Icons.CheckCircle className="w-3.5 h-3.5" /> Recorded
+                                                        </span>
+                                                        {videoUrl && (
+                                                            <a href={videoUrl} download={`${(s.name || s.id).replace(/\s+/g,'_')}_practical.webm`}
+                                                                className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-3 py-2 rounded-xl transition-all active:scale-95">
+                                                                <Icons.Download className="w-3.5 h-3.5" /> Save
+                                                            </a>
+                                                        )}
+                                                    </>
+                                                )}
+
+                                                {/* Marks button — always visible */}
+                                                <button
+                                                    onClick={() => { setActiveStudent(s); setPracticalQIdx(0); }}
+                                                    className={`px-4 py-2 rounded-xl text-xs font-bold border transition-all ${
+                                                        isDone ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
+                                                        'bg-indigo-600 text-white border-indigo-500 hover:bg-indigo-700'
+                                                    }`}>
+                                                    {isDone ? '✓ Marks' : 'Enter Marks'}
+                                                </button>
+                                            </div>
                                         </div>
                                     );
                                 })}
                             </div>
                         </div>
+
+                        {/* Floating camera preview strip — shown when any candidate is recording */}
+                        {Object.values(recState).some(rs => rs === 'recording') && (
+                            <div className="fixed bottom-0 left-64 right-0 bg-slate-900 border-t border-slate-700 flex items-center gap-4 px-6 py-3 z-50 shadow-2xl">
+                                <div className="w-2.5 h-2.5 bg-rose-500 rounded-full animate-pulse shrink-0" />
+                                <span className="text-rose-400 text-xs font-black uppercase tracking-wider shrink-0">Recording Live</span>
+                                <video ref={videoRef} autoPlay muted playsInline className="h-20 w-auto rounded-xl object-cover border border-slate-600" />
+                                <div className="flex-1 min-w-0">
+                                    <p className="text-white text-xs font-bold">Camera Preview</p>
+                                    <p className="text-slate-400 text-[10px] mt-0.5">Recording in progress. Pause anytime to switch candidates.</p>
+                                </div>
+                                <button onClick={() => startSingleCamera(cameraActive ? 'user' : 'environment')}
+                                    className="bg-slate-700 hover:bg-slate-600 text-white p-2 rounded-xl transition-colors shrink-0" title="Flip Camera">
+                                    <Icons.RefreshCw className="w-4 h-4" />
+                                </button>
+                            </div>
+                        )}
                     </div>
                 );
             };
