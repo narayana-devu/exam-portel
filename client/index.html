@@ -13525,7 +13525,6 @@
             const [batches, setBatches] = useState([]);
             const [selectedBatch, setSelectedBatch] = useState(null);
             const [batchStudents, setBatchStudents] = useState([]);
-            const [currentStudentIdx, setCurrentStudentIdx] = useState(0);
             const [centerPhotos, setCenterPhotos] = useState({});
             const [attendance, setAttendance] = useState({});
             const [practicalScores, setPracticalScores] = useState({});
@@ -13537,6 +13536,8 @@
             const [cameraActive, setCameraActive] = useState(false);
             const [submitted, setSubmitted] = useState(false);
             const [submitting, setSubmitting] = useState(false);
+            const [activeStudent, setActiveStudent] = useState(null);
+            const [attendanceModalStudent, setAttendanceModalStudent] = useState(null);
 
             const videoRef = React.useRef(null);
             const frontVideoRef = React.useRef(null);
@@ -13566,11 +13567,11 @@
                 setVivaQuestions(vqp ? (vqp.questions || []) : []);
             }, [selectedBatch]);
 
-            // Camera management based on view
+            // Camera management based on view and activeStudent selection
             useEffect(() => {
-                if (view === 'practical') {
+                if (view === 'practical' && activeStudent) {
                     startSingleCamera('environment');
-                } else if (view === 'viva') {
+                } else if (view === 'viva' && activeStudent) {
                     startDualCamera();
                 } else {
                     stopStream(mediaStreamRef);
@@ -13579,10 +13580,11 @@
                     setCameraActive(false);
                 }
                 return () => {
-                    if (view === 'practical') stopStream(mediaStreamRef);
-                    if (view === 'viva') { stopStream(frontStreamRef); stopStream(backStreamRef); }
+                    stopStream(mediaStreamRef);
+                    stopStream(frontStreamRef);
+                    stopStream(backStreamRef);
                 };
-            }, [view]);
+            }, [view, activeStudent]);
 
             // ── Camera helpers ──
             const stopStream = (ref) => {
@@ -13641,7 +13643,6 @@
                         const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
                         backStreamRef.current = stream;
                         if (backVideoRef.current) backVideoRef.current.srcObject = stream;
-                        if (frontVideoRef.current) frontVideoRef.current.srcObject = stream;
                         setCameraActive(true);
                     } catch(e2) { console.warn('Dual camera not available:', e2.message); }
                 }
@@ -13664,31 +13665,326 @@
                 } catch(e) { return dataUrl; }
             };
 
-            // ── Shared step bar ──
-            const StepBar = () => (
-                <div className="flex items-center justify-center gap-1 mb-8 flex-wrap">
-                    {STEPS.map((s, i) => {
-                        const cur = stepIndex[view] ?? 0;
-                        const done = i < cur;
-                        const active = i === cur;
-                        return (
-                            <React.Fragment key={s}>
-                                <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition-all ${active ? 'bg-indigo-600 text-white shadow-lg' : done ? 'bg-emerald-100 text-emerald-700' : 'bg-secondary-100 text-secondary-400'}`}>
-                                    {done ? <Icons.CheckCircle className="w-3.5 h-3.5" /> : <span>{i + 1}</span>}
-                                    {s}
-                                </div>
-                                {i < STEPS.length - 1 && <div className={`w-4 h-0.5 ${i < cur ? 'bg-emerald-400' : 'bg-secondary-200'}`} />}
-                            </React.Fragment>
-                        );
-                    })}
-                </div>
-            );
+            const calcTotal = (scores) => Object.values(scores || {}).reduce((s, v) => s + (parseFloat(v) || 0), 0);
+
+            const handleSubmit = async () => {
+                setSubmitting(true);
+                try {
+                    const token = localStorage.getItem('se_token');
+                    const responsesToSync = [];
+                    const localResponses = window.Utils.getResponses();
+
+                    for (const student of presentStudents) {
+                        const payload = {
+                            id: `assessor_${student.id}_${Date.now()}`,
+                            studentId: student.id,
+                            batchId: selectedBatch.id,
+                            examType: 'AssessorSubmit',
+                            assessorId: user.id,
+                            attendance: attendance[student.id] || { present: true, facePhoto: null, aadhaarPhoto: null },
+                            practicalScores: practicalScores[student.id] || {},
+                            vivaScores: vivaScores[student.id] || {},
+                            practicalTotal: calcTotal(practicalScores[student.id]),
+                            vivaTotal: calcTotal(vivaScores[student.id]),
+                            submittedAt: new Date().toISOString(),
+                            synced: false
+                        };
+                        
+                        // Upsert locally
+                        const idx = localResponses.findIndex(r => r.studentId === student.id && r.batchId === selectedBatch.id);
+                        if (idx >= 0) {
+                            localResponses[idx] = payload;
+                        } else {
+                            localResponses.push(payload);
+                        }
+                        responsesToSync.push(payload);
+                    }
+                    
+                    localStorage.setItem(DB_KEYS.RESPONSES, JSON.stringify(localResponses));
+
+                    // Sync to S3/Server
+                    if (navigator.onLine) {
+                        const syncRes = await fetch(`/api/sync/responses`, {
+                            method: 'POST',
+                            headers: { 
+                                'Content-Type': 'application/json', 
+                                'Authorization': `Bearer ${token}`,
+                                'x-api-key': 'portel_secure_key_2025'
+                            },
+                            body: JSON.stringify({ responses: responsesToSync })
+                        });
+                        if (syncRes.ok) {
+                            // Mark synced locally
+                            const updatedResponses = window.Utils.getResponses();
+                            responsesToSync.forEach(syncedItem => {
+                                const matched = updatedResponses.find(r => r.id === syncedItem.id);
+                                if (matched) matched.synced = true;
+                            });
+                            localStorage.setItem(DB_KEYS.RESPONSES, JSON.stringify(updatedResponses));
+                        }
+                    }
+                    setSubmitted(true);
+                } catch(e) {
+                    alert('Submission failed: ' + e.message);
+                } finally {
+                    setSubmitting(false);
+                }
+            };
 
             const presentStudents = batchStudents.filter(s => attendance[s.id]?.present === true);
-            const currentStudent = presentStudents[currentStudentIdx];
+            const currentStudentIdx = activeStudent ? presentStudents.findIndex(s => s.id === activeStudent.id) : 0;
+            const currentStudent = activeStudent || presentStudents[0];
 
-            // ════════════════════ VIEW: DASHBOARD ════════════════════
-            if (view === 'dashboard') {
+            // ════════════════════ TAB: DASHBOARD ════════════════════
+            const renderDashboardTab = () => {
+                const now = Date.now();
+                const live = batches.filter(b => {
+                    if (!b.startDate && !b.endDate) return true;
+                    const s = b.startDate ? new Date(b.startDate) : null;
+                    const e = b.endDate ? new Date(b.endDate) : null;
+                    if (s && e) return s <= now && e >= now;
+                    if (s) return s <= now;
+                    return true;
+                });
+                const upcoming = batches.filter(b => b.startDate && new Date(b.startDate) > now);
+                const completed = batches.filter(b => b.endDate && new Date(b.endDate) < now);
+
+                return (
+                    <div className="p-6 md:p-10 animate-fade-in space-y-8">
+                        <div className="flex items-center gap-4">
+                            <div className="w-14 h-14 bg-indigo-600 rounded-2xl flex items-center justify-center shadow-lg shadow-indigo-200">
+                                <Icons.Grid className="w-7 h-7 text-white" />
+                            </div>
+                            <div>
+                                <h1 className="text-3xl font-extrabold text-secondary-900">Assessor Dashboard</h1>
+                                <p className="text-secondary-600">Welcome, <span className="text-indigo-600 font-bold">{user.name}</span></p>
+                            </div>
+                        </div>
+
+                        {/* Batch Stats */}
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+                            <div className="bg-indigo-50/40 border border-indigo-100/60 rounded-3xl p-6 flex items-center gap-4 shadow-sm">
+                                <div className="w-12 h-12 rounded-2xl bg-indigo-100 flex items-center justify-center text-indigo-600">
+                                    <Icons.PlayCircle className="w-6 h-6" />
+                                </div>
+                                <div>
+                                    <p className="text-2xl font-black text-indigo-900">{live.length}</p>
+                                    <p className="text-xs font-bold text-indigo-600/80 uppercase tracking-wider">Live Batches</p>
+                                </div>
+                            </div>
+                            <div className="bg-amber-50/40 border border-amber-100/60 rounded-3xl p-6 flex items-center gap-4 shadow-sm">
+                                <div className="w-12 h-12 rounded-2xl bg-amber-100 flex items-center justify-center text-amber-600">
+                                    <Icons.Clock className="w-6 h-6" />
+                                </div>
+                                <div>
+                                    <p className="text-2xl font-black text-amber-900">{upcoming.length}</p>
+                                    <p className="text-xs font-bold text-amber-600/80 uppercase tracking-wider">Upcoming</p>
+                                </div>
+                            </div>
+                            <div className="bg-emerald-50/40 border border-emerald-100/60 rounded-3xl p-6 flex items-center gap-4 shadow-sm">
+                                <div className="w-12 h-12 rounded-2xl bg-emerald-100 flex items-center justify-center text-emerald-600">
+                                    <Icons.CheckCircle className="w-6 h-6" />
+                                </div>
+                                <div>
+                                    <p className="text-2xl font-black text-emerald-900">{completed.length}</p>
+                                    <p className="text-xs font-bold text-emerald-600/80 uppercase tracking-wider">Completed</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Overview & Instructions List */}
+                        <div className="grid gap-6 md:grid-cols-2">
+                            <div className="bg-white rounded-3xl border border-secondary-100 p-6 shadow-sm space-y-4">
+                                <h3 className="text-lg font-bold text-secondary-900 flex items-center gap-2">
+                                    <Icons.ClipboardList className="w-5 h-5 text-indigo-600" />
+                                    Assigned Batches Summary
+                                </h3>
+                                <div className="divide-y divide-secondary-100 max-h-[300px] overflow-y-auto pr-2">
+                                    {batches.map(b => {
+                                        const students = window.Utils.getStudentsByBatch(b.id);
+                                        const isCompleted = b.endDate && new Date(b.endDate) < now;
+                                        const isLive = !isCompleted && (!b.startDate || new Date(b.startDate) <= now);
+                                        const statusLabel = isCompleted ? 'Completed' : isLive ? 'Live' : 'Upcoming';
+                                        const statusBg = isCompleted ? 'bg-emerald-100 text-emerald-700' : isLive ? 'bg-indigo-100 text-indigo-700' : 'bg-amber-100 text-amber-700';
+
+                                        return (
+                                            <div key={b.id} className="py-3.5 flex items-center justify-between flex-wrap gap-2">
+                                                <div>
+                                                    <p className="font-bold text-secondary-900 text-sm truncate max-w-[200px]">{b.name}</p>
+                                                    <p className="text-[11px] text-secondary-500">ID: {b.batchId || b.id} · {students.length} Trainees</p>
+                                                </div>
+                                                <div className="flex items-center gap-3">
+                                                    <span className={`text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full ${statusBg}`}>{statusLabel}</span>
+                                                    <button
+                                                        onClick={() => {
+                                                            setSelectedBatch(b);
+                                                            setView('batches');
+                                                        }}
+                                                        className="text-xs font-bold text-indigo-600 hover:text-indigo-800 transition-colors"
+                                                    >
+                                                        Manage
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                    {batches.length === 0 && (
+                                        <p className="text-center text-secondary-400 py-8 text-sm">No batches assigned yet.</p>
+                                    )}
+                                </div>
+                            </div>
+
+                            <div className="bg-white rounded-3xl border border-secondary-100 p-6 shadow-sm space-y-4">
+                                <h3 className="text-lg font-bold text-secondary-900 flex items-center gap-2">
+                                    <Icons.Info className="w-5 h-5 text-indigo-600" />
+                                    Assessor Instructions Guide
+                                </h3>
+                                <ul className="space-y-3 text-sm text-secondary-600">
+                                    <li className="flex gap-2.5">
+                                        <span className="w-5 h-5 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-xs font-black shrink-0">1</span>
+                                        <span>Select active batch from <strong>Assigned Batches</strong>.</span>
+                                    </li>
+                                    <li className="flex gap-2.5">
+                                        <span className="w-5 h-5 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-xs font-black shrink-0">2</span>
+                                        <span>Mark attendance and verify candidate identity with photos.</span>
+                                    </li>
+                                    <li className="flex gap-2.5">
+                                        <span className="w-5 h-5 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-xs font-black shrink-0">3</span>
+                                        <span>Upload attendance sheets and center photos in <strong>Documents</strong>.</span>
+                                    </li>
+                                    <li className="flex gap-2.5">
+                                        <span className="w-5 h-5 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-xs font-black shrink-0">4</span>
+                                        <span>Click <strong>Practical</strong> or <strong>Viva</strong> per trainee to record marks.</span>
+                                    </li>
+                                    <li className="flex gap-2.5">
+                                        <span className="w-5 h-5 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center text-xs font-black shrink-0">5</span>
+                                        <span>Submit final summary report when all evaluations are complete.</span>
+                                    </li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                );
+            };
+
+            // ════════════════════ TAB: BATCHES (LIST & DETAILS) ════════════════════
+            const renderBatchesTab = () => {
+                if (selectedBatch) {
+                    const presentCount = Object.values(attendance).filter(a => a.present === true).length;
+                    const verifiedCount = Object.values(attendance).filter(a => a.present === true && a.facePhoto && a.aadhaarPhoto).length;
+
+                    return (
+                        <div className="p-6 md:p-10 animate-fade-in space-y-6">
+                            {/* Back */}
+                            <button
+                                onClick={() => setSelectedBatch(null)}
+                                className="flex items-center gap-1.5 text-xs font-bold text-secondary-500 hover:text-secondary-800 transition-colors"
+                            >
+                                <Icons.ArrowLeft className="w-3.5 h-3.5" /> Back to Batches List
+                            </button>
+
+                            {/* Batch Info Card */}
+                            <div className="flex justify-between items-center flex-wrap gap-4 bg-white rounded-3xl border border-secondary-100 p-6 shadow-sm">
+                                <div>
+                                    <h1 className="text-2xl font-extrabold text-secondary-900">{selectedBatch.name}</h1>
+                                    <p className="text-xs text-secondary-500 mt-1">
+                                        ID: {selectedBatch.batchId || selectedBatch.id} · Trainees: {batchStudents.length}
+                                    </p>
+                                </div>
+                                <button
+                                    onClick={() => setView('submit')}
+                                    className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-2xl font-black text-xs shadow-lg shadow-indigo-100 active:scale-95 transition-all"
+                                >
+                                    Submit Assessment Summary
+                                </button>
+                            </div>
+
+                            {/* Quick Metrics */}
+                            <div className="grid grid-cols-3 gap-4">
+                                {[
+                                    { label: 'Total Candidates', val: batchStudents.length, color: 'text-secondary-700', bg: 'bg-white' },
+                                    { label: 'Present', val: presentCount, color: 'text-indigo-700', bg: 'bg-indigo-50' },
+                                    { label: 'Verified Identity', val: verifiedCount, color: 'text-emerald-700', bg: 'bg-emerald-50' },
+                                ].map(s => (
+                                    <div key={s.label} className={`${s.bg} rounded-2xl p-4 text-center shadow-sm border border-secondary-100`}>
+                                        <p className={`text-2xl font-black ${s.color}`}>{s.val}</p>
+                                        <p className="text-[10px] text-secondary-500 mt-1 font-bold uppercase tracking-wider">{s.label}</p>
+                                    </div>
+                                ))}
+                            </div>
+
+                            {/* Student Roster */}
+                            <div className="bg-white rounded-3xl border border-secondary-100 p-6 shadow-sm space-y-4">
+                                <h2 className="text-base font-bold text-secondary-900">Candidates Verification & Scoring</h2>
+                                <div className="space-y-4">
+                                    {batchStudents.map(s => {
+                                        const att = attendance[s.id] || { present: null, facePhoto: null, aadhaarPhoto: null };
+                                        const practicalKeys = Object.keys(practicalScores[s.id] || {});
+                                        const vivaKeys = Object.keys(vivaScores[s.id] || {});
+                                        const practicalDone = practicalKeys.length === practicalQuestions.length && practicalQuestions.length > 0;
+                                        const vivaDone = vivaKeys.length === vivaQuestions.length && vivaQuestions.length > 0;
+
+                                        return (
+                                            <div key={s.id} className="border border-secondary-100 rounded-2xl p-4 bg-secondary-50/20 space-y-3">
+                                                <StudentAttendanceRow
+                                                    student={s}
+                                                    att={att}
+                                                    onMarkPresent={(studentId, present) => {
+                                                        setAttendance(prev => ({ ...prev, [studentId]: { ...prev[studentId], present } }));
+                                                    }}
+                                                    onPhoto={(studentId, field, dataUrl) => {
+                                                        setAttendance(prev => ({ ...prev, [studentId]: { ...prev[studentId], [field]: dataUrl } }));
+                                                    }}
+                                                    uploadPhoto={uploadPhoto}
+                                                />
+                                                
+                                                {att.present === true && (
+                                                    <div className="flex gap-4 pl-16 flex-wrap">
+                                                        <button
+                                                            onClick={() => {
+                                                                setActiveStudent(s);
+                                                                setPracticalQIdx(0);
+                                                                setView('practical');
+                                                            }}
+                                                            className="flex items-center gap-2 bg-white hover:bg-indigo-50 text-indigo-700 px-4 py-2.5 rounded-xl text-xs font-bold border border-secondary-200 hover:border-indigo-300 transition-all shadow-sm"
+                                                        >
+                                                            <Icons.MonitorSmartphone className="w-3.5 h-3.5" />
+                                                            {practicalDone ? (
+                                                                <span className="text-emerald-600 font-black flex items-center gap-1">✓ Practical Graded</span>
+                                                            ) : (
+                                                                <span>Practical Exam ({practicalKeys.length}/{practicalQuestions.length})</span>
+                                                            )}
+                                                        </button>
+                                                        <button
+                                                            onClick={() => {
+                                                                setActiveStudent(s);
+                                                                setVivaQIdx(0);
+                                                                setView('viva');
+                                                            }}
+                                                            className="flex items-center gap-2 bg-white hover:bg-violet-50 text-violet-700 px-4 py-2.5 rounded-xl text-xs font-bold border border-secondary-200 hover:border-violet-300 transition-all shadow-sm"
+                                                        >
+                                                            <Icons.Mic className="w-3.5 h-3.5" />
+                                                            {vivaDone ? (
+                                                                <span className="text-emerald-600 font-black flex items-center gap-1">✓ Viva Graded</span>
+                                                            ) : (
+                                                                <span>Viva Exam ({vivaKeys.length}/{vivaQuestions.length})</span>
+                                                            )}
+                                                        </button>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        );
+                                    })}
+                                    {batchStudents.length === 0 && (
+                                        <p className="text-center text-secondary-400 py-8">No candidate records seeded.</p>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    );
+                }
+
+                // Assigned Batches List
                 const now = Date.now();
                 const live = batches.filter(b => {
                     if (!b.startDate && !b.endDate) return true;
@@ -13703,9 +13999,9 @@
 
                 const BatchCard = ({ batch, status }) => {
                     const styles = {
-                        live: 'border-indigo-500 bg-indigo-50',
-                        upcoming: 'border-amber-400 bg-amber-50',
-                        completed: 'border-emerald-400 bg-emerald-50'
+                        live: 'border-indigo-500 bg-indigo-50/30',
+                        upcoming: 'border-amber-400 bg-amber-50/30',
+                        completed: 'border-emerald-400 bg-emerald-50/30'
                     };
                     const pills = {
                         live: 'bg-indigo-100 text-indigo-700',
@@ -13713,8 +14009,8 @@
                         completed: 'bg-emerald-100 text-emerald-700'
                     };
                     return (
-                        <div onClick={() => { setSelectedBatch(batch); setView('center_photos'); }}
-                            className={`bg-white rounded-3xl border-l-4 shadow-lg hover:shadow-xl transition-all cursor-pointer p-6 group ${styles[status]}`}>
+                        <div onClick={() => setSelectedBatch(batch)}
+                            className={`bg-white rounded-3xl border-l-4 shadow-md hover:shadow-lg transition-all cursor-pointer p-6 group ${styles[status]}`}>
                             <div className="flex items-start justify-between mb-4">
                                 <div>
                                     <h3 className="text-lg font-extrabold text-secondary-900 group-hover:text-indigo-700 transition-colors">{batch.name}</h3>
@@ -13727,422 +14023,401 @@
                                 {batch.startDate && <span className="flex items-center gap-1.5"><Icons.Calendar className="w-4 h-4" />{new Date(batch.startDate).toLocaleDateString()}</span>}
                             </div>
                             <div className="mt-4 flex justify-end">
-                                <span className="text-indigo-600 font-bold text-sm flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">Start Assessment <Icons.ArrowRight className="w-4 h-4" /></span>
+                                <span className="text-indigo-600 font-bold text-sm flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">Select & Evaluate <Icons.ArrowRight className="w-4 h-4" /></span>
                             </div>
                         </div>
                     );
                 };
 
                 return (
-                    <div className="min-h-screen bg-secondary-50 p-6 md:p-10 animate-fade-in">
-                        <div className="max-w-4xl mx-auto">
-                            <div className="flex items-center gap-4 mb-10">
-                                <div className="w-14 h-14 bg-indigo-600 rounded-2xl flex items-center justify-center shadow-lg shadow-indigo-200">
-                                    <Icons.ClipboardList className="w-7 h-7 text-white" />
-                                </div>
-                                <div>
-                                    <h1 className="text-3xl font-extrabold text-secondary-900">Assessor Dashboard</h1>
-                                    <p className="text-secondary-600">Welcome, <span className="text-indigo-600 font-bold">{user.name}</span></p>
-                                </div>
+                    <div className="p-6 md:p-10 animate-fade-in space-y-8">
+                        <div className="flex items-center gap-4">
+                            <div className="w-14 h-14 bg-indigo-600 rounded-2xl flex items-center justify-center shadow-lg shadow-indigo-200">
+                                <Icons.ClipboardList className="w-7 h-7 text-white" />
                             </div>
-
-                            {/* Batch Statistics Panel */}
-                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-10">
-                                <div className="bg-indigo-50/40 border border-indigo-100/60 rounded-3xl p-6 flex items-center gap-4 shadow-sm">
-                                    <div className="w-12 h-12 rounded-2xl bg-indigo-100 flex items-center justify-center text-indigo-600">
-                                        <Icons.PlayCircle className="w-6 h-6" />
-                                    </div>
-                                    <div>
-                                        <p className="text-2xl font-black text-indigo-900">{live.length}</p>
-                                        <p className="text-xs font-bold text-indigo-600/80 uppercase tracking-wider">Live Batches</p>
-                                    </div>
-                                </div>
-                                <div className="bg-amber-50/40 border border-amber-100/60 rounded-3xl p-6 flex items-center gap-4 shadow-sm">
-                                    <div className="w-12 h-12 rounded-2xl bg-amber-100 flex items-center justify-center text-amber-600">
-                                        <Icons.Clock className="w-6 h-6" />
-                                    </div>
-                                    <div>
-                                        <p className="text-2xl font-black text-amber-900">{upcoming.length}</p>
-                                        <p className="text-xs font-bold text-amber-600/80 uppercase tracking-wider">Upcoming Batches</p>
-                                    </div>
-                                </div>
-                                <div className="bg-emerald-50/40 border border-emerald-100/60 rounded-3xl p-6 flex items-center gap-4 shadow-sm">
-                                    <div className="w-12 h-12 rounded-2xl bg-emerald-100 flex items-center justify-center text-emerald-600">
-                                        <Icons.CheckCircle className="w-6 h-6" />
-                                    </div>
-                                    <div>
-                                        <p className="text-2xl font-black text-emerald-900">{completed.length}</p>
-                                        <p className="text-xs font-bold text-emerald-600/80 uppercase tracking-wider">Completed Batches</p>
-                                    </div>
-                                </div>
-                            </div>
-
-                            {live.length > 0 && (
-                                <div className="mb-8">
-                                    <h2 className="text-xs font-black uppercase tracking-widest text-indigo-600 mb-4 flex items-center gap-2"><div className="w-2 h-2 bg-indigo-500 rounded-full animate-pulse" /> Live Batches</h2>
-                                    <div className="grid gap-4 md:grid-cols-2">{live.map(b => <BatchCard key={b.id} batch={b} status="live" />)}</div>
-                                </div>
-                            )}
-                            {upcoming.length > 0 && (
-                                <div className="mb-8">
-                                    <h2 className="text-xs font-black uppercase tracking-widest text-amber-600 mb-4 flex items-center gap-2"><Icons.Clock className="w-3.5 h-3.5" /> Upcoming Batches</h2>
-                                    <div className="grid gap-4 md:grid-cols-2">{upcoming.map(b => <BatchCard key={b.id} batch={b} status="upcoming" />)}</div>
-                                </div>
-                            )}
-                            {completed.length > 0 && (
-                                <div className="mb-8">
-                                    <h2 className="text-xs font-black uppercase tracking-widest text-emerald-600 mb-4 flex items-center gap-2"><Icons.CheckCircle className="w-3.5 h-3.5" /> Completed Batches</h2>
-                                    <div className="grid gap-4 md:grid-cols-2">{completed.map(b => <BatchCard key={b.id} batch={b} status="completed" />)}</div>
-                                </div>
-                            )}
-                            {batches.length === 0 && (
-                                <div className="text-center py-24 text-secondary-400">
-                                    <Icons.ClipboardList className="w-16 h-16 mx-auto mb-4 opacity-30" />
-                                    <p className="font-bold text-lg">No batches assigned</p>
-                                    <p className="text-sm">Contact admin to assign a batch to your account.</p>
-                                </div>
-                            )}
-                        </div>
-                    </div>
-                );
-            }
-
-            // ════════════════════ VIEW: CENTER PHOTOS ════════════════════
-            if (view === 'center_photos') {
-                const SLOTS = ['Center / Lab Exterior', 'Seating Arrangement', 'Equipment / Infrastructure', 'Invigilator Photo', 'Additional Evidence'];
-                return (
-                    <div className="min-h-screen bg-secondary-50 p-6 animate-fade-in">
-                        <div className="max-w-3xl mx-auto">
-                            <StepBar />
-                            <div className="flex items-center gap-3 mb-8">
-                                <button onClick={() => setView('dashboard')} className="p-2 rounded-xl bg-white border border-secondary-200 hover:bg-secondary-50 transition-colors">
-                                    <Icons.ArrowLeft className="w-5 h-5 text-secondary-600" />
-                                </button>
-                                <div>
-                                    <h1 className="text-2xl font-extrabold text-secondary-900">Center & Infrastructure Photos</h1>
-                                    <p className="text-secondary-600 text-sm">Batch: <span className="font-bold text-indigo-600">{selectedBatch?.name}</span></p>
-                                </div>
-                            </div>
-                            <div className="grid gap-5 md:grid-cols-2 mb-8">
-                                {SLOTS.map(label => (
-                                    <CenterPhotoSlot
-                                        key={label}
-                                        label={label}
-                                        existingPhoto={centerPhotos[label] || null}
-                                        uploadPhoto={uploadPhoto}
-                                        onPhoto={(lbl, dataUrl) => setCenterPhotos(prev => ({ ...prev, [lbl]: dataUrl }))}
-                                    />
-                                ))}
-                            </div>
-                            <div className="flex justify-end">
-                                <button onClick={() => setView('attendance')}
-                                    className="bg-indigo-600 hover:bg-indigo-700 text-white px-10 py-4 rounded-2xl font-black flex items-center gap-3 shadow-xl shadow-indigo-200 active:scale-95 transition-all">
-                                    Next: Attendance <Icons.ArrowRight className="w-5 h-5" />
-                                </button>
+                            <div>
+                                <h1 className="text-3xl font-extrabold text-secondary-900">Assigned Batches</h1>
+                                <p className="text-secondary-600">Choose a batch from the categories below to manage candidates</p>
                             </div>
                         </div>
+                        
+                        {live.length > 0 && (
+                            <div>
+                                <h2 className="text-xs font-black uppercase tracking-widest text-indigo-600 mb-4 flex items-center gap-2"><div className="w-2 h-2 bg-indigo-500 rounded-full animate-pulse" /> Live Batches</h2>
+                                <div className="grid gap-5 md:grid-cols-2">{live.map(b => <BatchCard key={b.id} batch={b} status="live" />)}</div>
+                            </div>
+                        )}
+                        {upcoming.length > 0 && (
+                            <div>
+                                <h2 className="text-xs font-black uppercase tracking-widest text-amber-600 mb-4 flex items-center gap-2"><Icons.Clock className="w-3.5 h-3.5" /> Upcoming Batches</h2>
+                                <div className="grid gap-5 md:grid-cols-2">{upcoming.map(b => <BatchCard key={b.id} batch={b} status="upcoming" />)}</div>
+                            </div>
+                        )}
+                        {completed.length > 0 && (
+                            <div>
+                                <h2 className="text-xs font-black uppercase tracking-widest text-emerald-600 mb-4 flex items-center gap-2"><Icons.CheckCircle className="w-3.5 h-3.5" /> Completed Batches</h2>
+                                <div className="grid gap-5 md:grid-cols-2">{completed.map(b => <BatchCard key={b.id} batch={b} status="completed" />)}</div>
+                            </div>
+                        )}
+                        
+                        {batches.length === 0 && (
+                            <div className="text-center py-20 bg-white rounded-3xl border border-secondary-100 shadow-sm">
+                                <Icons.ClipboardList className="w-12 h-12 text-secondary-300 mx-auto mb-4 opacity-40" />
+                                <p className="font-bold text-secondary-900">No batches currently assigned</p>
+                            </div>
+                        )}
                     </div>
                 );
-            }
+            };
 
-            // ════════════════════ VIEW: ATTENDANCE ════════════════════
-            if (view === 'attendance') {
-                const presentCount = Object.values(attendance).filter(a => a.present === true).length;
-                const verifiedCount = Object.values(attendance).filter(a => a.present === true && a.facePhoto && a.aadhaarPhoto).length;
-
-                const handleMarkPresent = (studentId, present) => {
-                    setAttendance(prev => ({ ...prev, [studentId]: { ...prev[studentId], present } }));
-                };
-
-                const handlePhoto = (studentId, field, dataUrl) => {
-                    setAttendance(prev => ({ ...prev, [studentId]: { ...prev[studentId], [field]: dataUrl } }));
-                };
-
-                return (
-                    <div className="min-h-screen bg-secondary-50 p-6 animate-fade-in">
-                        <div className="max-w-3xl mx-auto">
-                            <StepBar />
-                            <div className="flex items-center gap-3 mb-6">
-                                <button onClick={() => setView('center_photos')} className="p-2 rounded-xl bg-white border border-secondary-200 hover:bg-secondary-50 transition-colors">
-                                    <Icons.ArrowLeft className="w-5 h-5 text-secondary-600" />
-                                </button>
-                                <div>
-                                    <h1 className="text-2xl font-extrabold text-secondary-900">Attendance & Verification</h1>
-                                    <p className="text-secondary-600 text-sm">Batch: <span className="font-bold text-indigo-600">{selectedBatch?.name}</span></p>
-                                </div>
-                            </div>
-                            <div className="grid grid-cols-3 gap-4 mb-6">
-                                {[
-                                    { label: 'Total Students', val: batchStudents.length, color: 'text-secondary-700', bg: 'bg-white' },
-                                    { label: 'Present', val: presentCount, color: 'text-indigo-700', bg: 'bg-indigo-50' },
-                                    { label: 'Verified', val: verifiedCount, color: 'text-emerald-700', bg: 'bg-emerald-50' },
-                                ].map(s => (
-                                    <div key={s.label} className={`${s.bg} rounded-2xl p-4 text-center shadow-sm border border-secondary-100`}>
-                                        <p className={`text-3xl font-extrabold ${s.color}`}>{s.val}</p>
-                                        <p className="text-xs text-secondary-500 mt-1 font-bold uppercase tracking-wider">{s.label}</p>
-                                    </div>
-                                ))}
-                            </div>
-                            <div className="space-y-4 mb-8">
-                                {batchStudents.map(s => (
-                                    <StudentAttendanceRow
-                                        key={s.id}
-                                        student={s}
-                                        att={attendance[s.id] || { present: null, facePhoto: null, aadhaarPhoto: null }}
-                                        onMarkPresent={handleMarkPresent}
-                                        onPhoto={handlePhoto}
-                                        uploadPhoto={uploadPhoto}
-                                    />
-                                ))}
-                                {batchStudents.length === 0 && <p className="text-center text-secondary-400 py-8">No students in this batch.</p>}
-                            </div>
-                            <div className="flex justify-end">
-                                <button onClick={() => { setCurrentStudentIdx(0); setPracticalQIdx(0); setView('practical'); }}
-                                    className="bg-indigo-600 hover:bg-indigo-700 text-white px-10 py-4 rounded-2xl font-black flex items-center gap-3 shadow-xl shadow-indigo-200 active:scale-95 transition-all">
-                                    Start Practical Assessment <Icons.ArrowRight className="w-5 h-5" />
-                                </button>
+            // ════════════════════ TAB: PRACTICAL ════════════════════
+            const renderPracticalTab = () => {
+                if (!selectedBatch) {
+                    return (
+                        <div className="p-6 md:p-10 text-center">
+                            <div className="max-w-md mx-auto py-20 bg-white rounded-3xl border border-secondary-100 shadow-sm space-y-4">
+                                <Icons.Lock className="w-12 h-12 text-secondary-300 mx-auto" />
+                                <p className="font-bold text-secondary-900 text-lg">No active batch selected</p>
+                                <p className="text-secondary-500 text-sm">Please select an assigned batch under Batches tab first.</p>
                             </div>
                         </div>
-                    </div>
-                );
-            }
+                    );
+                }
 
-            // ════════════════════ VIEW: PRACTICAL ════════════════════
-            if (view === 'practical') {
                 if (presentStudents.length === 0) {
                     return (
-                        <div className="min-h-screen flex items-center justify-center bg-secondary-50">
-                            <div className="text-center">
-                                <p className="text-secondary-500 font-bold mb-4">No present students for practical assessment.</p>
-                                <button onClick={() => setView('viva')} className="bg-indigo-600 text-white px-8 py-3 rounded-2xl font-bold">Continue to Viva</button>
+                        <div className="p-6 md:p-10 text-center">
+                            <div className="max-w-md mx-auto py-20 bg-white rounded-3xl border border-secondary-100 shadow-sm space-y-4">
+                                <Icons.Users className="w-12 h-12 text-secondary-300 mx-auto" />
+                                <p className="font-bold text-secondary-900 text-lg">No present candidates found</p>
+                                <p className="text-secondary-500 text-sm">Candidates must be marked present under the Batches tab roster first.</p>
                             </div>
                         </div>
                     );
                 }
 
-                const student = presentStudents[currentStudentIdx] || presentStudents[0];
-                const studentScores = practicalScores[student?.id] || {};
-                const currentQ = practicalQuestions[practicalQIdx];
-                const totalQ = practicalQuestions.length;
+                if (activeStudent) {
+                    const studentScores = practicalScores[activeStudent.id] || {};
+                    const currentQ = practicalQuestions[practicalQIdx];
+                    const totalQ = practicalQuestions.length;
 
-                const setScore = (val) => {
-                    if (!student) return;
-                    setPracticalScores(prev => ({ ...prev, [student.id]: { ...(prev[student.id] || {}), [practicalQIdx]: val } }));
-                };
+                    const setScore = (val) => {
+                        setPracticalScores(prev => ({ ...prev, [activeStudent.id]: { ...(prev[activeStudent.id] || {}), [practicalQIdx]: val } }));
+                    };
 
-                const goNext = () => {
-                    if (practicalQIdx < totalQ - 1) {
-                        setPracticalQIdx(q => q + 1);
-                    } else {
-                        const nextIdx = currentStudentIdx + 1;
-                        if (nextIdx < presentStudents.length) {
-                            setCurrentStudentIdx(nextIdx);
+                    const goNext = () => {
+                        if (practicalQIdx < totalQ - 1) {
+                            setPracticalQIdx(q => q + 1);
+                        } else {
+                            setActiveStudent(null);
                             setPracticalQIdx(0);
-                        } else {
-                            setCurrentStudentIdx(0);
-                            setVivaQIdx(0);
-                            setView('viva');
+                            alert(`Practical scores saved for ${activeStudent.name || activeStudent.username}`);
                         }
-                    }
-                };
+                    };
 
-                return (
-                    <div className="h-screen flex flex-col bg-slate-900 overflow-hidden animate-fade-in">
-                        <div className="bg-slate-800 text-white px-6 py-3 flex items-center justify-between shrink-0">
-                            <div className="flex items-center gap-3">
-                                <div className="w-8 h-8 bg-indigo-600 rounded-xl flex items-center justify-center font-black text-sm">{(student?.name || student?.username || 'S').charAt(0).toUpperCase()}</div>
-                                <div>
-                                    <p className="font-bold text-sm">{student?.name || student?.username || 'Student'}</p>
-                                    <p className="text-slate-400 text-[10px] uppercase tracking-widest">Practical Assessment</p>
-                                </div>
-                            </div>
-                            <div className="flex items-center gap-3">
-                                <span className="text-xs text-slate-400 font-bold">Student {currentStudentIdx + 1}/{presentStudents.length}</span>
-                                <span className="bg-indigo-600 text-white text-xs font-black px-3 py-1 rounded-full">Q {practicalQIdx + 1}/{Math.max(totalQ, 1)}</span>
-                            </div>
-                        </div>
-                        <div className="flex-1 bg-slate-900 relative min-h-0">
-                            <video ref={videoRef} autoPlay muted playsInline className="w-full h-full object-contain" />
-                            {!cameraActive && (
-                                <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-800 gap-4">
-                                    <Icons.VideoOff className="w-12 h-12 text-slate-500" />
-                                    <button onClick={() => startSingleCamera('environment')} className="bg-indigo-600 text-white px-6 py-2.5 rounded-xl font-bold text-sm active:scale-95 transition-all">Enable Camera</button>
-                                </div>
-                            )}
-                            <div className="absolute top-4 left-4 flex items-center gap-2 bg-rose-600 text-white text-xs font-black px-3 py-1.5 rounded-full animate-pulse">
-                                <div className="w-2 h-2 bg-white rounded-full" /> REC
-                            </div>
-                            <button onClick={() => startSingleCamera(cameraActive ? 'user' : 'environment')} className="absolute top-4 right-4 bg-black/50 text-white p-2.5 rounded-xl hover:bg-black/70 transition-colors" title="Switch Camera">
-                                <Icons.RefreshCw className="w-4 h-4" />
-                            </button>
-                        </div>
-                        <div className="bg-white shrink-0 p-6 space-y-4 shadow-2xl">
-                            {totalQ === 0 ? (
-                                <div className="text-center py-4">
-                                    <p className="text-secondary-500 font-bold mb-4">No practical questions assigned. Tap Continue to proceed.</p>
-                                    <button onClick={goNext} className="bg-indigo-600 text-white px-8 py-3 rounded-2xl font-black active:scale-95 transition-all">Continue →</button>
-                                </div>
-                            ) : currentQ && (
-                                <>
-                                    <div className="bg-secondary-50 rounded-2xl p-4 border border-secondary-100">
-                                        <p className="text-[10px] font-black text-secondary-400 uppercase tracking-widest mb-1">Question {practicalQIdx + 1} of {totalQ}</p>
-                                        <p className="text-secondary-900 font-semibold leading-snug">{currentQ.question}</p>
-                                    </div>
-                                    <div className="flex items-center gap-4">
-                                        <div className="flex-1">
-                                            <label className="text-xs font-black text-secondary-600 uppercase tracking-wider block mb-1">Marks <span className="text-secondary-400 font-normal">/ {currentQ.totalMarks || 5}</span></label>
-                                            <input type="number" min="0" max={currentQ.totalMarks || 5}
-                                                value={studentScores[practicalQIdx] ?? ''}
-                                                onChange={e => setScore(e.target.value)}
-                                                placeholder="0"
-                                                className="w-full border-2 border-secondary-200 focus:border-indigo-500 rounded-xl px-4 py-3 text-2xl font-black text-center outline-none transition-colors" />
-                                        </div>
-                                        <button onClick={goNext} className="bg-indigo-600 hover:bg-indigo-700 text-white px-8 py-4 rounded-2xl font-black flex items-center gap-2 shadow-lg shadow-indigo-200 active:scale-95 transition-all whitespace-nowrap">
-                                            {practicalQIdx < totalQ - 1 ? 'Next Q' : currentStudentIdx < presentStudents.length - 1 ? 'Next Student' : 'Go to Viva'}
-                                            <Icons.ArrowRight className="w-5 h-5" />
-                                        </button>
-                                    </div>
-                                </>
-                            )}
-                        </div>
-                    </div>
-                );
-            }
-
-            // ════════════════════ VIEW: VIVA ════════════════════
-            if (view === 'viva') {
-                const student = presentStudents[currentStudentIdx] || presentStudents[0];
-                const studentVivaScores = vivaScores[student?.id] || {};
-                const currentQ = vivaQuestions[vivaQIdx];
-                const totalQ = vivaQuestions.length;
-
-                const setVivaScore = (val) => {
-                    if (!student) return;
-                    setVivaScores(prev => ({ ...prev, [student.id]: { ...(prev[student.id] || {}), [vivaQIdx]: val } }));
-                };
-
-                const goNextViva = () => {
-                    if (vivaQIdx < totalQ - 1) {
-                        setVivaQIdx(q => q + 1);
-                    } else {
-                        const nextIdx = currentStudentIdx + 1;
-                        if (nextIdx < presentStudents.length) {
-                            setCurrentStudentIdx(nextIdx);
-                            setVivaQIdx(0);
-                        } else {
-                            setView('submit');
-                        }
-                    }
-                };
-
-                if (!student) {
                     return (
-                        <div className="min-h-screen flex items-center justify-center bg-secondary-50">
-                            <div className="text-center">
-                                <p className="text-secondary-500 font-bold mb-4">No present students for viva.</p>
-                                <button onClick={() => setView('submit')} className="bg-indigo-600 text-white px-8 py-3 rounded-2xl font-bold">Go to Submit</button>
+                        <div className="h-screen flex flex-col bg-slate-900 overflow-hidden animate-fade-in">
+                            <div className="bg-slate-800 text-white px-6 py-3 flex items-center justify-between shrink-0">
+                                <div className="flex items-center gap-3">
+                                    <button onClick={() => setActiveStudent(null)} className="p-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 transition-colors">
+                                        <Icons.ArrowLeft className="w-4 h-4 text-white" />
+                                    </button>
+                                    <div className="w-8 h-8 bg-indigo-600 rounded-xl flex items-center justify-center font-black text-sm">{(activeStudent.name || activeStudent.username || 'S').charAt(0).toUpperCase()}</div>
+                                    <div>
+                                        <p className="font-bold text-sm">{activeStudent.name || activeStudent.username || 'Student'}</p>
+                                        <p className="text-slate-400 text-[10px] uppercase tracking-widest">Practical Exam</p>
+                                    </div>
+                                </div>
+                                <div className="flex items-center gap-3">
+                                    <span className="text-xs text-slate-400 font-bold">Question {practicalQIdx + 1}/{Math.max(totalQ, 1)}</span>
+                                </div>
+                            </div>
+                            <div className="flex-1 bg-slate-900 relative min-h-0">
+                                <video ref={videoRef} autoPlay muted playsInline className="w-full h-full object-contain" />
+                                {!cameraActive && (
+                                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-800 gap-4">
+                                        <Icons.VideoOff className="w-12 h-12 text-slate-500" />
+                                        <button onClick={() => startSingleCamera('environment')} className="bg-indigo-600 text-white px-6 py-2.5 rounded-xl font-bold text-sm active:scale-95 transition-all">Enable Camera</button>
+                                    </div>
+                                )}
+                                <div className="absolute top-4 left-4 flex items-center gap-2 bg-rose-600 text-white text-xs font-black px-3 py-1.5 rounded-full animate-pulse">
+                                    <div className="w-2 h-2 bg-white rounded-full" /> REC
+                                </div>
+                                <button onClick={() => startSingleCamera(cameraActive ? 'user' : 'environment')} className="absolute top-4 right-4 bg-black/50 text-white p-2.5 rounded-xl hover:bg-black/70 transition-colors">
+                                    <Icons.RefreshCw className="w-4 h-4" />
+                                </button>
+                            </div>
+                            <div className="bg-white shrink-0 p-6 space-y-4 shadow-2xl">
+                                {totalQ === 0 ? (
+                                    <div className="text-center py-4">
+                                        <p className="text-secondary-500 font-bold mb-4">No practical questions loaded for this batch.</p>
+                                        <button onClick={() => setActiveStudent(null)} className="bg-indigo-600 text-white px-8 py-3 rounded-2xl font-black">Back to list</button>
+                                    </div>
+                                ) : currentQ && (
+                                    <>
+                                        <div className="bg-secondary-50 rounded-2xl p-4 border border-secondary-100">
+                                            <p className="text-[10px] font-black text-secondary-400 uppercase tracking-widest mb-1">Question {practicalQIdx + 1} of {totalQ}</p>
+                                            <p className="text-secondary-900 font-semibold leading-snug">{currentQ.question}</p>
+                                        </div>
+                                        <div className="flex items-center gap-4">
+                                            <div className="flex-1">
+                                                <label className="text-xs font-black text-secondary-600 uppercase tracking-wider block mb-1">Marks <span className="text-secondary-400 font-normal">/ {currentQ.totalMarks || 5}</span></label>
+                                                <input type="number" min="0" max={currentQ.totalMarks || 5}
+                                                    value={studentScores[practicalQIdx] ?? ''}
+                                                    onChange={e => setScore(e.target.value)}
+                                                    placeholder="0"
+                                                    className="w-full border-2 border-secondary-200 focus:border-indigo-500 rounded-xl px-4 py-3 text-2xl font-black text-center outline-none transition-colors" />
+                                            </div>
+                                            <button onClick={goNext} className="bg-indigo-600 hover:bg-indigo-700 text-white px-8 py-4 rounded-2xl font-black flex items-center gap-2 shadow-lg shadow-indigo-200 active:scale-95 transition-all whitespace-nowrap">
+                                                {practicalQIdx < totalQ - 1 ? 'Next Question' : 'Save & Exit'}
+                                                <Icons.ArrowRight className="w-5 h-5" />
+                                            </button>
+                                        </div>
+                                    </>
+                                )}
                             </div>
                         </div>
                     );
                 }
 
                 return (
-                    <div className="h-screen flex flex-col bg-slate-900 overflow-hidden animate-fade-in">
-                        <div className="bg-slate-800 text-white px-6 py-3 flex items-center justify-between shrink-0">
-                            <div className="flex items-center gap-3">
-                                <div className="w-8 h-8 bg-violet-600 rounded-xl flex items-center justify-center font-black text-sm">{(student?.name || student?.username || 'S').charAt(0).toUpperCase()}</div>
-                                <div>
-                                    <p className="font-bold text-sm">{student?.name || student?.username || 'Student'}</p>
-                                    <p className="text-slate-400 text-[10px] uppercase tracking-widest">Viva Assessment</p>
-                                </div>
-                            </div>
-                            <div className="flex items-center gap-3">
-                                <span className="text-xs text-slate-400 font-bold">Student {currentStudentIdx + 1}/{presentStudents.length}</span>
-                                <span className="bg-violet-600 text-white text-xs font-black px-3 py-1 rounded-full">Q {vivaQIdx + 1}/{Math.max(totalQ, 1)}</span>
-                            </div>
+                    <div className="p-6 md:p-10 animate-fade-in space-y-6">
+                        <div>
+                            <h1 className="text-2xl font-extrabold text-secondary-900">Practical Evaluations</h1>
+                            <p className="text-secondary-600 text-sm">Batch: <span className="font-bold text-indigo-600">{selectedBatch.name}</span></p>
                         </div>
-                        <div className="flex-1 grid grid-cols-2 gap-0.5 bg-slate-700 min-h-0">
-                            <div className="bg-slate-900 relative">
-                                <video ref={backVideoRef} autoPlay muted playsInline className="w-full h-full object-cover" />
-                                <div className="absolute bottom-3 left-3 bg-black/60 text-white text-[10px] font-black px-2.5 py-1 rounded-full">📹 STUDENT</div>
-                                <div className="absolute top-3 left-3 flex items-center gap-1.5 bg-rose-600 text-white text-[9px] font-black px-2 py-1 rounded-full animate-pulse"><div className="w-1.5 h-1.5 bg-white rounded-full" /> REC</div>
-                            </div>
-                            <div className="bg-slate-800 relative">
-                                <video ref={frontVideoRef} autoPlay muted playsInline className="w-full h-full object-cover scale-x-[-1]" />
-                                <div className="absolute bottom-3 right-3 bg-black/60 text-white text-[10px] font-black px-2.5 py-1 rounded-full">🎥 ASSESSOR</div>
-                            </div>
-                        </div>
-                        <div className="bg-white shrink-0 p-6 space-y-4 shadow-2xl">
-                            {totalQ === 0 ? (
-                                <div className="text-center py-4">
-                                    <p className="text-secondary-500 font-bold mb-4">No viva questions assigned.</p>
-                                    <button onClick={goNextViva} className="bg-violet-600 text-white px-8 py-3 rounded-2xl font-black active:scale-95 transition-all">
-                                        {currentStudentIdx < presentStudents.length - 1 ? 'Next Student' : 'Submit Assessment'} →
-                                    </button>
-                                </div>
-                            ) : currentQ && (
-                                <>
-                                    <div className="bg-secondary-50 rounded-2xl p-4 border border-secondary-100">
-                                        <p className="text-[10px] font-black text-secondary-400 uppercase tracking-widest mb-1">Viva Question {vivaQIdx + 1} of {totalQ}</p>
-                                        <p className="text-secondary-900 font-semibold leading-snug">{currentQ.question}</p>
-                                    </div>
-                                    <div className="flex items-center gap-4">
-                                        <div className="flex-1">
-                                            <label className="text-xs font-black text-secondary-600 uppercase tracking-wider block mb-1">Marks <span className="text-secondary-400 font-normal">/ {currentQ.totalMarks || 5}</span></label>
-                                            <input type="number" min="0" max={currentQ.totalMarks || 5}
-                                                value={studentVivaScores[vivaQIdx] ?? ''}
-                                                onChange={e => setVivaScore(e.target.value)}
-                                                placeholder="0"
-                                                className="w-full border-2 border-secondary-200 focus:border-violet-500 rounded-xl px-4 py-3 text-2xl font-black text-center outline-none transition-colors" />
+                        
+                        <div className="bg-white rounded-3xl border border-secondary-100 p-6 shadow-sm space-y-4">
+                            <h2 className="text-base font-bold text-secondary-900">Select candidate to score Practical exam</h2>
+                            <div className="divide-y divide-secondary-100">
+                                {presentStudents.map(s => {
+                                    const scores = practicalScores[s.id] || {};
+                                    const count = Object.keys(scores).length;
+                                    const isDone = count === practicalQuestions.length && practicalQuestions.length > 0;
+
+                                    return (
+                                        <div key={s.id} className="py-4 flex items-center justify-between flex-wrap gap-2">
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-700 flex items-center justify-center font-bold">
+                                                    {(s.name || s.username || 'S').charAt(0).toUpperCase()}
+                                                </div>
+                                                <div>
+                                                    <p className="font-bold text-secondary-900">{s.name || s.username}</p>
+                                                    <p className="text-xs text-secondary-500">Scored: {count}/{practicalQuestions.length} questions</p>
+                                                </div>
+                                            </div>
+                                            <button
+                                                onClick={() => {
+                                                    setActiveStudent(s);
+                                                    setPracticalQIdx(0);
+                                                }}
+                                                className={`px-5 py-2 rounded-xl text-xs font-bold border transition-all ${isDone ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-indigo-600 text-white border-indigo-500 hover:bg-indigo-700'}`}
+                                            >
+                                                {isDone ? 'Edit Marks' : 'Evaluate'}
+                                            </button>
                                         </div>
-                                        <button onClick={goNextViva} className="bg-violet-600 hover:bg-violet-700 text-white px-8 py-4 rounded-2xl font-black flex items-center gap-2 shadow-lg active:scale-95 transition-all whitespace-nowrap">
-                                            {vivaQIdx < totalQ - 1 ? 'Next Q' : currentStudentIdx < presentStudents.length - 1 ? 'Next Student' : 'Submit'}
-                                            <Icons.ArrowRight className="w-5 h-5" />
-                                        </button>
-                                    </div>
-                                </>
-                            )}
+                                    );
+                                })}
+                            </div>
                         </div>
                     </div>
                 );
-            }
+            };
 
-            // ════════════════════ VIEW: SUBMIT ════════════════════
-            if (view === 'submit') {
-                const calcTotal = (scores) => Object.values(scores || {}).reduce((s, v) => s + (parseFloat(v) || 0), 0);
+            // ════════════════════ TAB: VIVA ════════════════════
+            const renderVivaTab = () => {
+                if (!selectedBatch) {
+                    return (
+                        <div className="p-6 md:p-10 text-center">
+                            <div className="max-w-md mx-auto py-20 bg-white rounded-3xl border border-secondary-100 shadow-sm space-y-4">
+                                <Icons.Lock className="w-12 h-12 text-secondary-300 mx-auto" />
+                                <p className="font-bold text-secondary-900 text-lg">No active batch selected</p>
+                                <p className="text-secondary-500 text-sm">Please select an assigned batch under Batches tab first.</p>
+                            </div>
+                        </div>
+                    );
+                }
 
-                const handleSubmit = async () => {
-                    setSubmitting(true);
-                    try {
-                        const token = localStorage.getItem('se_token');
-                        for (const student of presentStudents) {
-                            const payload = {
-                                id: `assessor_${student.id}_${Date.now()}`,
-                                studentId: student.id,
-                                batchId: selectedBatch.id,
-                                examType: 'AssessorSubmit',
-                                assessorId: user.id,
-                                attendance: attendance[student.id],
-                                practicalScores: practicalScores[student.id] || {},
-                                vivaScores: vivaScores[student.id] || {},
-                                practicalTotal: calcTotal(practicalScores[student.id]),
-                                vivaTotal: calcTotal(vivaScores[student.id]),
-                                submittedAt: new Date().toISOString()
-                            };
-                            await fetch('/api/sync', {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                                body: JSON.stringify({ responses: [payload] })
-                            });
+                if (presentStudents.length === 0) {
+                    return (
+                        <div className="p-6 md:p-10 text-center">
+                            <div className="max-w-md mx-auto py-20 bg-white rounded-3xl border border-secondary-100 shadow-sm space-y-4">
+                                <Icons.Users className="w-12 h-12 text-secondary-300 mx-auto" />
+                                <p className="font-bold text-secondary-900 text-lg">No present candidates found</p>
+                                <p className="text-secondary-500 text-sm">Candidates must be marked present under the Batches tab roster first.</p>
+                            </div>
+                        </div>
+                    );
+                }
+
+                if (activeStudent) {
+                    const studentVivaScores = vivaScores[activeStudent.id] || {};
+                    const currentQ = vivaQuestions[vivaQIdx];
+                    const totalQ = vivaQuestions.length;
+
+                    const setVivaScore = (val) => {
+                        setVivaScores(prev => ({ ...prev, [activeStudent.id]: { ...(prev[activeStudent.id] || {}), [vivaQIdx]: val } }));
+                    };
+
+                    const goNextViva = () => {
+                        if (vivaQIdx < totalQ - 1) {
+                            setVivaQIdx(q => q + 1);
+                        } else {
+                            setActiveStudent(null);
+                            setVivaQIdx(0);
+                            alert(`Viva scores saved for ${activeStudent.name || activeStudent.username}`);
                         }
-                        setSubmitted(true);
-                    } catch(e) {
-                        alert('Submission failed: ' + e.message);
-                    } finally {
-                        setSubmitting(false);
-                    }
-                };
+                    };
 
+                    return (
+                        <div className="h-screen flex flex-col bg-slate-900 overflow-hidden animate-fade-in">
+                            <div className="bg-slate-800 text-white px-6 py-3 flex items-center justify-between shrink-0">
+                                <div className="flex items-center gap-3">
+                                    <button onClick={() => setActiveStudent(null)} className="p-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 transition-colors">
+                                        <Icons.ArrowLeft className="w-4 h-4 text-white" />
+                                    </button>
+                                    <div className="w-8 h-8 bg-violet-600 rounded-xl flex items-center justify-center font-black text-sm">{(activeStudent.name || activeStudent.username || 'S').charAt(0).toUpperCase()}</div>
+                                    <div>
+                                        <p className="font-bold text-sm">{activeStudent.name || activeStudent.username || 'Student'}</p>
+                                        <p className="text-slate-400 text-[10px] uppercase tracking-widest">Viva Voce</p>
+                                    </div>
+                                </div>
+                                <div className="flex items-center gap-3">
+                                    <span className="text-xs text-slate-400 font-bold">Question {vivaQIdx + 1}/{Math.max(totalQ, 1)}</span>
+                                </div>
+                            </div>
+                            <div className="flex-1 grid grid-cols-2 gap-0.5 bg-slate-700 min-h-0">
+                                <div className="bg-slate-900 relative">
+                                    <video ref={backVideoRef} autoPlay muted playsInline className="w-full h-full object-cover" />
+                                    <div className="absolute bottom-3 left-3 bg-black/60 text-white text-[10px] font-black px-2.5 py-1 rounded-full">📹 STUDENT</div>
+                                    <div className="absolute top-3 left-3 flex items-center gap-1.5 bg-rose-600 text-white text-[9px] font-black px-2 py-1 rounded-full animate-pulse"><div className="w-1.5 h-1.5 bg-white rounded-full" /> REC</div>
+                                </div>
+                                <div className="bg-slate-800 relative">
+                                    <video ref={frontVideoRef} autoPlay muted playsInline className="w-full h-full object-cover scale-x-[-1]" />
+                                    <div className="absolute bottom-3 right-3 bg-black/60 text-white text-[10px] font-black px-2.5 py-1 rounded-full">🎥 ASSESSOR</div>
+                                </div>
+                            </div>
+                            <div className="bg-white shrink-0 p-6 space-y-4 shadow-2xl">
+                                {totalQ === 0 ? (
+                                    <div className="text-center py-4">
+                                        <p className="text-secondary-500 font-bold mb-4">No viva questions loaded for this batch.</p>
+                                        <button onClick={() => setActiveStudent(null)} className="bg-violet-600 text-white px-8 py-3 rounded-2xl font-black">Back to list</button>
+                                    </div>
+                                ) : currentQ && (
+                                    <>
+                                        <div className="bg-secondary-50 rounded-2xl p-4 border border-secondary-100">
+                                            <p className="text-[10px] font-black text-secondary-400 uppercase tracking-widest mb-1">Viva Question {vivaQIdx + 1} of {totalQ}</p>
+                                            <p className="text-secondary-900 font-semibold leading-snug">{currentQ.question}</p>
+                                        </div>
+                                        <div className="flex items-center gap-4">
+                                            <div className="flex-1">
+                                                <label className="text-xs font-black text-secondary-600 uppercase tracking-wider block mb-1">Marks <span className="text-secondary-400 font-normal">/ {currentQ.totalMarks || 5}</span></label>
+                                                <input type="number" min="0" max={currentQ.totalMarks || 5}
+                                                    value={studentVivaScores[vivaQIdx] ?? ''}
+                                                    onChange={e => setVivaScore(e.target.value)}
+                                                    placeholder="0"
+                                                    className="w-full border-2 border-secondary-200 focus:border-violet-500 rounded-xl px-4 py-3 text-2xl font-black text-center outline-none transition-colors" />
+                                            </div>
+                                            <button onClick={goNextViva} className="bg-violet-600 hover:bg-violet-700 text-white px-8 py-4 rounded-2xl font-black flex items-center gap-2 shadow-lg active:scale-95 transition-all whitespace-nowrap">
+                                                {vivaQIdx < totalQ - 1 ? 'Next Question' : 'Save & Exit'}
+                                                <Icons.ArrowRight className="w-5 h-5" />
+                                            </button>
+                                        </div>
+                                    </>
+                                )}
+                            </div>
+                        </div>
+                    );
+                }
+
+                return (
+                    <div className="p-6 md:p-10 animate-fade-in space-y-6">
+                        <div>
+                            <h1 className="text-2xl font-extrabold text-secondary-900">Viva Voce</h1>
+                            <p className="text-secondary-600 text-sm">Batch: <span className="font-bold text-indigo-600">{selectedBatch.name}</span></p>
+                        </div>
+                        
+                        <div className="bg-white rounded-3xl border border-secondary-100 p-6 shadow-sm space-y-4">
+                            <h2 className="text-base font-bold text-secondary-900">Select candidate to score Viva Voce</h2>
+                            <div className="divide-y divide-secondary-100">
+                                {presentStudents.map(s => {
+                                    const scores = vivaScores[s.id] || {};
+                                    const count = Object.keys(scores).length;
+                                    const isDone = count === vivaQuestions.length && vivaQuestions.length > 0;
+
+                                    return (
+                                        <div key={s.id} className="py-4 flex items-center justify-between flex-wrap gap-2">
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-10 h-10 rounded-xl bg-violet-50 text-violet-700 flex items-center justify-center font-bold">
+                                                    {(s.name || s.username || 'S').charAt(0).toUpperCase()}
+                                                </div>
+                                                <div>
+                                                    <p className="font-bold text-secondary-900">{s.name || s.username}</p>
+                                                    <p className="text-xs text-secondary-500">Scored: {count}/{vivaQuestions.length} questions</p>
+                                                </div>
+                                            </div>
+                                            <button
+                                                onClick={() => {
+                                                    setActiveStudent(s);
+                                                    setVivaQIdx(0);
+                                                }}
+                                                className={`px-5 py-2 rounded-xl text-xs font-bold border transition-all ${isDone ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-violet-600 text-white border-violet-500 hover:bg-violet-700'}`}
+                                            >
+                                                {isDone ? 'Edit Marks' : 'Evaluate'}
+                                            </button>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    </div>
+                );
+            };
+
+            // ════════════════════ TAB: DOCUMENTS ════════════════════
+            const renderDocumentsTab = () => {
+                if (!selectedBatch) {
+                    return (
+                        <div className="p-6 md:p-10 text-center">
+                            <div className="max-w-md mx-auto py-20 bg-white rounded-3xl border border-secondary-100 shadow-sm space-y-4">
+                                <Icons.Lock className="w-12 h-12 text-secondary-300 mx-auto" />
+                                <p className="font-bold text-secondary-900 text-lg">No active batch selected</p>
+                                <p className="text-secondary-500 text-sm">Please select a batch in the Batches tab first to upload evidence documents.</p>
+                            </div>
+                        </div>
+                    );
+                }
+
+                const DOCUMENT_SLOTS = ['Attendance Sheet', 'Center / Lab Exterior', 'Seating Arrangement', 'Equipment / Infrastructure', 'Invigilator Photo', 'Additional Evidence'];
+                return (
+                    <div className="p-6 md:p-10 animate-fade-in space-y-6">
+                        <div className="flex items-center gap-3">
+                            <div className="w-12 h-12 bg-indigo-600 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-indigo-100">
+                                <Icons.FileText className="w-6 h-6" />
+                            </div>
+                            <div>
+                                <h1 className="text-2xl font-extrabold text-secondary-900">Evidence Uploads & Documents</h1>
+                                <p className="text-secondary-600 text-sm">Batch: <span className="font-bold text-indigo-600">{selectedBatch.name}</span></p>
+                            </div>
+                        </div>
+
+                        <div className="grid gap-5 md:grid-cols-2 mb-8">
+                            {DOCUMENT_SLOTS.map(label => (
+                                <CenterPhotoSlot
+                                    key={label}
+                                    label={label}
+                                    existingPhoto={centerPhotos[label] || null}
+                                    uploadPhoto={uploadPhoto}
+                                    onPhoto={(lbl, dataUrl) => setCenterPhotos(prev => ({ ...prev, [lbl]: dataUrl }))}
+                                />
+                            ))}
+                        </div>
+                    </div>
+                );
+            };
+
+            // ════════════════════ TAB: SUBMIT SUMMARY ════════════════════
+            const renderSubmitTab = () => {
                 if (submitted) {
                     return (
                         <div className="min-h-screen bg-secondary-50 flex items-center justify-center p-8 animate-fade-in">
@@ -14151,9 +14426,10 @@
                                     <Icons.CheckCircle className="w-12 h-12 text-emerald-600" />
                                 </div>
                                 <h2 className="text-3xl font-extrabold text-secondary-900 mb-3">Assessment Complete!</h2>
-                                <p className="text-secondary-600 mb-8">All scores for <span className="font-bold text-indigo-600">{selectedBatch?.name}</span> submitted successfully.</p>
+                                <p className="text-secondary-600 mb-8">All trainee results and evidence for <span className="font-bold text-indigo-600">{selectedBatch?.name}</span> submitted successfully.</p>
                                 <button onClick={() => { setView('dashboard'); setSelectedBatch(null); setSubmitted(false); }}
-                                    className="bg-indigo-600 text-white px-8 py-3 rounded-2xl font-black active:scale-95 transition-all">
+                                    className="bg-indigo-600 text-white px-8 py-3 rounded-2xl font-black active:scale-95 transition-all"
+                                >
                                     Back to Dashboard
                                 </button>
                             </div>
@@ -14162,24 +14438,31 @@
                 }
 
                 return (
-                    <div className="min-h-screen bg-secondary-50 p-6 animate-fade-in">
-                        <div className="max-w-3xl mx-auto">
-                            <StepBar />
-                            <h1 className="text-2xl font-extrabold text-secondary-900 mb-2">Assessment Summary</h1>
-                            <p className="text-secondary-600 mb-8">Batch: <span className="font-bold text-indigo-600">{selectedBatch?.name}</span> · Review and submit</p>
-                            <div className="bg-white rounded-3xl shadow-lg overflow-hidden border border-secondary-100 mb-8">
-                                <div className="grid grid-cols-5 bg-secondary-50 border-b border-secondary-100 px-6 py-3 text-xs font-black text-secondary-500 uppercase tracking-widest">
-                                    <span className="col-span-2">Student</span>
-                                    <span className="text-center">Attendance</span>
-                                    <span className="text-center">Practical</span>
-                                    <span className="text-center">Viva</span>
-                                </div>
+                    <div className="p-6 md:p-10 animate-fade-in space-y-6">
+                        <div className="flex items-center gap-3">
+                            <button onClick={() => setView('batches')} className="p-1.5 rounded-lg bg-white border border-secondary-200 text-secondary-600 hover:bg-secondary-50 transition-colors">
+                                <Icons.ArrowLeft className="w-4 h-4" />
+                            </button>
+                            <div>
+                                <h1 className="text-2xl font-extrabold text-secondary-900">Review & Submit Summary</h1>
+                                <p className="text-secondary-600 text-sm">Batch: <span className="font-bold text-indigo-600">{selectedBatch?.name}</span></p>
+                            </div>
+                        </div>
+
+                        <div className="bg-white rounded-3xl shadow-lg overflow-hidden border border-secondary-100">
+                            <div className="grid grid-cols-5 bg-secondary-50 border-b border-secondary-100 px-6 py-3.5 text-xs font-black text-secondary-500 uppercase tracking-widest">
+                                <span className="col-span-2">Trainee</span>
+                                <span className="text-center">Attendance</span>
+                                <span className="text-center">Practical</span>
+                                <span className="text-center">Viva</span>
+                            </div>
+                            <div className="divide-y divide-secondary-50">
                                 {batchStudents.map(student => {
                                     const att = attendance[student.id] || {};
                                     const pTotal = calcTotal(practicalScores[student.id]);
                                     const vTotal = calcTotal(vivaScores[student.id]);
                                     return (
-                                        <div key={student.id} className="grid grid-cols-5 px-6 py-4 border-b border-secondary-50 items-center hover:bg-secondary-50 transition-colors">
+                                        <div key={student.id} className="grid grid-cols-5 px-6 py-4 items-center hover:bg-secondary-50 transition-colors">
                                             <div className="col-span-2 flex items-center gap-3">
                                                 <div className="w-9 h-9 rounded-xl bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold">{(student?.name || student?.username || 'S').charAt(0).toUpperCase()}</div>
                                                 <div>
@@ -14198,11 +14481,6 @@
                                     );
                                 })}
                             </div>
-                            <div className="flex justify-between items-center">
-                                <button onClick={() => setView('viva')} className="flex items-center gap-2 text-secondary-600 font-bold hover:text-secondary-900 transition-colors">
-                                    <Icons.ArrowLeft className="w-4 h-4" /> Back to Viva
-                                </button>
-                                <button onClick={handleSubmit} disabled={submitting}
                                     className={`px-12 py-4 rounded-2xl font-black flex items-center gap-3 shadow-xl transition-all active:scale-95 ${submitting ? 'bg-secondary-300 cursor-not-allowed text-secondary-500' : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-200'}`}>
                                     {submitting ? <Icons.Loader className="w-5 h-5 animate-spin" /> : <Icons.Send className="w-5 h-5" />}
                                     {submitting ? 'Submitting...' : 'Submit Assessment'}
