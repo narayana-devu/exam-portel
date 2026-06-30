@@ -3052,7 +3052,7 @@
                                 { id: 'questionPapers', label: 'Question Papers', icon: <Icons.FileText /> },
                                 { id: 'batches', label: 'Batches', icon: <Icons.Users /> },
                                 { id: 'marks', label: 'Marks Entry', icon: <Icons.Edit3 /> },
-                                { id: 'results', label: 'Results', icon: <Icons.Cpu /> },
+                                { id: 'results', label: 'Evidence', icon: <Icons.Cpu /> },
                                 { id: 'assessors', label: 'Assessors', icon: <Icons.UserPlus /> },
                                 { id: 'storage', label: 'Storage', icon: <Icons.Database /> },
                             ].map(item => (
@@ -7776,7 +7776,7 @@
                                 )}
                             </div>
                         </div>
-                        <h3 className="text-xl font-bold mb-4">{selectedBatch.name} - {examType} Results</h3>
+                        <h3 className="text-xl font-bold mb-4">{selectedBatch.name} - {examType} Evidence</h3>
                         <div className="bg-white rounded overflow-hidden shadow">
                             {students.map((s, i) => {
                                 let hasResponse = allResponses.some(r => r.studentId === s.id && r.examType === examType);
@@ -10216,7 +10216,7 @@
                                 <div className="flex items-center text-[10px] font-black uppercase tracking-[0.2em] text-gray-700 bg-gray-100/50 px-3 py-1.5 rounded-full border border-gray-200">
                                     <span className="hover:text-primary-600 transition-colors cursor-pointer">Admin</span>
                                     <Icons.ChevronRight className="w-3 h-3 mx-1" />
-                                    <span className="text-gray-900">{activeTab.replace(/([A-Z])/g, ' $1')}</span>
+                                    <span className="text-gray-900">{activeTab === 'results' ? 'Evidence' : activeTab.replace(/([A-Z])/g, ' $1')}</span>
                                 </div>
                             </div>
 
