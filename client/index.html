@@ -14481,15 +14481,22 @@
                                     );
                                 })}
                             </div>
-                                    className={`px-12 py-4 rounded-2xl font-black flex items-center gap-3 shadow-xl transition-all active:scale-95 ${submitting ? 'bg-secondary-300 cursor-not-allowed text-secondary-500' : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-200'}`}>
-                                    {submitting ? <Icons.Loader className="w-5 h-5 animate-spin" /> : <Icons.Send className="w-5 h-5" />}
-                                    {submitting ? 'Submitting...' : 'Submit Assessment'}
-                                </button>
-                            </div>
+                        </div>
+
+                        <div className="flex justify-between items-center">
+                            <button onClick={() => setView('batches')} className="text-secondary-600 font-bold hover:text-secondary-900 transition-colors text-sm flex items-center gap-1">
+                                <Icons.ArrowLeft className="w-4 h-4" /> Back to Trainees List
+                            </button>
+                            <button onClick={handleSubmit} disabled={submitting}
+                                className={`px-12 py-4 rounded-2xl font-black flex items-center gap-3 shadow-xl transition-all active:scale-95 ${submitting ? 'bg-secondary-300 cursor-not-allowed text-secondary-500' : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-200'}`}
+                            >
+                                {submitting ? <Icons.Loader className="w-5 h-5 animate-spin" /> : <Icons.Send className="w-5 h-5" />}
+                                {submitting ? 'Submitting...' : 'Finalize & Submit'}
+                            </button>
                         </div>
                     </div>
                 );
-            }
+            };
 
             return null;
         };
