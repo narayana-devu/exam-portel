@@ -14321,24 +14321,10 @@
 
                 if (activeStudent) {
                     const studentScores = practicalScores[activeStudent.id] || {};
-                    const currentQ = practicalQuestions[practicalQIdx];
                     const totalQ = practicalQuestions.length;
 
-                    const setScore = (val) => {
-                        setPracticalScores(prev => ({ ...prev, [activeStudent.id]: { ...(prev[activeStudent.id] || {}), [practicalQIdx]: val } }));
-                    };
-
-                    const goNext = () => {
-                        if (practicalQIdx < totalQ - 1) {
-                            setPracticalQIdx(q => q + 1);
-                        } else {
-                            if (activeRecStudentRef.current) {
-                                pauseCandidateRec(activeRecStudentRef.current);
-                            }
-                            setActiveStudent(null);
-                            setPracticalQIdx(0);
-                            alert(`Practical scores saved for ${activeStudent.name || activeStudent.username}`);
-                        }
+                    const setScore = (val, qIdx) => {
+                        setPracticalScores(prev => ({ ...prev, [activeStudent.id]: { ...(prev[activeStudent.id] || {}), [qIdx]: val } }));
                     };
 
                     return (
@@ -14360,7 +14346,7 @@
                                     </div>
                                 </div>
                                 <div className="flex items-center gap-3">
-                                    <span className="text-xs text-slate-400 font-bold">Question {practicalQIdx + 1}/{Math.max(totalQ, 1)}</span>
+                                    <span className="text-xs text-slate-400 font-bold">Practical Evaluation</span>
                                 </div>
                             </div>
                             <div className="flex-1 bg-slate-900 relative min-h-0">
@@ -14435,7 +14421,7 @@
                                     <Icons.RefreshCw className="w-4 h-4" />
                                 </button>
                             </div>
-                            <div className="bg-white shrink-0 p-6 space-y-4 shadow-2xl">
+                            <div className="bg-white shrink-0 p-6 shadow-2xl overflow-y-auto max-h-[45vh] border-t border-secondary-100">
                                 {totalQ === 0 ? (
                                     <div className="text-center py-4">
                                         <p className="text-secondary-500 font-bold mb-4">No practical questions loaded for this batch.</p>
@@ -14446,27 +14432,42 @@
                                             setActiveStudent(null);
                                         }} className="bg-indigo-600 text-white px-8 py-3 rounded-2xl font-black">Back to list</button>
                                     </div>
-                                ) : currentQ && (
-                                    <>
-                                        <div className="bg-secondary-50 rounded-2xl p-4 border border-secondary-100">
-                                            <p className="text-[10px] font-black text-secondary-400 uppercase tracking-widest mb-1">Question {practicalQIdx + 1} of {totalQ}</p>
-                                            <p className="text-secondary-900 font-semibold leading-snug">{currentQ.question}</p>
+                                ) : (
+                                    <div className="space-y-4">
+                                        <div className="flex items-center justify-between pb-2 border-b border-secondary-100">
+                                            <h3 className="text-sm font-black text-secondary-500 uppercase tracking-widest">Practical Scoring — {totalQ} Questions</h3>
                                         </div>
-                                        <div className="flex items-center gap-4">
-                                            <div className="flex-1">
-                                                <label className="text-xs font-black text-secondary-600 uppercase tracking-wider block mb-1">Marks <span className="text-secondary-400 font-normal">/ {currentQ.totalMarks || 5}</span></label>
-                                                <input type="number" min="0" max={currentQ.totalMarks || 5}
-                                                    value={studentScores[practicalQIdx] ?? ''}
-                                                    onChange={e => setScore(e.target.value)}
-                                                    placeholder="0"
-                                                    className="w-full border-2 border-secondary-200 focus:border-indigo-500 rounded-xl px-4 py-3 text-2xl font-black text-center outline-none transition-colors" />
-                                            </div>
-                                            <button onClick={goNext} className="bg-indigo-600 hover:bg-indigo-700 text-white px-8 py-4 rounded-2xl font-black flex items-center gap-2 shadow-lg shadow-indigo-200 active:scale-95 transition-all whitespace-nowrap">
-                                                {practicalQIdx < totalQ - 1 ? 'Next Question' : 'Save & Exit'}
-                                                <Icons.ArrowRight className="w-5 h-5" />
+                                        <div className="space-y-3 max-h-48 overflow-y-auto pr-1">
+                                            {practicalQuestions.map((q, idx) => (
+                                                <div key={idx} className="flex items-center justify-between gap-4 p-3 bg-secondary-50 rounded-xl border border-secondary-100/80">
+                                                    <div className="flex-1 text-xs">
+                                                        <span className="font-bold text-secondary-400 block mb-0.5">Q{idx + 1} (Max: {q.totalMarks || 5})</span>
+                                                        <p className="text-secondary-800 font-semibold leading-tight">{q.question}</p>
+                                                    </div>
+                                                    <div className="w-24 shrink-0 flex items-center gap-1.5">
+                                                        <input type="number" min="0" max={q.totalMarks || 5}
+                                                            value={studentScores[idx] ?? ''}
+                                                            onChange={e => setScore(e.target.value, idx)}
+                                                            placeholder="0"
+                                                            className="w-full border border-secondary-200 focus:border-indigo-500 rounded-lg px-2 py-1.5 text-base font-black text-center outline-none transition-colors" />
+                                                        <span className="text-[10px] font-bold text-secondary-400">/ {q.totalMarks || 5}</span>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                        <div className="flex justify-end pt-2 border-t border-secondary-100">
+                                            <button onClick={() => {
+                                                if (activeRecStudentRef.current) {
+                                                    pauseCandidateRec(activeRecStudentRef.current);
+                                                }
+                                                setActiveStudent(null);
+                                                alert(`Practical scores saved for ${activeStudent.name || activeStudent.username}`);
+                                            }} className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-xl font-black flex items-center gap-2 shadow-lg active:scale-95 transition-all text-xs uppercase tracking-wider">
+                                                Save & Exit
+                                                <Icons.Check className="w-4 h-4" />
                                             </button>
                                         </div>
-                                    </>
+                                    </div>
                                 )}
                             </div>
                         </div>
@@ -14637,21 +14638,10 @@
 
                 if (activeStudent) {
                     const studentVivaScores = vivaScores[activeStudent.id] || {};
-                    const currentQ = vivaQuestions[vivaQIdx];
                     const totalQ = vivaQuestions.length;
 
-                    const setVivaScore = (val) => {
-                        setVivaScores(prev => ({ ...prev, [activeStudent.id]: { ...(prev[activeStudent.id] || {}), [vivaQIdx]: val } }));
-                    };
-
-                    const goNextViva = () => {
-                        if (vivaQIdx < totalQ - 1) {
-                            setVivaQIdx(q => q + 1);
-                        } else {
-                            setActiveStudent(null);
-                            setVivaQIdx(0);
-                            alert(`Viva scores saved for ${activeStudent.name || activeStudent.username}`);
-                        }
+                    const setVivaScore = (val, qIdx) => {
+                        setVivaScores(prev => ({ ...prev, [activeStudent.id]: { ...(prev[activeStudent.id] || {}), [qIdx]: val } }));
                     };
 
                     return (
@@ -14668,7 +14658,7 @@
                                     </div>
                                 </div>
                                 <div className="flex items-center gap-3">
-                                    <span className="text-xs text-slate-400 font-bold">Question {vivaQIdx + 1}/{Math.max(totalQ, 1)}</span>
+                                    <span className="text-xs text-slate-400 font-bold">Viva Evaluation</span>
                                 </div>
                             </div>
                             <div className="flex-1 grid grid-cols-2 gap-0.5 bg-slate-700 min-h-0">
@@ -14682,33 +14672,45 @@
                                     <div className="absolute bottom-3 right-3 bg-black/60 text-white text-[10px] font-black px-2.5 py-1 rounded-full">🎥 ASSESSOR</div>
                                 </div>
                             </div>
-                            <div className="bg-white shrink-0 p-6 space-y-4 shadow-2xl">
+                            <div className="bg-white shrink-0 p-6 shadow-2xl overflow-y-auto max-h-[45vh] border-t border-secondary-100">
                                 {totalQ === 0 ? (
                                     <div className="text-center py-4">
                                         <p className="text-secondary-500 font-bold mb-4">No viva questions loaded for this batch.</p>
                                         <button onClick={() => setActiveStudent(null)} className="bg-violet-600 text-white px-8 py-3 rounded-2xl font-black">Back to list</button>
                                     </div>
-                                ) : currentQ && (
-                                    <>
-                                        <div className="bg-secondary-50 rounded-2xl p-4 border border-secondary-100">
-                                            <p className="text-[10px] font-black text-secondary-400 uppercase tracking-widest mb-1">Viva Question {vivaQIdx + 1} of {totalQ}</p>
-                                            <p className="text-secondary-900 font-semibold leading-snug">{currentQ.question}</p>
+                                ) : (
+                                    <div className="space-y-4">
+                                        <div className="flex items-center justify-between pb-2 border-b border-secondary-100">
+                                            <h3 className="text-sm font-black text-secondary-500 uppercase tracking-widest">Viva Scoring — {totalQ} Questions</h3>
                                         </div>
-                                        <div className="flex items-center gap-4">
-                                            <div className="flex-1">
-                                                <label className="text-xs font-black text-secondary-600 uppercase tracking-wider block mb-1">Marks <span className="text-secondary-400 font-normal">/ {currentQ.totalMarks || 5}</span></label>
-                                                <input type="number" min="0" max={currentQ.totalMarks || 5}
-                                                    value={studentVivaScores[vivaQIdx] ?? ''}
-                                                    onChange={e => setVivaScore(e.target.value)}
-                                                    placeholder="0"
-                                                    className="w-full border-2 border-secondary-200 focus:border-violet-500 rounded-xl px-4 py-3 text-2xl font-black text-center outline-none transition-colors" />
-                                            </div>
-                                            <button onClick={goNextViva} className="bg-violet-600 hover:bg-violet-700 text-white px-8 py-4 rounded-2xl font-black flex items-center gap-2 shadow-lg active:scale-95 transition-all whitespace-nowrap">
-                                                {vivaQIdx < totalQ - 1 ? 'Next Question' : 'Save & Exit'}
-                                                <Icons.ArrowRight className="w-5 h-5" />
+                                        <div className="space-y-3 max-h-48 overflow-y-auto pr-1">
+                                            {vivaQuestions.map((q, idx) => (
+                                                <div key={idx} className="flex items-center justify-between gap-4 p-3 bg-secondary-50 rounded-xl border border-secondary-100/80">
+                                                    <div className="flex-1 text-xs">
+                                                        <span className="font-bold text-secondary-400 block mb-0.5">Q{idx + 1} (Max: {q.totalMarks || 5})</span>
+                                                        <p className="text-secondary-800 font-semibold leading-tight">{q.question}</p>
+                                                    </div>
+                                                    <div className="w-24 shrink-0 flex items-center gap-1.5">
+                                                        <input type="number" min="0" max={q.totalMarks || 5}
+                                                            value={studentVivaScores[idx] ?? ''}
+                                                            onChange={e => setVivaScore(e.target.value, idx)}
+                                                            placeholder="0"
+                                                            className="w-full border border-secondary-200 focus:border-violet-500 rounded-lg px-2 py-1.5 text-base font-black text-center outline-none transition-colors" />
+                                                        <span className="text-[10px] font-bold text-secondary-400">/ {q.totalMarks || 5}</span>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                        <div className="flex justify-end pt-2 border-t border-secondary-100">
+                                            <button onClick={() => {
+                                                setActiveStudent(null);
+                                                alert(`Viva scores saved for ${activeStudent.name || activeStudent.username}`);
+                                            }} className="bg-violet-600 hover:bg-violet-700 text-white px-6 py-3 rounded-xl font-black flex items-center gap-2 shadow-lg active:scale-95 transition-all text-xs uppercase tracking-wider">
+                                                Save & Exit
+                                                <Icons.Check className="w-4 h-4" />
                                             </button>
                                         </div>
-                                    </>
+                                    </div>
                                 )}
                             </div>
                         </div>
