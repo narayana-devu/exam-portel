@@ -7820,14 +7820,14 @@
                             </div>
                         </div>
 
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-4xl mx-auto">
-                            {['Aad/Fat', 'Videos', 'Photo'].map(t => (
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 max-w-6xl mx-auto">
+                            {['Aad/Fat', 'Theory', 'Videos', 'Photo'].map(t => (
                                 <button key={t} onClick={() => loadResults(t)} className="bg-white p-8 rounded-3xl shadow-lg text-lg font-black text-secondary-800 hover:shadow-2xl border-2 border-secondary-50 hover:border-primary-300 transition-all transform hover:-translate-y-1 flex flex-col items-center gap-3">
                                     <span className="text-3xl">
-                                        {t === 'Aad/Fat' ? '🪪' : (t === 'Videos' ? '📹' : '📸')}
+                                        {t === 'Aad/Fat' ? '🪪' : (t === 'Theory' ? '📝' : (t === 'Videos' ? '📹' : '📸'))}
                                     </span>
                                     <span className="font-extrabold text-sm uppercase tracking-wider">
-                                        {t === 'Aad/Fat' ? 'Trainee Identity & Verification' : (t === 'Videos' ? 'Trainee Practical Videos' : 'Center Setup Photos')}
+                                        {t === 'Aad/Fat' ? 'Trainee Identity & Verification' : (t === 'Theory' ? 'Trainee Theory Responses' : (t === 'Videos' ? 'Trainee Practical Videos' : 'Center Setup Photos'))}
                                     </span>
                                 </button>
                             ))}
