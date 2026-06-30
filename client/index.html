@@ -14193,6 +14193,9 @@
                         if (practicalQIdx < totalQ - 1) {
                             setPracticalQIdx(q => q + 1);
                         } else {
+                            if (activeRecStudentRef.current) {
+                                pauseCandidateRec(activeRecStudentRef.current);
+                            }
                             setActiveStudent(null);
                             setPracticalQIdx(0);
                             alert(`Practical scores saved for ${activeStudent.name || activeStudent.username}`);
@@ -14203,7 +14206,12 @@
                         <div className="h-screen flex flex-col bg-slate-900 overflow-hidden animate-fade-in">
                             <div className="bg-slate-800 text-white px-6 py-3 flex items-center justify-between shrink-0">
                                 <div className="flex items-center gap-3">
-                                    <button onClick={() => setActiveStudent(null)} className="p-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 transition-colors">
+                                    <button onClick={() => {
+                                        if (activeRecStudentRef.current) {
+                                            pauseCandidateRec(activeRecStudentRef.current);
+                                        }
+                                        setActiveStudent(null);
+                                    }} className="p-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 transition-colors">
                                         <Icons.ArrowLeft className="w-4 h-4 text-white" />
                                     </button>
                                     <div className="w-8 h-8 bg-indigo-600 rounded-xl flex items-center justify-center font-black text-sm">{(activeStudent.name || activeStudent.username || 'S').charAt(0).toUpperCase()}</div>
@@ -14224,9 +14232,66 @@
                                         <button onClick={() => startSingleCamera('environment')} className="bg-indigo-600 text-white px-6 py-2.5 rounded-xl font-bold text-sm active:scale-95 transition-all">Enable Camera</button>
                                     </div>
                                 )}
-                                <div className="absolute top-4 left-4 flex items-center gap-2 bg-rose-600 text-white text-xs font-black px-3 py-1.5 rounded-full animate-pulse">
-                                    <div className="w-2 h-2 bg-white rounded-full" /> REC
-                                </div>
+                                
+                                {/* Pausable video recording controls overlay */}
+                                {(() => {
+                                    const rs = recState[activeStudent.id] || 'idle';
+                                    const dur = recDuration[activeStudent.id] || 0;
+                                    return (
+                                        <div className="absolute top-4 left-4 flex items-center gap-2 bg-slate-950/80 backdrop-blur-md px-3 py-2 rounded-2xl border border-slate-800/80 shadow-2xl z-20">
+                                            {rs !== 'idle' && (
+                                                <span className={`text-xs font-black px-2.5 py-1 rounded-full flex items-center gap-1.5 ${
+                                                    rs === 'recording' ? 'bg-rose-500/20 text-rose-400' :
+                                                    rs === 'paused' ? 'bg-amber-500/20 text-amber-400' :
+                                                    'bg-emerald-500/20 text-emerald-400'
+                                                }`}>
+                                                    {rs === 'recording' && <span className="w-1.5 h-1.5 bg-rose-500 rounded-full animate-pulse inline-block" />}
+                                                    {fmtDuration(dur)}
+                                                </span>
+                                            )}
+
+                                            {rs === 'idle' && (
+                                                <button onClick={() => startCandidateRec(activeStudent.id)}
+                                                    className="flex items-center gap-1.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold px-3 py-1.5 rounded-xl transition-all active:scale-95 shadow-md shadow-rose-900/20">
+                                                    <Icons.Video className="w-3.5 h-3.5" /> Record
+                                                </button>
+                                            )}
+
+                                            {rs === 'recording' && (
+                                                <>
+                                                    <button onClick={() => pauseCandidateRec(activeStudent.id)}
+                                                        className="flex items-center gap-1.5 bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold px-3 py-1.5 rounded-xl transition-all active:scale-95">
+                                                        <Icons.Square className="w-3.5 h-3.5" /> Pause
+                                                    </button>
+                                                    <button onClick={() => finishCandidateRec(activeStudent.id)}
+                                                        className="flex items-center gap-1.5 bg-slate-700 hover:bg-slate-800 text-white text-xs font-bold px-3 py-1.5 rounded-xl transition-all active:scale-95">
+                                                        <Icons.Check className="w-3.5 h-3.5" /> Done
+                                                    </button>
+                                                </>
+                                            )}
+
+                                            {rs === 'paused' && (
+                                                <>
+                                                    <button onClick={() => startCandidateRec(activeStudent.id)}
+                                                        className="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold px-3 py-1.5 rounded-xl transition-all active:scale-95 shadow-md shadow-indigo-900/20">
+                                                        <Icons.Play className="w-3.5 h-3.5" /> Resume
+                                                    </button>
+                                                    <button onClick={() => finishCandidateRec(activeStudent.id)}
+                                                        className="flex items-center gap-1.5 bg-slate-700 hover:bg-slate-800 text-white text-xs font-bold px-3 py-1.5 rounded-xl transition-all active:scale-95">
+                                                        <Icons.Check className="w-3.5 h-3.5" /> Done
+                                                    </button>
+                                                </>
+                                            )}
+
+                                            {rs === 'done' && (
+                                                <span className="text-xs text-emerald-400 font-bold flex items-center gap-1 px-1.5 py-0.5">
+                                                    <Icons.CheckCircle className="w-3.5 h-3.5 text-emerald-400" /> Recorded
+                                                </span>
+                                            )}
+                                        </div>
+                                    );
+                                })()}
+
                                 <button onClick={() => startSingleCamera(cameraActive ? 'user' : 'environment')} className="absolute top-4 right-4 bg-black/50 text-white p-2.5 rounded-xl hover:bg-black/70 transition-colors">
                                     <Icons.RefreshCw className="w-4 h-4" />
                                 </button>
@@ -14235,7 +14300,12 @@
                                 {totalQ === 0 ? (
                                     <div className="text-center py-4">
                                         <p className="text-secondary-500 font-bold mb-4">No practical questions loaded for this batch.</p>
-                                        <button onClick={() => setActiveStudent(null)} className="bg-indigo-600 text-white px-8 py-3 rounded-2xl font-black">Back to list</button>
+                                        <button onClick={() => {
+                                            if (activeRecStudentRef.current) {
+                                                pauseCandidateRec(activeRecStudentRef.current);
+                                            }
+                                            setActiveStudent(null);
+                                        }} className="bg-indigo-600 text-white px-8 py-3 rounded-2xl font-black">Back to list</button>
                                     </div>
                                 ) : currentQ && (
                                     <>
