@@ -4937,6 +4937,13 @@
             const [uploadPaperType, setUploadPaperType] = useState('THEORY'); // Default to Theory
             const [selectedQP, setSelectedQP] = useState(null);
 
+            // Difficulty sampling settings
+            const [enableSampling, setEnableSampling] = useState(false);
+            const [targetCount, setTargetCount] = useState(50);
+            const [easyPercent, setEasyPercent] = useState(50);
+            const [mediumPercent, setMediumPercent] = useState(30);
+            const [hardPercent, setHardPercent] = useState(20);
+
             // New State for Filters
             const [sscList, setSSCList] = useState([]);
             const [masterQPList, setMasterQPList] = useState([]); // List of defined QPs from QP Tab
@@ -4975,15 +4982,15 @@
             };
 
             const handleDownloadSample = () => {
-                const headers = [['Question', 'Option1', 'Option2', 'Option3', 'Option4', 'CorrectOption', 'NoofOptions', 'QuestionTypeID', 'PCIDsWithMarks']];
+                const headers = [['Question', 'Option1', 'Option2', 'Option3', 'Option4', 'CorrectOption', 'NoofOptions', 'QuestionTypeID', 'PCIDsWithMarks', 'Difficulty']];
                 let data = [];
 
                 if (uploadPaperType === 'THEORY') {
                     data = [
-                        ['What is the capital of France?', 'London', 'Berlin', 'Paris', 'Madrid', 'Paris', '4', 'MCQ', '1PC1:10'],
-                        ['Which is a prime number?', '4', '6', '7', '9', '7', '4', 'MCQ', '2PC1:10'],
-                        ['What is 2+2?', '3', '4', '5', '6', '4', '4', 'MCQ', '3PC1:10'],
-                        ['Water boils at?', '50C', '100C', '150C', '200C', '100C', '4', 'MCQ', '4PC1:10']
+                        ['What is the capital of France?', 'London', 'Berlin', 'Paris', 'Madrid', 'Paris', '4', 'MCQ', '1PC1:10', 'Easy'],
+                        ['Which is a prime number?', '4', '6', '7', '9', '7', '4', 'MCQ', '2PC1:10', 'Medium'],
+                        ['What is 2+2?', '3', '4', '5', '6', '4', '4', 'MCQ', '3PC1:10', 'Easy'],
+                        ['Water boils at?', '50C', '100C', '150C', '200C', '100C', '4', 'MCQ', '4PC1:10', 'Hard']
                     ];
                 } else if (uploadPaperType === 'PRACTICAL') {
                     data = [
@@ -5091,6 +5098,12 @@
                                 }
                             });
                         }
+                        let difficulty = (row.Difficulty || row.difficulty || row.Level || row.level || 'Easy').toString().trim().toLowerCase();
+                        if (difficulty.includes('easy')) difficulty = 'easy';
+                        else if (difficulty.includes('medium') || difficulty.includes('avg') || difficulty.includes('average')) difficulty = 'medium';
+                        else if (difficulty.includes('hard') || difficulty.includes('difficult')) difficulty = 'hard';
+                        else difficulty = 'easy';
+
                         return {
                             id: window.Utils.generateId(),
                             question: (row.Question || row.question || `Question ${idx + 1}`).toString(),
@@ -5098,7 +5111,8 @@
                             options: (isCoding || isPractical || isViva) ? [] : [row.Option1, row.Option2, row.Option3, row.Option4, row.Option5].filter((o, i) => i < noOfOptions && o !== undefined && o !== null),
                             correctAnswer: (row.Solution || row.Answer || row.CorrectOption || row.correctOption || '').toString(),
                             totalMarks: calculatedMarks > 0 ? calculatedMarks : parseFloat(row.Marks || row.marks || 1),
-                            pcMapping: pcMapping
+                            pcMapping: pcMapping,
+                            difficulty: difficulty
                         };
                     });
 
@@ -5107,11 +5121,57 @@
                         return;
                     }
 
+                    const shuffleArray = (array) => {
+                        const arr = [...array];
+                        for (let i = arr.length - 1; i > 0; i--) {
+                            const j = Math.floor(Math.random() * (i + 1));
+                            [arr[i], arr[j]] = [arr[j], arr[i]];
+                        }
+                        return arr;
+                    };
+
+                    let finalQuestions = questions;
+
+                    if (enableSampling) {
+                        const totalPct = parseInt(easyPercent) + parseInt(mediumPercent) + parseInt(hardPercent);
+                        if (totalPct !== 100) {
+                            alert(`Error: The sum of Easy (${easyPercent}%), Medium (${mediumPercent}%), and Hard (${hardPercent}%) percentages must be exactly 100%. Currently: ${totalPct}%`);
+                            return;
+                        }
+
+                        const targetEasyCount = Math.round(targetCount * (easyPercent / 100));
+                        const targetMediumCount = Math.round(targetCount * (mediumPercent / 100));
+                        const targetHardCount = targetCount - targetEasyCount - targetMediumCount;
+
+                        const easyPool = questions.filter(q => q.difficulty === 'easy');
+                        const mediumPool = questions.filter(q => q.difficulty === 'medium');
+                        const hardPool = questions.filter(q => q.difficulty === 'hard');
+
+                        if (easyPool.length < targetEasyCount) {
+                            alert(`Error: The Excel file only contains ${easyPool.length} Easy questions, but you requested ${targetEasyCount} (${easyPercent}% of ${targetCount}). Please adjust your distribution or upload another file.`);
+                            return;
+                        }
+                        if (mediumPool.length < targetMediumCount) {
+                            alert(`Error: The Excel file only contains ${mediumPool.length} Medium questions, but you requested ${targetMediumCount} (${mediumPercent}% of ${targetCount}). Please adjust your distribution or upload another file.`);
+                            return;
+                        }
+                        if (hardPool.length < targetHardCount) {
+                            alert(`Error: The Excel file only contains ${hardPool.length} Hard questions, but you requested ${targetHardCount} (${hardPercent}% of ${targetCount}). Please adjust your distribution or upload another file.`);
+                            return;
+                        }
+
+                        const selectedEasy = shuffleArray(easyPool).slice(0, targetEasyCount);
+                        const selectedMedium = shuffleArray(mediumPool).slice(0, targetMediumCount);
+                        const selectedHard = shuffleArray(hardPool).slice(0, targetHardCount);
+
+                        finalQuestions = shuffleArray([...selectedEasy, ...selectedMedium, ...selectedHard]);
+                    }
+
                     // Validation: Check Total Theory Marks
                     const currentQPDef = masterQPList.find(q => q.id === filterQPId);
                     if (currentQPDef) {
                         // 1. Validate Total Theory Marks
-                        const uploadedTheoryMarks = questions.reduce((sum, q) => {
+                        const uploadedTheoryMarks = finalQuestions.reduce((sum, q) => {
                             if (q.questionType !== 'VIVA') {
                                 return sum + q.totalMarks;
                             }
@@ -5119,8 +5179,12 @@
                         }, 0);
                         const theoryMismatch = Math.abs(uploadedTheoryMarks - parseFloat(currentQPDef.theoryMarks || 0)) > 0.1;
                         if (theoryMismatch) {
-                            alert(`Error: Uploaded Theory Marks (${uploadedTheoryMarks}) do not match QP Theory Marks (${currentQPDef.theoryMarks}).`);
-                            return;
+                            if (enableSampling) {
+                                console.warn(`Uploaded Theory Marks (${uploadedTheoryMarks}) do not match QP Theory Marks (${currentQPDef.theoryMarks}). Proceeding because Random Sampling is enabled.`);
+                            } else {
+                                alert(`Error: Uploaded Theory Marks (${uploadedTheoryMarks}) do not match QP Theory Marks (${currentQPDef.theoryMarks}).`);
+                                return;
+                            }
                         }
 
                         // 2. Validate PC Coverage (STRICT)
@@ -5132,7 +5196,7 @@
 
                         // Collect PCs covered by questions
                         const coveredPCIds = new Set();
-                        questions.forEach(q => {
+                        finalQuestions.forEach(q => {
                             if (q.pcMapping) {
                                 Object.keys(q.pcMapping).forEach(key => coveredPCIds.add(key));
                             }
@@ -5149,8 +5213,8 @@
                     const qp = {
                         id: window.Utils.generateId(),
                         qpName: qpName || `${masterQPList.find(q => q.id === filterQPId)?.name || 'Question Paper'} - ${uploadPaperType}`,
-                        questions: questions,
-                        totalMarks: questions.reduce((sum, q) => sum + q.totalMarks, 0),
+                        questions: finalQuestions,
+                        totalMarks: finalQuestions.reduce((sum, q) => sum + q.totalMarks, 0),
                         totalTime: 60,
                         createdAt: new Date().toISOString(),
                         sscId: selectedSSC,
@@ -5321,7 +5385,7 @@
                                         <table className="w-full text-left text-xs">
                                             <thead className="bg-gray-100 text-gray-700">
                                                 <tr>
-                                                    {['Question', 'Option1', 'Option2', 'Option3', 'Option4', 'Solution', 'NoofOptions', 'QuestionTypeID', 'PCIDsWithMarks'].map(h => (
+                                                    {['Question', 'Option1', 'Option2', 'Option3', 'Option4', 'Solution', 'NoofOptions', 'QuestionTypeID', 'PCIDsWithMarks', 'Difficulty'].map(h => (
                                                         <th key={h} className="p-2 border-r last:border-r-0 font-bold">{h}</th>
                                                     ))}
                                                 </tr>
@@ -5336,19 +5400,104 @@
                                                     <td className="p-2 border-r">Option1</td>
                                                     <td className="p-2 border-r">4</td>
                                                     <td className="p-2 border-r">MCQ</td>
-                                                    <td className="p-2">PC1:5,PC2:3</td>
+                                                    <td className="p-2 border-r">PC1:5,PC2:3</td>
+                                                    <td className="p-2">Easy</td>
                                                 </tr>
                                             </tbody>
                                         </table>
                                     </div>
 
-                                    <div className="border-2 border-dashed border-gray-300 rounded-xl p-8 text-center bg-gray-50 hover:bg-gray-100 transition-colors cursor-pointer relative">
-                                        <input type="file" accept=".xlsx, .xls" onChange={handleExcelUpload} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
-                                        <div className="pointer-events-none">
-                                            <Icons.UploadCloud className="w-12 h-12 text-gray-700 mx-auto mb-3" />
-                                            <p className="font-medium text-gray-600">Drag & Drop or Click to Upload Excel File</p>
+                                    {/* Random Difficulty Sampling (Optional) */}
+                                    <div className="bg-slate-50 border border-slate-200 rounded-2xl p-6 mb-8">
+                                        <div className="flex items-center justify-between mb-4">
+                                            <div className="flex items-center gap-2">
+                                                <LucideIcon name="sliders" className="w-5 h-5 text-indigo-600" />
+                                                <span className="font-extrabold text-sm text-slate-800 uppercase tracking-wider">Difficulty-based Random Sampling</span>
+                                            </div>
+                                            <label className="relative inline-flex items-center cursor-pointer">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={enableSampling}
+                                                    onChange={e => setEnableSampling(e.target.checked)}
+                                                    className="sr-only peer"
+                                                />
+                                                <div className="w-11 h-6 bg-gray-200 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+                                            </label>
                                         </div>
+
+                                        {enableSampling && (
+                                            <div className="space-y-4 animate-fade-in">
+                                                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                                                    <div>
+                                                        <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5">Questions to Pick</label>
+                                                        <input
+                                                            type="number"
+                                                            value={targetCount}
+                                                            onChange={e => setTargetCount(Math.max(1, parseInt(e.target.value) || 0))}
+                                                            className="w-full p-3 border border-slate-200 rounded-xl text-sm font-bold text-slate-800"
+                                                        />
+                                                    </div>
+                                                    <div>
+                                                        <label className="block text-[10px] font-black text-emerald-600 uppercase tracking-widest mb-1.5">Easy (%)</label>
+                                                        <input
+                                                            type="number"
+                                                            value={easyPercent}
+                                                            onChange={e => setEasyPercent(Math.max(0, parseInt(e.target.value) || 0))}
+                                                            className="w-full p-3 border border-slate-200 rounded-xl text-sm font-bold text-emerald-650"
+                                                        />
+                                                    </div>
+                                                    <div>
+                                                        <label className="block text-[10px] font-black text-amber-600 uppercase tracking-widest mb-1.5">Medium (%)</label>
+                                                        <input
+                                                            type="number"
+                                                            value={mediumPercent}
+                                                            onChange={e => setMediumPercent(Math.max(0, parseInt(e.target.value) || 0))}
+                                                            className="w-full p-3 border border-slate-200 rounded-xl text-sm font-bold text-amber-650"
+                                                        />
+                                                    </div>
+                                                    <div>
+                                                        <label className="block text-[10px] font-black text-rose-600 uppercase tracking-widest mb-1.5">Hard (%)</label>
+                                                        <input
+                                                            type="number"
+                                                            value={hardPercent}
+                                                            onChange={e => setHardPercent(Math.max(0, parseInt(e.target.value) || 0))}
+                                                            className="w-full p-3 border border-slate-200 rounded-xl text-sm font-bold text-rose-650"
+                                                        />
+                                                    </div>
+                                                </div>
+
+                                                <div className="flex flex-wrap justify-between items-center bg-white p-4 rounded-xl border border-slate-100 shadow-sm text-xs font-bold text-slate-700 gap-2">
+                                                    <div>
+                                                        🎯 Targeted: <span className="text-emerald-600 font-extrabold">{Math.round(targetCount * (easyPercent / 100))} Easy</span>, <span className="text-amber-600 font-extrabold">{Math.round(targetCount * (mediumPercent / 100))} Medium</span>, <span className="text-rose-600 font-extrabold">{targetCount - Math.round(targetCount * (easyPercent / 100)) - Math.round(targetCount * (mediumPercent / 100))} Hard</span> questions.
+                                                    </div>
+                                                    {parseInt(easyPercent) + parseInt(mediumPercent) + parseInt(hardPercent) !== 100 ? (
+                                                        <span className="text-rose-600 bg-rose-50 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border border-rose-100 animate-pulse">
+                                                            Sum must be 100% (Current: {parseInt(easyPercent) + parseInt(mediumPercent) + parseInt(hardPercent)}%)
+                                                        </span>
+                                                    ) : (
+                                                        <span className="text-emerald-600 bg-emerald-50 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border border-emerald-100">
+                                                            ✓ Distribution Valid
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
+
+                                    {(() => {
+                                        const isDistributionInvalid = enableSampling && (parseInt(easyPercent) + parseInt(mediumPercent) + parseInt(hardPercent) !== 100);
+                                        return (
+                                            <div className={`border-2 border-dashed border-gray-300 rounded-xl p-8 text-center bg-gray-50 hover:bg-gray-100 transition-colors cursor-pointer relative ${isDistributionInvalid ? 'opacity-40 pointer-events-none' : ''}`}>
+                                                <input type="file" accept=".xlsx, .xls" onChange={handleExcelUpload} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" disabled={isDistributionInvalid} />
+                                                <div className="pointer-events-none">
+                                                    <Icons.UploadCloud className="w-12 h-12 text-gray-700 mx-auto mb-3" />
+                                                    <p className="font-medium text-gray-600">
+                                                        {isDistributionInvalid ? 'Please fix the distribution percentages above to upload' : 'Drag & Drop or Click to Upload Excel File'}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        );
+                                    })()}
                                 </div>
                             </div>
                         </div>
